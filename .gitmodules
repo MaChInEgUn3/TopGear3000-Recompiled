@@ -1,0 +1,3 @@
+[submodule "extern/tg3000-decomp"]
+	path = extern/tg3000-decomp
+	url = https://github.com/MaChInEgUn3/tg3000-decomp.git
