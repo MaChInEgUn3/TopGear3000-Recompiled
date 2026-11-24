@@ -28,7 +28,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
   `69adbec`, run 45504114049) passed on both jobs, Linux (ubuntu-latest) and Windows (MSYS2
   UCRT64).
 
-## Platform layer: proposed, waiting for the owner (2026-11-24)
+## Platform layer: proposed, then accepted (2026-11-24)
 
 - `docs/proposals/video-layer.md` (PROPOSED). Measured first: the decomp's screens run on the
   PC from zeroed memory (`title_card_show` returns by itself at frame 240); screens block inside
@@ -60,6 +60,34 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
   original drawing and text, no game art.
 - **Local notes:** `notes/` (excluded through `.git/info/exclude`) holds unverified research
   summaries; facts move into this file only once checked against the source.
+
+## Video layer: the owner's answers (2026-11-24)
+
+`docs/proposals/video-layer.md` is accepted. Its three questions, answered by the owner:
+
+1. **Per-line effects.** Owner, verbatim: "chama o advisor e vá pelo melhor caminho seguindo a
+   regra de sem emular nada". **Delegated under the rule**, read with the owner's own criterion
+   ("drawing each line from a table the game computed is the game's effect; a general per-line
+   register mechanism is the chip"), case by case:
+   - the screen's code is written against the format the game's own routine writes into RAM
+     for that table, never against the chip's general table grammar;
+   - test: if the code would still work pointed at another table or another target, it is the
+     general mechanism and is not allowed;
+   - which layer scrolls and how the colour combines are written in that screen's code (the
+     register calls stay ignored);
+   - if an effect can only be done by implementing the general format, stop and report;
+   - every per-line effect done is listed in the step's report, so the owner can veto it.
+2. **The per-screen graphics table.** Owner, verbatim: "é 0% emulado sem trapacear". Read as
+   the yardstick, not a blank cheque: the drawing code understands only what this game's
+   routines write. So: nothing indexed by a video-memory address (named roles: background, text
+   drawings, object drawings); one function per kind of screen, with no mode or layer
+   parameters; pictures converted from the cartridge blocks at start-up, never decoded from the
+   uploaded bytes; the text map read only through the fields the game's text routine uses
+   (anything else stops with a message); objects from the game's object table where it exists,
+   rather than its chip-format copy; the ignored platform functions all in one file with empty
+   bodies, so review is trivial. Screens that share the background still get one table each
+   (their drawings and objects differ).
+3. **Picture size.** Owner: no preference. Chosen: the original 256x224, scaled to the window.
 
 ## Steps (2026-11-24)
 

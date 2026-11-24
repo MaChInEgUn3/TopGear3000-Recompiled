@@ -1,7 +1,7 @@
 # Proposal: the port's video and frame layer
 
-**Status: PROPOSED (2026-11-24), waiting for the owner's approval.** No port code is written
-for it until then. Facts are measured on the decomp at `f84afeb` with a throwaway recorder
+**Status: ACCEPTED, delegated under the rule (2026-11-24).** The owner's answers and how they
+are read are in `docs/DECISIONS.md`, "Video layer: the owner's answers". Facts are measured on the decomp at `f84afeb` with a throwaway recorder
 (every `platform.h` function logging its calls, not committed).
 
 ## What was measured
@@ -23,18 +23,21 @@ for it until then. Facts are measured on the decomp at `f84afeb` with a throwawa
     is uploaded once from the scratch area, which is then cleared and reused: **it never lives in
     game RAM during the screen**;
   - **layer 2, the text**: its arrangement is the tile map the game rebuilds at `$7F:0000` and
-    uploads every frame (game RAM); its drawings are font blocks from the ROM (two on the title
-    card, `$87:F861` and `$87:F5BC`; on options also words written straight from the ROM by
-    `text_tiles_put_0`);
+    uploads every frame (game RAM); its drawings come from ROM blocks (on the title card the map
+    uses tile numbers 128-165: the block `$87:F861`; on options also words written straight from
+    the ROM by `text_tiles_put_0`);
   - **sprites**: the 128 objects at `$0500-$08FF`, turned into the sprite table at `$0900` by
-    `oam_from_objects` (game RAM). `$0500-$08FF` is the object table on these screens and the
+    `oam_from_objects` (game RAM). On the title card they use tile numbers 0-10: the block
+    `$87:F5BC`. Text and sprites share one drawings area, so each screen's table says which block
+    is which, measured from the numbers the game's map and objects use. `$0500-$08FF` is the object table on these screens and the
     palette shadow on the two-task screens;
   - **palettes**: uploaded straight from the ROM (`$8A:C658` 512 bytes, `$8A:C964`, `$8A:C984`).
 
   The VS screen does the same with its panels: their arrangement is written once from the
   scratch area (from the block at `$8A:C86C`) and is not kept in RAM.
-- **Per-line effects:** title card, password display and VS screen use none. The options menu
-  uses two (a horizontal scroll per line for one layer and a fixed-colour gradient).
+- **Per-line effects:** title card and password display use none. The VS screen uses none while
+  shown; on leaving, `vs_screen_frame` turns the menu's two back on for the next screen (the
+  recorded run never got there: no player confirmed). The options menu uses two (a horizontal scroll per line for one layer and a fixed-colour gradient).
 
 ## 1. The game owns the loop
 
@@ -117,8 +120,9 @@ instead of log files.
    ignored?
 2. **The per-screen graphics table**, the point closest to the line. Concretely, for the title
    card: "background picture = drawings block `$96:EE52` + arrangement block `$85:FA8B` + palette
-   `$8A:C658`, converted once into an image; text = the game's live tile map + font blocks
-   `$87:F861`/`$87:F5BC` + palettes `$8A:C964`/`$8A:C984`; sprites = the game's object table".
+   `$8A:C658`, converted once into an image; text = the game's live tile map + drawings block
+   `$87:F861` + palettes `$8A:C964`/`$8A:C984`; sprites = the game's object table + drawings
+   block `$87:F5BC`".
    Is a hand-written table like this on the right side?
 3. **Software picture at the original 256x224, scaled**, as the start (widescreen or higher
    resolution only later, if ever)?
