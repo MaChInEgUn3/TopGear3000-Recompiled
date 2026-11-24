@@ -1,107 +1,130 @@
-# Top Gear 3000 Recompiled — port nativo (Linux e Windows)
+<p align="center"><img src="docs/img/banner.svg" alt="Top Gear 3000: Recompiled" width="100%"></p>
 
-Port nativo para PC (Linux e Windows x86-64) do jogo de SNES **Top Gear 3000**, usando a lógica em C legível e verificada do projeto irmão [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp), fixado como submódulo em `extern/`.
+<p align="center">
+  <a href="https://github.com/MaChInEgUn3/TopGear3000-Recompiled/actions/workflows/build.yml"><img src="https://github.com/MaChInEgUn3/TopGear3000-Recompiled/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later"></a>
+  <img src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-8b5cf6.svg" alt="Platforms: Linux | Windows">
+  <img src="https://img.shields.io/badge/status-pre--alpha-orange.svg" alt="Status: pre-alpha">
+</p>
 
-"Recompiled" aqui é o nome do tipo de port, não a técnica: o jogo não é recompilado da ROM.
-A lógica é o C legível e verificado do decomp, e vídeo e som são reescritos do zero.
+**English** · [Português (BR)](README.pt-br.md)
 
-**Estado atual:** Etapa 1: esqueleto. Abre uma janela preta e confere a sua ROM. Ainda não roda o jogo.
+# Top Gear 3000: Recompiled
 
-## Regra do projeto: "nem 1% emulador"
+Top Gear 3000: Recompiled is an early-stage native PC port (Linux and Windows x86-64) of the SNES game **Top Gear 3000**, built on top of the readable, verified C game logic from [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp) and using SDL3 for windowing, input, and audio.
 
-O executável final não contém nenhum modelo de CPU (65816), PPU (chip de vídeo), SPC700/S-DSP (som) ou DSP-4.
-Vídeo e áudio são desenhados e tocados nativamente a partir dos dados que o jogo monta na RAM, com código de desenho próprio por tela (e a matemática do DSP-4 vira C nativo).
+### **This repository and its releases do not contain game assets. The original game is required to run this project.**
 
-**Teste prático:** se o código de vídeo ou som conseguiria exibir ou tocar *outro* jogo de SNES dada a memória dele, então é um emulador — e é proibido aqui.
+You must provide your own legally obtained copy of **Top Gear 3000 (USA)**:
+* Exact size: `1,048,576` bytes (no copier header)
+* SHA-1: `058aadf1ee719cb9e0c7333e665797f990a6381d`
+* Place it at `input/TG3000.sfc` (git-ignored) or pass its path on the command line.
+* The DSP-4 firmware (`dsp4.rom`) is **not** needed.
 
-Nenhum dado protegido por direitos autorais entra no git (sem ROM, sem gráficos/sons extraídos, sem firmware, sem screenshots).
+## Table of Contents
+* [Status](#status)
+* [Not Even 1% Emulator](#not-even-1-emulator)
+* [System Requirements](#system-requirements)
+* [Planned](#planned)
+* [FAQ](#faq)
+* [Building](#building)
+* [Project Layout](#project-layout)
+* [Contributing](#contributing)
+* [Libraries Used and Special Thanks](#libraries-used-and-special-thanks)
+* [Legal](#legal)
 
-## ROM necessária
+## Status
 
-Você precisa da sua própria cópia legal da ROM **Top Gear 3000 (USA)**:
-- Tamanho exato: `1.048.576` bytes (sem header de copier)
-- SHA-1: `058aadf1ee719cb9e0c7333e665797f990a6381d`
-- Coloque o arquivo em `input/TG3000.sfc` (pasta ignorada pelo git) ou passe o caminho como argumento na linha de comando.
+The project is currently at **Step 1 of 4** (pre-alpha). **The game does not run yet** and **no releases exist yet**. Today, the executable builds on Linux and Windows x86-64, verifies your ROM (size and SHA-1), and opens an empty black window (`768x672`). No saves, settings, mods, widescreen, or gameplay exist yet.
 
-O firmware do DSP-4 (`dsp4.rom`) **não** é necessário.
+| Step | Milestone | State |
+|---|---|---|
+| 1 | Skeleton (CMake, SDL3 fetch, ROM SHA-1 check, empty window, CI) | ✅ Done |
+| 2 | Platform layer design (game-data boundary above `platform.h`) | ⏳ In progress |
+| 3 | Sound interface (native music and SFX playback) | Planned |
+| 4 | First native menus (first screens drawn natively from RAM data) | Planned |
 
-## Como compilar
+## Not Even 1% Emulator
 
-### Linux
+The shipped game contains **no** model of the SNES CPU (65816), video chip (PPU), sound processor (SPC700/S-DSP), or DSP-4 coprocessor.
 
-Instale as dependências de compilação e do SDL3 (exemplo para Debian/Ubuntu):
+* **Game logic:** comes from the readable C in [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp), where every ported routine is proven against the original ROM in a differential test.
+* **Video and sound:** rewritten natively, drawing each screen and playing audio directly from the game-level data the logic builds in memory (tile maps, sprite lists, palettes, per-line road tables).
+* **DSP-4:** coprocessor commands become native C functions.
 
-```bash
-sudo apt-get update
-sudo apt-get install -y \
-  build-essential cmake ninja-build \
-  libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
-  libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
-  libwayland-dev wayland-protocols \
-  libegl1-mesa-dev libgl1-mesa-dev \
-  libasound2-dev libpulse-dev libpipewire-0.3-dev \
-  libudev-dev libdbus-1-dev libdrm-dev libgbm-dev
-```
+**The litmus test:** if the video or sound code could display or play *another* SNES game given its memory, it is an emulator and is not allowed here.
 
-(Em Ubuntu antigo, como o 20.04, o `libpipewire-0.3-dev` não existe: é só tirar da lista. O CMake
-precisa ser 3.24 ou mais novo; no 20.04 use o repositório da Kitware.)
+## System Requirements
 
-Clone com submódulos, baixe o SDL3 fixado e compile:
+* **OS:** Windows 10 or later (x86-64) or Linux (x86-64)
+* **Hardware:** nothing exotic — the port uses SDL3 for windowing, input, and audio.
+
+## Planned
+
+The items below are **goals, not promises** — none of them are implemented yet:
+
+* Native video renderer drawn per screen from game data in memory
+* Native sound player for music and sound effects
+* Native DSP-4 math functions
+* Keyboard and controller support via SDL3
+* Prebuilt releases for Linux and Windows x86-64
+
+## FAQ
+
+#### Is this a static recompilation?
+No — despite the name. "Recompiled" names the kind of native PC port. Nothing is statically recompiled from the ROM; the game logic is hand-written, readable C from [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp) verified routine by routine against the original.
+
+#### How is this related to the decompilation project?
+This repository consumes [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp) as a read-only git submodule pinned at a named commit in `extern/tg3000-decomp/`.
+
+#### Is it an emulator?
+No. There is no 65816 CPU, PPU, SPC700/S-DSP, or DSP-4 emulation in the port. See [Not Even 1% Emulator](#not-even-1-emulator).
+
+#### Why is MSVC not supported?
+The decompilation C code uses GCC/Clang builtins (such as `__builtin_trap()`). Use GCC or Clang (on Windows, MinGW-w64 UCRT via MSYS2 or WinLibs).
+
+#### Does it need the DSP-4 firmware?
+No. `dsp4.rom` is never needed because DSP-4 commands will be implemented as native C functions.
+
+## Building
+
+No prebuilt releases exist yet. Quick start (Linux or Windows MSYS2 UCRT64):
 
 ```bash
 git clone --recursive https://github.com/MaChInEgUn3/TopGear3000-Recompiled.git
 cd TopGear3000-Recompiled
 cmake -P tools/fetch_deps.cmake
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake --build build && ctest --test-dir build --output-on-failure
 ```
 
-Para rodar:
+See [BUILDING.md](BUILDING.md) for full prerequisites, Ubuntu 20.04 notes, Windows toolchain setup, system SDL3 usage, and test commands.
 
-```bash
-./build/tg3000
+## Project Layout
+
+```text
+extern/tg3000-decomp/   read-only submodule with verified C game logic
+port/                   native PC port code (main.c, rom.c, sha1.c)
+tools/                  helper CMake scripts (fetch_deps.cmake)
+docs/                   architecture notes and decisions (DECISIONS.md)
+deps/                   fetched dependencies (SDL3, git-ignored)
+input/                  default user ROM location (TG3000.sfc, git-ignored)
+build/                  out-of-source build directory (git-ignored)
 ```
 
-### Windows
+## Contributing
 
-Use **MSYS2 (UCRT64)** ou **WinLibs MinGW-w64 (UCRT)** com `cmake` e `ninja` no PATH.
-*(MSVC não é suportado porque o C da decompilação usa `__builtin_trap()`.)*
+Pull requests are welcome. Never include ROM data, extracted assets, firmware, or screenshots in commits or PRs.
 
-No terminal UCRT64 (ou MSYS2/Git Bash com MinGW-w64):
+Changes to the game logic itself belong in [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp), not here.
 
-```bash
-git clone --recursive https://github.com/MaChInEgUn3/TopGear3000-Recompiled.git
-cd TopGear3000-Recompiled
-cmake -P tools/fetch_deps.cmake
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build --output-on-failure
-./build/tg3000.exe
-```
+## Libraries Used and Special Thanks
 
-### Usando SDL3 do sistema
+* [SDL3](https://github.com/libsdl-org/SDL) (zlib license) for cross-platform windowing, input, and audio
+* [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp) (GPL-3.0-or-later) for the verified C decompilation of the game logic
 
-Se você já tiver o SDL3 instalado no sistema e não quiser compilar a partir de `deps/SDL3`:
+## Legal
 
-```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTG3000_SYSTEM_SDL=ON
-```
+Licensed under **GPL-3.0-or-later** — see [LICENSE](LICENSE).
 
-## Estrutura do repositório
-
-- `extern/tg3000-decomp/` — submódulo somente leitura com o C da lógica do jogo
-- `port/` — código do port nativo (`main.c`, `rom.c`, `sha1.c`)
-- `tools/` — scripts auxiliares (`fetch_deps.cmake`)
-- `deps/` — dependências baixadas localmente (ex.: `SDL3`, ignorado pelo git)
-- `input/` — local padrão para colocar sua `TG3000.sfc` (ignorado pelo git)
-- `build/` — diretório de compilação (ignorado pelo git)
-- `docs/` — decisões de arquitetura e escopo
-
-## Licença
-
-Licenciado sob **GPL-3.0-or-later** (veja `LICENSE`).
-
----
-
-Top Gear 3000 é © 1994 Kemco / Gremlin Graphics. Projeto de fã não oficial, sem ligação com elas ou com a Nintendo.
+Top Gear 3000 is © 1994 Kemco / Gremlin Graphics. This is an unofficial fan project, not affiliated with or endorsed by them or Nintendo.

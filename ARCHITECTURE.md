@@ -13,7 +13,8 @@
 - `deps/` — fetched third-party dependencies (`deps/SDL3`, git-ignored).
 - `input/` — default user ROM location (`input/TG3000.sfc`, git-ignored).
 - `build/` — out-of-source build directory (git-ignored).
-- `docs/` — architectural decisions (`docs/DECISIONS.md`).
+- `docs/` — architectural decisions (`docs/DECISIONS.md`) and `docs/img/` (original banner).
+- `README.md` (English) / `README.pt-br.md`, `BUILDING.md` — user-facing docs.
 
 ## Current data flow (Step 1)
 ```

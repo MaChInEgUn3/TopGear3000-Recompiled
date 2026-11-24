@@ -42,6 +42,12 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 - **Inputs:** the user's ROM goes in `input/TG3000.sfc` (ignored); the port looks there
   first. `dsp4.rom`, when present, sits in `input/` too and is never read by the port.
 - **Commit identity:** the account's GitHub noreply address, as in the decomp.
+- **READMEs (owner, 2026-11-24):** `README.md` in English, the universal default, with
+  `README.pt-br.md` as its Portuguese twin and a language switch, like the decomp. Structure
+  follows the best-known native PC ports (Zelda64Recomp): no-assets notice, contents, status,
+  system requirements, planned (goals only), FAQ, building (full guide in `BUILDING.md`, English),
+  credits, legal. Only what exists today is claimed. The banner (`docs/img/banner.svg`) is
+  original drawing and text, no game art.
 - **Local notes:** `notes/` (excluded through `.git/info/exclude`) holds unverified research
   summaries; facts move into this file only once checked against the source.
 
