@@ -8,17 +8,31 @@ for it until then. Facts are measured on the decomp at `f84afeb` with a throwawa
 
 - **The game's C runs on the PC by itself.** From zeroed memory plus
   `interrupt_vectors_init()`, `title_card_show()` advanced 240 frames, uploaded its graphics and
-  palettes, and returned on its own, as on the console. `password_show()`, `options_screens(0)`
+  palettes, and returned on its own. (Here the game's frame code runs only inside its waits;
+  matching the console's timing exactly was not measured.) `password_show()`, `options_screens(0)`
   and `vs_screen()` ran 300 frames without a crash, each waiting for input.
 - **Screens are blocking functions.** Each loops on `wait_frames()` / `platform_wait_vblank()`
   until it is done. No C dispatcher between screens exists yet (decomp request 1).
-- **Graphics arrive as whole blocks.** On the measured screens, every tile upload is either a
+- **Graphics arrive as whole blocks.** On the four measured screens, every tile upload is either a
   whole block just decompressed from the ROM into the scratch area `$7F:0000`, or a direct ROM
   address. The scratch area is never decompressed into while it holds the live tile map.
-- **The rest is game RAM.** The text screens build their tile map at `$7F:0000` (uploaded every
-  frame), their 128 objects at `$0500-$08FF` (turned into the sprite table at `$0900` by
-  `oam_from_objects`), and palettes come from the ROM. `$0500-$08FF` is the object table on
-  these screens and the palette shadow on the two-task screens.
+- **Not everything stays in game RAM.** The text screens (title card, password display, options)
+  share one layout:
+  - **layer 1, the background picture** (256 colours): its drawings are one ROM block (13,120
+    bytes, `$96:EE52`) and its *arrangement* another (1,728 bytes, `$85:FA8B`). The arrangement
+    is uploaded once from the scratch area, which is then cleared and reused: **it never lives in
+    game RAM during the screen**;
+  - **layer 2, the text**: its arrangement is the tile map the game rebuilds at `$7F:0000` and
+    uploads every frame (game RAM); its drawings are font blocks from the ROM (two on the title
+    card, `$87:F861` and `$87:F5BC`; on options also words written straight from the ROM by
+    `text_tiles_put_0`);
+  - **sprites**: the 128 objects at `$0500-$08FF`, turned into the sprite table at `$0900` by
+    `oam_from_objects` (game RAM). `$0500-$08FF` is the object table on these screens and the
+    palette shadow on the two-task screens;
+  - **palettes**: uploaded straight from the ROM (`$8A:C658` 512 bytes, `$8A:C964`, `$8A:C984`).
+
+  The VS screen does the same with its panels: their arrangement is written once from the
+  scratch area (from the block at `$8A:C86C`) and is not kept in RAM.
 - **Per-line effects:** title card, password display and VS screen use none. The options menu
   uses two (a horizontal scroll per line for one layer and a fixed-colour gradient).
 
@@ -57,12 +71,18 @@ video memory indexed by address.
 
 - A **software picture** of 256x224 pixels, drawn in C, uploaded to one SDL texture and scaled
   (pixel-exact, no widescreen for now). No GPU tricks needed for these screens.
-- Each screen kind has its own drawing function that knows its layout: for the text screens,
-  "the background is the tile map at `$7F:0000`, 32 columns, its tiles come from blocks *X* and
-  *Y*, then the 128 objects of `$0500-$08FF` on top". This is per-screen knowledge written by
-  hand from the decomp, checked against what the game uploads.
-- Which screen is active comes from the game's own state (the frame-code target and the screen
-  routine running), not from register values.
+- Each **kind** of screen has its own drawing function that knows its layout. For the text
+  screens: "the background picture, then the text from the tile map at `$7F:0000` with the font
+  blocks, then the 128 objects of `$0500-$08FF`". This is per-screen knowledge written by hand
+  from the decomp, checked against what the game uploads.
+- **Background pictures are converted, not reassembled from video memory:** at start-up the
+  port unpacks the known ROM blocks with the decomp's own `decompress` and turns "drawings block
+  + arrangement block + palette" into one ordinary picture. When the game uploads those blocks,
+  the port only notes "background picture *N* is on".
+- **Which kind of screen is active** comes from what the game loaded (which background picture
+  is on), not from register values. No game variable names the current screen (the decomp's
+  bench does not have one either: it tells a race by DSP-4 traffic), and none is needed: the
+  title card, password display and options are the same kind.
 
 ## 4. First target and order
 
@@ -71,7 +91,9 @@ video memory indexed by address.
 3. **Options menu**: needs the owner's ruling on its two per-line effects.
 
 Each is checked by eye against reference pictures of the original from the decomp's bench (a
-measuring tool, never shipped; pictures stay outside the repo).
+measuring tool, never shipped; pictures stay outside the repo). The bench builds from a separate
+clone (Ubuntu 20.04 under WSL, 2026-11-24), and its verification movies reach the title card and
+the password display (their rows have live samples in `map/verified.txt`).
 
 ## 5. Test channel (later, from the YGO FM port's practice)
 
@@ -93,7 +115,10 @@ instead of log files.
 1. **Per-line effects:** may a screen's code read a table the game computed (the options menu's
    gradient and per-line scroll) and draw that effect, while the per-line platform calls stay
    ignored?
-2. **The per-screen graphics table** ("this screen's background uses blocks X and Y with these
-   palettes"): this is the point closest to the line. Is it on the right side?
+2. **The per-screen graphics table**, the point closest to the line. Concretely, for the title
+   card: "background picture = drawings block `$96:EE52` + arrangement block `$85:FA8B` + palette
+   `$8A:C658`, converted once into an image; text = the game's live tile map + font blocks
+   `$87:F861`/`$87:F5BC` + palettes `$8A:C964`/`$8A:C984`; sprites = the game's object table".
+   Is a hand-written table like this on the right side?
 3. **Software picture at the original 256x224, scaled**, as the start (widescreen or higher
    resolution only later, if ever)?
