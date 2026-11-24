@@ -24,8 +24,9 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 - **Checked (2026-11-24), decomp at `2ade543`, then again at `f84afeb`:** Windows 11 with WinLibs MinGW-w64 GCC 16
   (UCRT), and Linux in WSL Ubuntu 20.04 with GCC 9 and CMake 4.5 from Kitware: all of
   `tg3000_logic` and `tg3000` build without warnings, `ctest` passes and `--check-rom` accepts the
-  ROM. The Windows `.exe` imports only system DLLs. The CI workflow has not run yet: the
-  GitHub repository does not exist until the owner picks its name and visibility.
+  ROM. The Windows `.exe` imports only system DLLs. The CI workflow's first run (push of
+  `69adbec`, run 45504114049) passed on both jobs, Linux (ubuntu-latest) and Windows (MSYS2
+  UCRT64).
 
 ## Platform layer: not designed yet (2026-11-24)
 
