@@ -1,6 +1,9 @@
-# Top Gear 3000 — port nativo (Linux e Windows)
+# Top Gear 3000 Recompiled — port nativo (Linux e Windows)
 
 Port nativo para PC (Linux e Windows x86-64) do jogo de SNES **Top Gear 3000**, usando a lógica em C legível e verificada do projeto irmão [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp), fixado como submódulo em `extern/`.
+
+"Recompiled" aqui é o nome do tipo de port, não a técnica: o jogo não é recompilado da ROM.
+A lógica é o C legível e verificado do decomp, e vídeo e som são reescritos do zero.
 
 **Estado atual:** Etapa 1: esqueleto. Abre uma janela preta e confere a sua ROM. Ainda não roda o jogo.
 
@@ -46,8 +49,8 @@ precisa ser 3.24 ou mais novo; no 20.04 use o repositório da Kitware.)
 Clone com submódulos, baixe o SDL3 fixado e compile:
 
 ```bash
-git clone --recursive <url-do-repositorio>
-cd tg3000
+git clone --recursive https://github.com/MaChInEgUn3/TopGear3000-Recompiled.git
+cd TopGear3000-Recompiled
 cmake -P tools/fetch_deps.cmake
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
@@ -68,8 +71,8 @@ Use **MSYS2 (UCRT64)** ou **WinLibs MinGW-w64 (UCRT)** com `cmake` e `ninja` no 
 No terminal UCRT64 (ou MSYS2/Git Bash com MinGW-w64):
 
 ```bash
-git clone --recursive <url-do-repositorio>
-cd tg3000
+git clone --recursive https://github.com/MaChInEgUn3/TopGear3000-Recompiled.git
+cd TopGear3000-Recompiled
 cmake -P tools/fetch_deps.cmake
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build

@@ -32,6 +32,18 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 - The decomp's `src/platform.h` is shaped like the SNES chips on purpose so its verification bench can compare against the original ROM.
 - The port needs a higher-level platform layer above it at the level of game data (not SNES MMIO/VRAM). That design will be proposed to the owner before it is written (Step 2).
 
+## Name, visibility and inputs (2026-11-24, owner's decisions)
+
+- **Repository:** `github.com/MaChInEgUn3/TopGear3000-Recompiled`, public (the owner picked
+  the name; public like the decomp). "Recompiled" names the kind of port, not the technique:
+  nothing is recompiled from the ROM; the logic is the decomp's readable C, and video and
+  sound are rewritten natively. The README says so.
+- **Inputs:** the user's ROM goes in `input/TG3000.sfc` (ignored); the port looks there
+  first. `dsp4.rom`, when present, sits in `input/` too and is never read by the port.
+- **Commit identity:** the account's GitHub noreply address, as in the decomp.
+- **Local notes:** `notes/` (excluded through `.git/info/exclude`) holds unverified research
+  summaries; facts move into this file only once checked against the source.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
