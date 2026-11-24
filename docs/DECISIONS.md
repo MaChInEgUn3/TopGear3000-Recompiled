@@ -28,7 +28,17 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
   `69adbec`, run 45504114049) passed on both jobs, Linux (ubuntu-latest) and Windows (MSYS2
   UCRT64).
 
-## Platform layer: not designed yet (2026-11-24)
+## Platform layer: proposed, waiting for the owner (2026-11-24)
+
+- `docs/proposals/video-layer.md` (PROPOSED). Measured first: the decomp's screens run on the
+  PC from zeroed memory (`title_card_show` returns by itself at frame 240); screens block inside
+  `platform_wait_vblank`, so the game owns the loop and the port lives at that frame boundary;
+  the menus' graphics arrive as whole decompressed blocks or direct ROM addresses.
+- Requests filed for the decomp (claude-mem list `tg3000-port-requests`, owner told):
+  1 the boot and top-level dispatcher in C; 2 `tg3000_unported` passing its name to the
+  platform; 3 (enhancement) the ROM source of decompressed uploads.
+
+## Platform layer: background (2026-11-24)
 
 - The decomp's `src/platform.h` is shaped like the SNES chips on purpose so its verification bench can compare against the original ROM.
 - The port needs a higher-level platform layer above it at the level of game data (not SNES MMIO/VRAM). That design will be proposed to the owner before it is written (Step 2).
