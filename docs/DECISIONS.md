@@ -126,7 +126,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
   about 0.8 s and reaching the first frame about 2.8 s: about 2 s go to starting SDL, the window
   and the renderer, not broken down further.
 
-## Sound: proposed (step 3, 2026-11-24)
+## Sound: proposed, then accepted (step 3, 2026-11-24)
 
 - `docs/proposals/sound.md` (PROPOSED). Part A, the loading interface, asked of the decomp as
   request 4 (three calls at the level each assembly routine already has in hand, so its bench
@@ -138,6 +138,30 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 - Until request 4 is done, no screen of the port loads sound: the loading routines are assembly.
 - Driver tables and game sound data are never reproduced in the repository (source or docs);
   the port reads them from the cartridge. The research notes and tools stay in `notes/sound/`.
+
+## Sound: the owner's questions (2026-11-24)
+
+The mixer question of `docs/proposals/sound.md` went back and forth; the owner's words, verbatim:
+"Qual a melhor decisão seguindo a regra do 0% emulado?", then "Qual a opção que deixa perfeito
+com o original mas sem emular?", then "é que a gente tava fazendo o desasembly do chip DSP-4, não
+rola de fazer parecido?", "e porque não?", and "porque não fazemos o desasembly do S-DSP igual
+estamos fazendo com o DSP-4?".
+
+- **Answered:** the sound driver (the Gremlin program the game sends to the sound processor) is
+  the DSP-4's counterpart: game-specific logic, read from the cartridge and rewritten in C, checked
+  against the original on the bench (request 5). The S-DSP is the console's fixed mixing circuit,
+  the PPU's counterpart: it has no program to disassemble, and C that reproduces its behaviour
+  exactly is a model of the sound chip, which the Scope rule forbids. Bit-identical sound without
+  that is not possible; indistinguishable by ear is the aim.
+- **The rule, kept for now:** at load, the cartridge's sound data become ordinary units (PCM audio,
+  envelope times and levels, frequencies, echo delay in ms; the few format constants these
+  conversions need sit in one file); while playing, our own mixer with our own interpolation,
+  envelope curves and echo, tuned against recordings of the original made on the bench until no
+  difference can be heard; only the envelope shapes the game's instruments use, anything else
+  stops with a message.
+- **To revisit after listening:** when the menus' music plays, the owner compares it with the
+  original. If he hears a difference he does not accept, the exception for the mixer is decided
+  then (swapping the mixer is cheap: the sequencer and conversions are shared by both options).
 
 ## Steps (2026-11-24)
 

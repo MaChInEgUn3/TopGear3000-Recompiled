@@ -1,8 +1,8 @@
 # Proposal: sound
 
-**Status: PROPOSED (2026-11-24).** Part A (the loading interface) needs no ruling and is asked
-of the decomp as a request. Part B (the native player) has one question for the owner. No player
-code is written before the answer.
+**Status: ACCEPTED (2026-11-24), the mixer question settled for now** (see `docs/DECISIONS.md`,
+"Sound: the owner's questions"). Part A is asked of the decomp as request 4. Part B goes ahead with
+the rule kept: conversions at load, our own mixer, tuned against recordings of the original.
 
 Facts below come from reading the decomp's disassembly (bank `$86`) and from throwaway
 measurement tools run on the user's ROM (kept out of git). Statements about what the sound
