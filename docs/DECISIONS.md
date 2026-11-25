@@ -334,6 +334,20 @@ estamos fazendo com o DSP-4?".
   a slot's table address), which the rule forbids. Both are used only by the VS race so far; the
   owner will be asked when the race is reached.
 
+## The OPTIONS submenu: drawn, but an animation phase differs (step 4, 2026-11-25)
+
+- The options menu's OPTIONS submenu (1 PLAYER FULL, 1 PLAYER SPLIT, 2 PLAYERS, PASSWORD, EXIT;
+  `explore_options.txt`, bench steps 3190/3191) is drawn by the options table as is: same
+  blocks, colours and band tables. Background, text and colours match the original.
+- **No frame of the port equals the original's picture there,** measured: the red box around
+  "OPTIONS" (20 objects) slides up 4 px per frame and the title glows through the band table's
+  32-step pulse. In the original the box stops sliding about 8 frames before the glow's peak; in
+  the port 2 frames after it, about 10 frames of phase between the two animations. The best
+  port frames are 264-280 pixels off, all in the box. It is a game-state difference, not a
+  drawing one: the same known difference (frames pass on the console while it unpacks graphics,
+  not in the port; hypothesis), here visible because two animations combine.
+- Not forced (no simulated loading delay); no exact-picture test for this submenu.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
