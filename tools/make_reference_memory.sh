@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-late
 #
-# Regenerate the four local 131072-byte WRAM snapshots used by the ctest picture tests:
+# Regenerate the five local 131072-byte WRAM snapshots used by the ctest picture tests:
+#   - wram_before_tick.bin  (notes/tick/wram_before_tick.bin) -> ticker_screen
+#       autopilot_60k.txt, WRAM at the end of step 15857
 #   - wram_before_res.bin   (notes/res/wram_before_res.bin)   -> game_picture_results
 #       autopilot_60k.txt, WRAM at the end of step 16489
 #   - wram_before_pw.bin    (notes/pw/wram_before_pw.bin)    -> game_picture_password_show
@@ -87,6 +89,7 @@ PY
 }
 
 extract_chunks "$MOVIES_DIR/autopilot_60k.txt" 41071 \
+  15857 "$OUT_DIR/wram_before_tick.bin" \
   16489 "$OUT_DIR/wram_before_res.bin" \
   41070 "$OUT_DIR/wram_before_pw.bin"
 
@@ -95,4 +98,4 @@ extract_chunks "$MOVIES_DIR/explore_options.txt" 2956 \
   2955 "$OUT_DIR/wram_before_opt.bin"
 
 echo "Generated reference memories in $OUT_DIR:"
-ls -la "$OUT_DIR/wram_before_res.bin" "$OUT_DIR/wram_before_pw.bin" "$OUT_DIR/wram_before_opt.bin" "$OUT_DIR/wram_before_title.bin"
+ls -la "$OUT_DIR/wram_before_tick.bin" "$OUT_DIR/wram_before_res.bin" "$OUT_DIR/wram_before_pw.bin" "$OUT_DIR/wram_before_opt.bin" "$OUT_DIR/wram_before_title.bin"

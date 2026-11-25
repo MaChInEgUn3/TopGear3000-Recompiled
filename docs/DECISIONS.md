@@ -377,6 +377,19 @@ estamos fazendo com o DSP-4?".
   verified by the decomp's differential test. Decomp request 8 asks for it in C.
 - **Test:** `game_picture_results`.
 
+## The ticker screen: measured, blocked (step 4, 2026-11-25)
+
+- Measured (`autopilot_60k.txt`, entry at step 15858; memory saved for later in
+  `tools/make_reference_memory.sh`): the ticker is a **two-task screen** (`$0008` = `$B97B`, the
+  menus' NMI frame with a line interrupt at line 108), so it waits on decomp request 7 like the
+  championship and the shop; and its top region is **Mode 7**: a 128x128 picture rotated and
+  scaled line by line from matrix tables the game computes (channels 1-4 to the Mode 7
+  registers, from WRAM `$012E-$013B`), with the scrolling ticker text as objects; the bottom
+  region is blanked.
+- **Owner's ruling needed before any code:** drawing a Mode 7 picture means mapping every
+  screen pixel through the game's per-line matrix, the closest any screen comes to the chip.
+  The title screen and the intro use Mode 7 too.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
