@@ -25,6 +25,8 @@ void port_set_shot(unsigned long frame, const char* path);
 void port_set_start_wram(const char* path);
 /* Test only: replay controller-1 input from a bench movie file with frame offset. */
 void port_set_movie(const char* path, long offset);
+/* Test only: switch movie frame offset to offset from port frame onwards. */
+void port_set_movie_offset_from(unsigned long frame, long offset);
 /* Test only: write the 128 KB game memory to path at frame (before frame code runs). */
 void port_set_wram_out(unsigned long frame, const char* path);
 /* Test only: disable 60.0988 fps frame pacing when fast is true. */

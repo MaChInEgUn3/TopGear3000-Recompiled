@@ -334,19 +334,25 @@ estamos fazendo com o DSP-4?".
   a slot's table address), which the rule forbids. Both are used only by the VS race so far; the
   owner will be asked when the race is reached.
 
-## The OPTIONS submenu: drawn, but an animation phase differs (step 4, 2026-11-25)
+## The OPTIONS submenu drawn natively (step 4, 2026-11-25)
 
-- The options menu's OPTIONS submenu (1 PLAYER FULL, 1 PLAYER SPLIT, 2 PLAYERS, PASSWORD, EXIT;
-  `explore_options.txt`, bench steps 3190/3191) is drawn by the options table as is: same
-  blocks, colours and band tables. Background, text and colours match the original.
-- **No frame of the port equals the original's picture there,** measured: the red box around
-  "OPTIONS" (20 objects) slides up 4 px per frame and the title glows through the band table's
-  32-step pulse. In the original the box stops sliding about 8 frames before the glow's peak; in
-  the port 2 frames after it, about 10 frames of phase between the two animations. The best
-  port frames are 264-280 pixels off, all in the box. It is a game-state difference, not a
-  drawing one: the same known difference (frames pass on the console while it unpacks graphics,
-  not in the port; hypothesis), here visible because two animations combine.
-- Not forced (no simulated loading delay); no exact-picture test for this submenu.
+- **The sixth screen, identical to the original pixel for pixel:** the options menu's OPTIONS
+  submenu (1 PLAYER FULL, 1 PLAYER SPLIT, 2 PLAYERS, PASSWORD, EXIT), drawn by the options table
+  as is. Frames 2775 and 2776 match the bench's pictures of steps 3190 and 3191 of
+  `explore_options.txt` (0 of 57,344 pixels different each).
+- **A first comparison seemed to show a 10-frame phase** between the box that slides to the
+  title and the title's glow. Measured, it was the test: the movie's buttons were aligned only
+  on the intro, but the options menu comes up about 10 frames earlier in the port, so the
+  button-driven box and the menu's own glow clock drifted apart. A player presses on what they
+  see, so there is no phase to keep. New test option `--movie-offset-from FRAME N` adds a second
+  anchor (the menu's first fully lit frame: port 2598, bench 3011, N = 413). The owner had been
+  asked whether to simulate load time; owner, verbatim: "Chama o Advisor e vá pelo melhor
+  caminho" — delegated: the port keeps loading faster than the console (cause still a
+  hypothesis); to be revisited when sound plays.
+- **Test:** `game_picture_options_submenu`.
+- Also: the title card's and password display's text palettes are checked again against the
+  measured ones (6 and 7); the two new platform calls that stop (`video_read_vram_word`,
+  `dma_hdma_get_table`) are called only by `vs_hud_draw` and `irq_vs_split` (the VS race).
 
 ## Steps (2026-11-24)
 

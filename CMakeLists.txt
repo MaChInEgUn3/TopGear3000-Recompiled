@@ -150,7 +150,18 @@ add_test(NAME game_picture_password_entry
 set_tests_properties(game_picture_password_entry PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 3132 picture hash bd2932edc0710119 brightness 15 drawn password_entry"
 )
-set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry PROPERTIES
+# The options submenu reached from the title/intro memory via the bench movie
+# (explore_options.txt, offset 403, then offset 413 from frame 2554): frames 2775 and 2776
+# matched the original's pictures (steps 3190 and 3191, frame_03191.png and frame_03192.png)
+# pixel for pixel. Skipped where the local WRAM file is absent.
+add_test(NAME game_picture_options_submenu
+  COMMAND tg3000 --wram notes/opt/wram_before_title.bin --screen intro,options --movie extern/tg3000-decomp/tools/bench/movies/explore_options.txt --movie-offset 403 --movie-offset-from 2554 413 --fast --frames 2777 --shot 2775 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_options_submenu PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 2775 picture hash b288ee1fcad88168 brightness 15 drawn options"
+)
+set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

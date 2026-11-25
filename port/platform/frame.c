@@ -53,12 +53,18 @@ static size_t g_movie_len = 0;
 static size_t g_movie_idx = 0;
 static uint16_t g_movie_held = 0;
 static long g_movie_offset = 0;
+static bool g_movie_offset_from_set = false;
+static unsigned long g_movie_offset_from_frame = 0;
+static long g_movie_offset_from_value = 0;
 
 static uint16_t movie_buttons_for_frame(unsigned long frame) {
     if (g_movie_events == NULL) {
         return 0;
     }
-    long step = (long)frame + g_movie_offset;
+    long offset = (g_movie_offset_from_set && frame >= g_movie_offset_from_frame)
+                      ? g_movie_offset_from_value
+                      : g_movie_offset;
+    long step = (long)frame + offset;
     while (g_movie_idx < g_movie_len && g_movie_events[g_movie_idx].step <= step) {
         g_movie_held = g_movie_events[g_movie_idx].mask;
         ++g_movie_idx;
@@ -381,6 +387,7 @@ void port_set_movie(const char* path, long offset) {
     g_movie_idx = 0;
     g_movie_held = 0;
     g_movie_offset = offset;
+    g_movie_offset_from_set = false;
 
     FILE* f = fopen(path, "r");
     if (f == NULL) {
@@ -419,6 +426,12 @@ void port_set_movie(const char* path, long offset) {
     }
     fclose(f);
     port_input_set_pad2_present(true);
+}
+
+void port_set_movie_offset_from(unsigned long frame, long offset) {
+    g_movie_offset_from_set = true;
+    g_movie_offset_from_frame = frame;
+    g_movie_offset_from_value = offset;
 }
 
 int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {

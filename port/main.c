@@ -87,7 +87,8 @@ static rom_status load_default_or_path(const char* explicit_path,
 static void print_usage(const char* prog) {
     fprintf(stderr,
             "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] "
-            "[--movie FILE] [--movie-offset N] [--expect-return] [--fast] [--shot F PATH] "
+            "[--movie FILE] [--movie-offset N] [--movie-offset-from FRAME N] [--expect-return] "
+            "[--fast] [--shot F PATH] "
             "[--wram FILE] [--wram-out F PATH] [path/to/TG3000.sfc]\n",
             prog);
 }
@@ -105,6 +106,9 @@ int main(int argc, char* argv[]) {
     const char* shot_path = NULL;
     const char* movie_path = NULL;
     long movie_offset = 0;
+    bool movie_offset_from_set = false;
+    unsigned long movie_offset_from_frame = 0;
+    long movie_offset_from_value = 0;
     unsigned long wram_out_frame = 0;
     const char* wram_out_path = NULL;
     const char* screen = "title_card";
@@ -126,6 +130,10 @@ int main(int argc, char* argv[]) {
             movie_path = argv[++i];
         } else if (strcmp(argv[i], "--movie-offset") == 0 && i + 1 < argc) {
             movie_offset = strtol(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--movie-offset-from") == 0 && i + 2 < argc) {
+            movie_offset_from_set = true;
+            movie_offset_from_frame = strtoul(argv[++i], NULL, 10);
+            movie_offset_from_value = strtol(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--wram") == 0 && i + 1 < argc) {
             wram_path = argv[++i];
             port_set_start_wram(wram_path);
@@ -228,6 +236,9 @@ int main(int argc, char* argv[]) {
     port_set_shot(shot_frame, shot_path);
     if (movie_path != NULL) {
         port_set_movie(movie_path, movie_offset);
+        if (movie_offset_from_set) {
+            port_set_movie_offset_from(movie_offset_from_frame, movie_offset_from_value);
+        }
     }
     if (wram_out_path != NULL) {
         port_set_wram_out(wram_out_frame, wram_out_path);
