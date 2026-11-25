@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `75e8d14`; earlier `2ade543`, `f84afeb`, `8238cd1`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `49b5583`; earlier `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -323,6 +323,16 @@ estamos fazendo com o DSP-4?".
   The options-only per-line function now serves the menus' band tables (options and password
   entry), with the same strict checks. No new kind of per-line effect.
 - **Test:** `game_picture_password_entry`.
+
+## Decomp at 49b5583: four new platform calls (2026-11-25)
+
+- The decomp reached 92.40% of the game's code in verified C (754 routines), mostly the VS race,
+  and added four platform calls. `video_set_m7_vofs` and `dma_stream_set_source` are ignored like
+  the other screen-register and per-line calls. **`video_read_vram_word`** (the game reads video
+  memory back) and **`dma_hdma_get_table`** (it reads back an HDMA slot's table address) stop
+  with a message: answering them would need the port to keep chip state (a copy of video memory,
+  a slot's table address), which the rule forbids. Both are used only by the VS race so far; the
+  owner will be asked when the race is reached.
 
 ## Steps (2026-11-24)
 

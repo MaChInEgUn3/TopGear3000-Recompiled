@@ -79,3 +79,9 @@ void platform_set_irq_h(uint16_t dot) { (void)dot; }
 void platform_set_irq_h_low(uint8_t dot) { (void)dot; }
 void platform_set_irq_v_low(uint8_t line) { (void)line; }
 void platform_set_irq_v_high(uint8_t line) { (void)line; }
+
+// Added by the decomp at 49b5583 (VS race work).
+// The Mode 7 vertical offset alone: a screen register, ignored like the others.
+void video_set_m7_vofs(uint16_t value) { (void)value; }
+// A stream slot's source address alone: per-line machinery, ignored like the other dma_* calls.
+void dma_stream_set_source(int slot, uint16_t src) { (void)slot; (void)src; }

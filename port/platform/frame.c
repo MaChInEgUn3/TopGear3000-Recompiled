@@ -502,3 +502,18 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
         platform_wait_vblank();
     }
 }
+
+/* Added by the decomp at 49b5583, used so far only by the VS race. Both would need the port to
+   hold chip state (a copy of video memory; an HDMA slot's table address), which the rule
+   forbids; they stop with a message until the race is reached and the owner rules on it. */
+uint16_t video_read_vram_word(uint16_t vram_word) {
+    (void)vram_word;
+    port_fatal("the game reads video memory back (VS race): not supported");
+    return 0;
+}
+
+uint16_t dma_hdma_get_table(int slot) {
+    (void)slot;
+    port_fatal("the game reads a per-line table address back (VS race): not supported");
+    return 0;
+}
