@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "assets.h"
+#include "palette.h"
 #include "platform.h"
 
-// step 4: identify the block (by content hash of a known ROM block or by ROM address)
-// and note its role for the active screen; never keep a copy indexed by video address
+/* Nothing is kept by video address: graphics uploads identify a known cartridge block
+   and mark it loaded; palette uploads update the screen's 256-colour palette. */
 
 void video_upload_vram(uint16_t vram_word, uint32_t src, uint32_t size) {
     (void)vram_word;
-    (void)src;
-    (void)size;
+    assets_note_upload(src, size);
 }
 
 void video_fill_vram(uint16_t vram_word, uint8_t value, uint32_t size) {
     (void)vram_word;
     (void)value;
-    (void)size;
+    if (size == 0x10000u) {
+        assets_clear_loaded();
+    }
 }
 
 void video_write_vram_word(uint16_t vram_word, uint16_t value) {
@@ -23,12 +26,9 @@ void video_write_vram_word(uint16_t vram_word, uint16_t value) {
 }
 
 void video_upload_cgram(uint8_t index, uint32_t src, uint32_t size) {
-    (void)index;
-    (void)src;
-    (void)size;
+    palette_load(index, src, size);
 }
 
 void video_set_color(uint8_t index, uint16_t bgr) {
-    (void)index;
-    (void)bgr;
+    palette_set(index, bgr);
 }

@@ -9,11 +9,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "assets.h"
 #include "frame.h"
 #include "misc.h"
 #include "password.h"
 #include "platform.h"
 #include "port.h"
+#include "screens.h"
 #include "tg3000.h"
 #include "vs.h"
 
@@ -25,6 +27,8 @@ static uint8_t g_sound_last_msg[16];
 static unsigned long g_sound_last_frame = 0;
 
 static SDL_Renderer* g_renderer = NULL;
+static SDL_Texture* g_texture = NULL;
+static uint32_t g_fb[SCREEN_WIDTH * SCREEN_HEIGHT];
 static unsigned long g_frame_limit = 0;
 static unsigned long g_frame_count = 0;
 static uint64_t g_next_frame_ns = 0;
@@ -32,6 +36,8 @@ static jmp_buf g_quit_jmp;
 static unsigned long g_test_press_frame = 0;
 static bool g_test_expect_return = false;
 static volatile bool g_screen_returned = false;  /* read after longjmp */
+static unsigned long g_shot_frame = 0;
+static const char* g_shot_path = NULL;
 
 void platform_set_interrupts(uint8_t value) {
     nmi_enabled = (value & 0x80) != 0;
@@ -136,10 +142,79 @@ void platform_wait_vblank(void) {
         run_nmi_dispatch();
     }
 
-    /* c) Draw (no drawing in step 2) */
-    SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
-    SDL_RenderClear(g_renderer);
+    /* c) Draw */
+    if (title_card_active()) {
+        title_card_draw(g_fb);
+        SDL_UpdateTexture(g_texture, NULL, g_fb, SCREEN_WIDTH * (int)sizeof(uint32_t));
+        SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
+        SDL_RenderClear(g_renderer);
+        SDL_RenderTexture(g_renderer, g_texture, NULL, NULL);
+    } else {
+        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
+            g_fb[i] = 0xFF000000u;
+        }
+        SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
+        SDL_RenderClear(g_renderer);
+    }
     SDL_RenderPresent(g_renderer);
+
+    if (g_shot_path != NULL && g_frame_count == g_shot_frame) {
+        /* The picture's fingerprint (FNV-1a 64 of its RGB bytes, top to bottom): a test can
+           check a screen against a known value without any picture in the repository. */
+        uint64_t h = 0xCBF29CE484222325ULL;
+        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
+            for (int sh = 16; sh >= 0; sh -= 8) {
+                h ^= (g_fb[i] >> sh) & 0xFFu;
+                h *= 0x100000001B3ULL;
+            }
+        }
+        printf("frame %lu picture hash %016llx\n", g_frame_count, (unsigned long long)h);
+        fflush(stdout);
+    }
+    if (g_shot_path != NULL && g_frame_count == g_shot_frame && strcmp(g_shot_path, "-") != 0) {
+        FILE* f = fopen(g_shot_path, "wb");
+        if (f == NULL) {
+            port_fatal("failed to open screenshot path for writing");
+        }
+        const uint32_t width = SCREEN_WIDTH;
+        const uint32_t height = SCREEN_HEIGHT;
+        const uint32_t image_size = width * height * 3u;
+        const uint32_t file_size = 54u + image_size;
+        uint8_t hdr[54];
+        memset(hdr, 0, sizeof(hdr));
+        hdr[0] = 'B';
+        hdr[1] = 'M';
+        hdr[2] = (uint8_t)(file_size & 0xFFu);
+        hdr[3] = (uint8_t)((file_size >> 8) & 0xFFu);
+        hdr[4] = (uint8_t)((file_size >> 16) & 0xFFu);
+        hdr[5] = (uint8_t)((file_size >> 24) & 0xFFu);
+        hdr[10] = 54u;
+        hdr[14] = 40u;
+        hdr[18] = (uint8_t)(width & 0xFFu);
+        hdr[19] = (uint8_t)((width >> 8) & 0xFFu);
+        hdr[22] = (uint8_t)(height & 0xFFu);
+        hdr[23] = (uint8_t)((height >> 8) & 0xFFu);
+        hdr[26] = 1u;
+        hdr[28] = 24u;
+        hdr[34] = (uint8_t)(image_size & 0xFFu);
+        hdr[35] = (uint8_t)((image_size >> 8) & 0xFFu);
+        hdr[36] = (uint8_t)((image_size >> 16) & 0xFFu);
+        hdr[37] = (uint8_t)((image_size >> 24) & 0xFFu);
+        fwrite(hdr, 1, sizeof(hdr), f);
+        uint8_t row[SCREEN_WIDTH * 3];
+        for (int y = SCREEN_HEIGHT - 1; y >= 0; --y) {
+            const uint32_t* src = &g_fb[y * SCREEN_WIDTH];
+            for (int x = 0; x < SCREEN_WIDTH; ++x) {
+                uint32_t px = src[x];
+                row[x * 3 + 0] = (uint8_t)(px & 0xFFu);
+                row[x * 3 + 1] = (uint8_t)((px >> 8) & 0xFFu);
+                row[x * 3 + 2] = (uint8_t)((px >> 16) & 0xFFu);
+            }
+            fwrite(row, 1, sizeof(row), f);
+        }
+        fclose(f);
+        g_shot_path = NULL;
+    }
 
     /* d) Pace to 60.0988 fps */
     const uint64_t frame_ns = 16639267ULL;
@@ -167,6 +242,11 @@ void port_set_test_options(unsigned long press_frame, bool expect_return) {
     g_test_expect_return = expect_return;
 }
 
+void port_set_shot(unsigned long frame, const char* path) {
+    g_shot_frame = frame;
+    g_shot_path = path;
+}
+
 int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
     g_renderer = r;
     g_frame_limit = frame_limit;
@@ -174,7 +254,20 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
     g_next_frame_ns = 0;
     g_screen_returned = false;
 
+    if (g_texture == NULL) {
+        g_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_ARGB8888,
+                                      SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
+        if (g_texture == NULL) {
+            port_fatal("SDL_CreateTexture failed");
+        }
+        SDL_SetTextureScaleMode(g_texture, SDL_SCALEMODE_NEAREST);
+    }
+
     if (setjmp(g_quit_jmp) != 0) {
+        if (g_texture != NULL) {
+            SDL_DestroyTexture(g_texture);
+            g_texture = NULL;
+        }
         if (g_test_expect_return && !g_screen_returned) {
             fprintf(stderr, "FAIL: screen %s did not return within %lu frames\n", screen,
                     g_frame_count);
@@ -183,6 +276,7 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
         return 0;
     }
 
+    assets_init();
     memset(g_ram, 0, sizeof(g_ram));
     interrupt_vectors_init();
     nmi_enabled = true;

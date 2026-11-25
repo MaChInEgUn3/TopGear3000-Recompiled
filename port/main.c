@@ -91,6 +91,8 @@ int main(int argc, char* argv[]) {
     bool expect_return = false;
     unsigned long press_frame = 0;
     unsigned long frame_limit = 0;
+    unsigned long shot_frame = 0;
+    const char* shot_path = NULL;
     const char* screen = "title_card";
     const char* rom_path = NULL;
 
@@ -106,6 +108,9 @@ int main(int argc, char* argv[]) {
             frame_limit = strtoul(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--press") == 0 && i + 1 < argc) {
             press_frame = strtoul(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--shot") == 0 && i + 2 < argc) {
+            shot_frame = strtoul(argv[++i], NULL, 10);
+            shot_path = argv[++i];
         } else if (strcmp(argv[i], "--expect-return") == 0) {
             expect_return = true;
         } else if (argv[i][0] == '-') {
@@ -185,6 +190,7 @@ int main(int argc, char* argv[]) {
     SDL_SetRenderLogicalPresentation(renderer, 256, 224, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
 
     port_set_test_options(press_frame, expect_return);
+    port_set_shot(shot_frame, shot_path);
     int rc = port_run(renderer, screen, frame_limit);
 
     SDL_DestroyRenderer(renderer);

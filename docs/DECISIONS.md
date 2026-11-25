@@ -163,6 +163,41 @@ estamos fazendo com o DSP-4?".
   original. If the owner hears a difference they do not accept, the exception for the mixer is decided
   then (swapping the mixer is cheap: the sequencer and conversions are shared by both options).
 
+## The title card drawn natively (step 4, 2026-11-24)
+
+- **The first screen the port draws:** the title card (`title_card_show`: KEMCO logo, "presents",
+  the TOP GEAR 3000 logo, the copyright lines). It matches the original **pixel for pixel**: the
+  port's frame 119 of the screen against frame 180 of the decomp bench's `explore_options.txt`
+  movie (the title card runs there from frame 61 to 300), 0 of 57,344 pixels different.
+- **How, under the rule:**
+  - `port/video/convert.c`: every format conversion (planar tiles to colour numbers, the game's
+    BGR555 colours to RGBA), in one file;
+  - `port/video/assets.c`: a catalogue of named cartridge blocks, unpacked at start-up with the
+    decomp's own `decompress` and recognised by content (hash) or ROM address when the game
+    uploads them; nothing is kept by video address; the game's "clear all graphics" (a 64 KB
+    fill) unloads them;
+  - `port/video/palette.c`: the screen's 256 colours as the game sets them (named palette blocks
+    and the colours it writes one by one; the title card zeroes 48 colours its background
+    picture uses, which is why the picture has black parts);
+  - `port/screens/title_card.c`: one function for this screen. Background picture (drawings
+    `$96:EE52` + arrangement `$85:FA8B`, built once as a 256x256 colour-number image; the
+    arrangement's rows 27-31 do not exist and are entry 0, as on the console after the game
+    clears video memory), then the text from the game's map at `$7F:0000` (tiles 128-166 of
+    `$87:F861`; all entries "in front"), then the objects from the game's object table (16x16,
+    `$87:F5BC`, priority 2). Anything else stops with a message.
+- **Positions:** the background sits 64 lines down and 4 pixels right: the screen set-up at
+  `$8A:C4B0` scrolls it by -4 horizontally and `title_card_show` by -65 vertically, and the
+  game's convention puts a vertical scroll of -1 at the top line (its text layer). Objects at
+  their table's Y. Found by comparing pictures, region by region.
+- **Brightness** (`$019B`, 0-15, the game's fade): linear, `c * b * 17 / 256`. During fades the
+  bench's picture differs by at most 1 in 255 per colour channel (its own rounding); the fade's
+  timing matches to the frame. Not chased further: it is the bench emulator's rounding.
+- **Regression test:** `game_picture_title_card` checks the fingerprint (FNV-1a 64 of the RGB
+  picture) of that frame; only the hash is in the repository. `--shot F PATH` (PATH `-` = no
+  file) prints it and saves a BMP for local comparison (pictures stay outside the repo, under
+  the excluded `notes/`).
+- **Per-line effects done:** none (the title card has none).
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

@@ -58,10 +58,16 @@ add_executable(tg3000
   port/platform/video_events.c
   port/platform/input.c
   port/platform/frame.c
+  port/video/convert.c
+  port/video/assets.c
+  port/video/palette.c
+  port/screens/title_card.c
 )
 target_include_directories(tg3000 PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/port"
   "${CMAKE_CURRENT_SOURCE_DIR}/port/platform"
+  "${CMAKE_CURRENT_SOURCE_DIR}/port/video"
+  "${CMAKE_CURRENT_SOURCE_DIR}/port/screens"
 )
 target_compile_options(tg3000 PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(tg3000 PRIVATE tg3000_logic ${TG3000_SDL_TARGET})
@@ -82,7 +88,17 @@ add_test(NAME game_smoke_password_press
   COMMAND tg3000 --screen password_show --frames 400 --press 120 --expect-return
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-set_tests_properties(game_smoke_title_card game_smoke_password_press PROPERTIES
+# The title card drawn natively must stay the picture that matched the original pixel for pixel
+# (frame 119 of the screen = the decomp bench's frame 180 of explore_options.txt; see
+# docs/DECISIONS.md "The title card drawn natively"). Only its fingerprint is in the repository.
+add_test(NAME game_picture_title_card
+  COMMAND tg3000 --screen title_card --frames 125 --shot 119 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_title_card PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 119 picture hash 7c3658674cf68a42"
+)
+set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

@@ -13,7 +13,10 @@
   `g_ram`/`g_rom`, timing, sound message, DSP-4 stop), `input.c` (keyboard and gamepad),
   `video_events.c` (named graphics/palette events, empty until step 4), `ignored.c` (every
   register-style call, empty bodies, one file so review is trivial).
-- `docs/proposals/` — accepted design proposals (`video-layer.md`).
+- `port/video/` — `convert.c` (every format conversion), `assets.c` (named cartridge blocks,
+  recognised when the game uploads them), `palette.c` (the screen's colours as the game sets them).
+- `port/screens/` — one drawing function per kind of screen (`title_card.c`).
+- `docs/proposals/` — accepted design proposals (`video-layer.md`, `sound.md`).
 - `tools/` — helper CMake scripts (`fetch_deps.cmake`).
 - `deps/` — fetched third-party dependencies (`deps/SDL3`, git-ignored).
 - `input/` — default user ROM location (`input/TG3000.sfc`, git-ignored).
@@ -29,7 +32,8 @@ main() -> rom_load() [1048576 bytes + SHA-1] -> g_rom -> SDL window + renderer (
     0. SDL events (quit/Escape -> longjmp back to port_run; input state)
     1. the game's frame code (its NMI, in C): JML target at $0000, then nmi_prologue() and the
        target word at $0008 (fixed table; unknown -> port_fatal with the value)
-    3. draw (black until step 4) and present
+    3. draw: the active screen's own function into a 256x224 picture (title card so far;
+       other screens black), then present
     4. pace at 60.0988 fps (SDL_DelayPrecise)
 ```
 The game owns the loop; the port lives at the frame boundary (docs/proposals/video-layer.md).
@@ -41,6 +45,7 @@ CLI modes:
 - `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
 - `--expect-return` (tests): exit 2 if the screen function has not returned by then.
 - `--press F` (tests): hold A+B for 6 frames from frame F.
+- `--shot F PATH` (tests): print the picture's fingerprint at frame F and save it as BMP (`-`: no file).
 
 ## Boundary
 The decomp's `src/platform.h` is chip-shaped on purpose (its bench compares with the

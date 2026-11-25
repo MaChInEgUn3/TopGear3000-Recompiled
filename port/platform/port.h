@@ -17,5 +17,7 @@ void port_input_set_test_mask(uint16_t mask);
 /* Test only: hold A+B for 6 frames from press_frame (0 = never); expect_return makes
    port_run return 2 if the screen function has not returned when the frame limit ends. */
 void port_set_test_options(unsigned long press_frame, bool expect_return);
+/* Test only: save the 256x224 framebuffer as a 24-bit BMP when frame_count reaches frame. */
+void port_set_shot(unsigned long frame, const char* path);
 
 #endif
