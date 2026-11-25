@@ -390,6 +390,19 @@ estamos fazendo com o DSP-4?".
   screen pixel through the game's per-line matrix, the closest any screen comes to the chip.
   The title screen and the intro use Mode 7 too.
 
+## Mode 7: the owner's answer (2026-11-25)
+
+Asked whether a screen may draw its Mode 7 picture with its own code that reads the matrix
+tables the game computed and applies them line by line to the picture converted from the
+cartridge. Owner, verbatim: "Pode fazer da melhor forma possível contanto que não quebre a regra
+do 0% emulado". **Delegated under the rule**, with the same safeguards as the per-line effects:
+- one function per screen, reading only that screen's tables at their fixed addresses, in the
+  format the game's own routine writes, with that screen's fixed line geometry; no interface
+  shaped like the Mode 7 registers, nothing generic that another table or target could drive;
+- the picture (128x128 map and its drawings) converted once from the named cartridge blocks;
+- every value checked against what was measured for that screen; anything else stops;
+- each Mode 7 use listed in the step's report, so the owner can veto it.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
