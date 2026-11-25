@@ -11,6 +11,7 @@ This guide covers building the port from source on Linux and Windows (x86-64).
 * [Using System SDL3](#using-system-sdl3)
 * [Updating the Submodule](#updating-the-submodule)
 * [Running Checks and CLI Options](#running-checks-and-cli-options)
+* [Reference Memories for the Picture Tests](#reference-memories-for-the-picture-tests)
 
 ## Linux
 
@@ -103,3 +104,16 @@ git submodule update --init --recursive
 * Controls: arrows = D-pad, Z = B, X = A, A = Y, S = X, Q = L, W = R, Enter = Start,
   Right Shift = Select, Esc = quit; or the first connected gamepad (SNES button positions).
 * `tg3000 --check-rom [path]` verifies ROM size (`1,048,576` bytes) and SHA-1 without opening a window. If `[path]` is omitted, it checks `input/TG3000.sfc` first and falls back to `TG3000.sfc` in the current directory.
+
+## Reference Memories for the Picture Tests
+
+Three picture tests (`game_picture_password_show`, `game_picture_options`, `game_picture_vs`) start from 128 KB WRAM snapshots captured from the original game on the `tg3000-decomp` bench. Because those snapshots are game data, they are not tracked in git and are skipped by `ctest` when absent.
+
+To regenerate them on Linux or WSL next to a built `tg3000-decomp` checkout:
+
+```bash
+bash tools/make_reference_memory.sh /path/to/tg3000-decomp input/TG3000.sfc /tmp/tg3000-ref-wram
+cp /tmp/tg3000-ref-wram/wram_before_pw.bin notes/pw/wram_before_pw.bin
+cp /tmp/tg3000-ref-wram/wram_before_opt.bin notes/opt/wram_before_opt.bin
+cp /tmp/tg3000-ref-wram/wram_before_title.bin notes/opt/wram_before_title.bin
+```

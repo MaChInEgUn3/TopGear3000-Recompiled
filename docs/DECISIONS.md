@@ -280,13 +280,14 @@ estamos fazendo com o DSP-4?".
   (`--movie`, `--movie-offset 403`: aligned on the intro's first fade-in step, measured on both
   sides; "nothing else runs between the screens" comes from a subagent's reading of the
   assembly, and the memory comparison supports it for this movie only). At the VS screen's entry
-  the port's memory differs from the original's in 17 bytes outside the stack. Identified: the
-  frame counter `$0024`; the menu glow byte `$0D25`; the sound state `$045B-$045E`, `$0463`,
-  `$046D-$046E` (the sound sets are not loaded in the port: their loader is still assembly,
-  decomp request 4); and **controller 2**: `$0010`/`$0012` (pad 2) and `$0020-$0021` (the
-  multitap read) show the original with a controller in port 2 and the port declaring it absent
-  (its input layer answers "no multitap pads"). That is a gap of the port's input layer, on the
-  multi-player screen, not fixed yet. Not identified: `$0156`, `$0158`, `$1520`, `$152E`.
+  the port's memory first differed from the original's in 17 bytes outside the stack, most of
+  them because the port declared port 2 empty while the bench has a standard controller there.
+  **Controller 2 (2026-11-25):** the port now answers the game's port-2 reads as a standard
+  controller (first pair: its 16 bits, plugged; second pair: lines high, nothing plugged) when a
+  second gamepad is connected, or during a bench movie replay (the bench has a pad there); the
+  multitap (players 3-5) is not supported yet. With it, only these remain: the frame counter
+  `$0024`, the stack, and the sound state `$045B-$045E`, `$0463`, `$046D-$046E` (the sound sets
+  are not loaded in the port: their loader is still assembly, decomp request 4).
 - **First try from the options menu's own entry failed, measured:** the title screen's "skip the
   pads" flag (`$0026` bit 2) is cleared by the title screen's last instructions, in the same step
   the options menu starts; memory saved at the end of the previous step still has it, so the

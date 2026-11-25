@@ -418,6 +418,7 @@ void port_set_movie(const char* path, long offset) {
         ++g_movie_len;
     }
     fclose(f);
+    port_input_set_pad2_present(true);
 }
 
 int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
@@ -442,6 +443,7 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
         free(g_movie_events);
         g_movie_events = NULL;
         g_movie_len = 0;
+        port_input_set_pad2_present(false);
         if (g_texture != NULL) {
             SDL_DestroyTexture(g_texture);
             g_texture = NULL;
