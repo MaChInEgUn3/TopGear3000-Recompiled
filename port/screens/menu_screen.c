@@ -139,7 +139,7 @@ static const menu_screen_desc menu_screen_table[] = {
     },
     {
         .name = "password_entry",
-        /* measured on password_entry (notes/probe/PWENTRY.md): $96:EE52, $85:FA8B, $88:FEC3 (A, inherited), $88:8601 (256..441), $8A:C8E4 (cursor word run) */
+        /* measured on password_entry (docs/DECISIONS.md, "The password entry drawn natively"): $96:EE52, $85:FA8B, $88:FEC3 (A, inherited), $88:8601 (256..441), $8A:C8E4 (cursor word run) */
         .roles = {
             [ROLE_BG_DRAWINGS] = ASSET_MENU_BG_DRAWINGS,
             [ROLE_BG_ARRANGEMENT] = ASSET_MENU_BG_ARRANGEMENT,
@@ -150,7 +150,7 @@ static const menu_screen_desc menu_screen_table[] = {
         /* Setup $8A:C4B0 BG1 HOFS 0xFFFC (-4), VOFS 0xFFFF (-1 sits at line 0) */
         .bg_shift_x = 4,
         .bg_shift_y = 0,
-        /* measured on password_entry (notes/probe/PWENTRY.md): $88:8601 (186 tiles, 256..441; 266..434 used), blank $003D, pal 6 & 7, prio=1, flips allowed */
+        /* measured on password_entry (docs/DECISIONS.md, "The password entry drawn natively"): $88:8601 (186 tiles, 256..441; 266..434 used), blank $003D, pal 6 & 7, prio=1, flips allowed */
         .text_first_tile = 256u,
         .text_tile_count = 186u,
         .text_blank_entry = 0x003Du,
@@ -158,7 +158,7 @@ static const menu_screen_desc menu_screen_table[] = {
         .text_require_in_front = true,
         .text_flips_allowed = true,
         .text_per_line_effects = true,
-        /* measured on password_entry (notes/probe/PWENTRY.md): 97 words at $8A:C8E4 (tiles 0..2 used), 8x8 (size flag set), priority 3, palette 0, h/v-flip used */
+        /* measured on password_entry (docs/DECISIONS.md, "The password entry drawn natively"): 97 words at $8A:C8E4 (tiles 0..2 used), 8x8 (size flag set), priority 3, palette 0, h/v-flip used */
         .has_objects = true,
         .obj_first_tile = 0u,
         .obj_tile_count = 3u,
