@@ -414,8 +414,24 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   computes it (`mode7_view`, `mode7_zoom_view`) and writes it straight to the Mode 7 registers
   (`video_set_m7a-d`, ignored by the port). The owner's Mode 7 permission covers "reading the
   matrix table the game computed"; keeping register values would be chip state. To be settled
-  before any intro code (options: a named data event "the game's Mode 7 view this frame" from
-  those calls, owner to rule; or the game's own view variables, without duplicating its maths).
+  before any intro code.
+- **Settled under the rule (2026-11-25; the owner asked not to be brought options):** in the
+  zoom phases the matrix is only "scale the picture by a factor about a centre" (`mode7_zoom_view`:
+  A = D = scale, B = C = 0, the centre put at screen point ($80, $6F)), and the factor and centre
+  are game variables in RAM. The intro's screen code reads those variables and draws the picture
+  scaled about that centre; the `video_set_m7*` calls stay ignored (they also serve the stars'
+  and tables' multiplications, so a "last value written" would not even be the matrix).
+- **Plan, sliced:** first the zoom phase with stars at its first measured moment (bench steps
+  700/701 = port frames 298/299), the phase taken from the game's `$013E`; the ROM band tables
+  become a fixed layout per phase. Before the spec: how the Mode 7 picture reaches the port (its
+  uploads go through the stream calls the port ignores; the map is built in the scratch area,
+  like the VS panels), whether the sliced logo's RAM buffer stays intact while shown, and the
+  first colours that come from game RAM (the copy at `$81:0500`) and their cycling. Scaling
+  needs rounding: do the plain fixed-point maths and measure; if only copying the chip's
+  truncations would match, stop and report. Guard for every subagent spec and a grep: the port
+  never writes game RAM nor calls decomp routines outside the frame dispatch.
+
+
 
 ## Steps (2026-11-24)
 
