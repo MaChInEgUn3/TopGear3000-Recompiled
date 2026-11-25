@@ -126,6 +126,19 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
   about 0.8 s and reaching the first frame about 2.8 s: about 2 s go to starting SDL, the window
   and the renderer, not broken down further.
 
+## Sound: proposed (step 3, 2026-11-24)
+
+- `docs/proposals/sound.md` (PROPOSED). Part A, the loading interface, asked of the decomp as
+  request 4 (three calls at the level each assembly routine already has in hand, so its bench
+  can check them; the port names blocks by a fixed table of destinations and stops on anything
+  else). Part B, the native player, waits for one owner ruling: how close the mixer may follow
+  the sound chip (options a/b/c; recommended b).
+- Request 5: a bench measurement of the driver's output per voice (note, pitch, volume per
+  tick), the reference for the native sequencer.
+- Until request 4 is done, no screen of the port loads sound: the loading routines are assembly.
+- Driver tables and game sound data are never reproduced in the repository (source or docs);
+  the port reads them from the cartridge. The research notes and tools stay in `notes/sound/`.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
