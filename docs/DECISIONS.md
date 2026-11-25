@@ -240,6 +240,36 @@ estamos fazendo com o DSP-4?".
 - **Test:** `game_picture_password_show` (fingerprint of frame 137 from the saved memory).
 - **Per-line effects done:** none.
 
+## The options menu drawn natively (step 4, 2026-11-25)
+
+- **The third screen, identical to the original pixel for pixel, glow included:** the main
+  options menu (CHAMPIONSHIP / VS MODE, `options_screens(0)`), started from the original's memory
+  saved at the end of step 2955 of `explore_options.txt` (entry at step 2956, found by the WRAM
+  stream and a one-off program-counter print in the separate bench copy, reverted). Frames 132
+  and 133 of the call match the bench's pictures of steps 3100 and 3101 with 0 of 57,344 pixels
+  different each (the item under the cursor pulses every frame).
+- **What it uses (measured):** the menus' picture (scrolls -4/-1); text drawings `$88:FEC3`
+  (first tile 128, not visible here) and `$88:F87F` (first tile 256), all text palette 7 and in
+  front; the cursor box: 30 objects, 8x8, priority 3, drawn with 97 words the game writes one by
+  one from ROM `$8A:C8E4` (`text_tiles_put_0`), recognised by content (the run's length and hash)
+  like the blocks; the whole palette `$8A:C658`.
+- **Text drawings now have two roles,** by the tile number their block starts at (128 or 256):
+  the menus load two text blocks at once. This "tile range -> block" mapping is the point closest
+  to the line; only measured ranges are accepted.
+- **The first per-line effects (listed for the owner's veto), both on the text layer only, in
+  one options-only function:**
+  1. **Item centring:** the game's table at `$0D00` (76 lines, then 7 bands of 24 lines) holds
+     one horizontal offset per band, written by `func_8AB700` (4 when the item's name has an odd
+     number of letters, else 0); the port moves that band's text left by it.
+  2. **Item glow:** the game's table at `$0D20` (same bands) holds one colour byte per band,
+     written by `func_8AA32B` (the item under the cursor pulses through a 32-step ROM table, the
+     other items hold a fixed value); the port adds its intensity to each colour channel of that
+     band's text, clamped, as the measured picture shows (background and objects unchanged).
+  Both read the game's own values at fixed addresses with this menu's fixed band geometry and
+  stop on any other count or colour-plane value: pointed at another table or target, the code
+  would not work.
+- **Test:** `game_picture_options` (fingerprint of frame 132 from the saved memory).
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

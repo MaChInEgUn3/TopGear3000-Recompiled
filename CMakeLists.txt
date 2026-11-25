@@ -118,7 +118,18 @@ add_test(NAME game_picture_password_show
 set_tests_properties(game_picture_password_show PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 137 picture hash 67be51b43114d1f5 brightness 15 drawn password_show"
 )
-set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show PROPERTIES
+# The main options menu from the original's own game memory (saved on the decomp's bench just
+# before the screen, explore_options.txt step 2955; a local file under notes/, never in git):
+# frame 132 matched the original's picture (step 3100, frame_03101.png) pixel for pixel.
+# Skipped where the file is absent.
+add_test(NAME game_picture_options
+  COMMAND tg3000 --wram notes/opt/wram_before_opt.bin --screen options --frames 135 --shot 132 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_options PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 132 picture hash 818ba9b5248b7647 brightness 15 drawn options"
+)
+set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

@@ -35,14 +35,14 @@ Você precisa fornecer sua própria cópia legal da ROM **Top Gear 3000 (USA)**:
 
 ## Estado atual
 
-O projeto está na **etapa 4 de 4** (pré-alfa). **Ainda não dá para jogar** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e roda algumas telas do jogo a partir do C do decomp, na velocidade do console, com teclado e controle já ligados (ainda sem uso: nada aparece na tela). As primeiras telas já são desenhadas de forma nativa, idênticas ao original pixel a pixel: o cartão de título e a tela da senha. As outras telas ainda ficam pretas. Ainda não há saves, configurações, mods, widescreen nem gameplay.
+O projeto está na **etapa 4 de 4** (pré-alfa). **Ainda não dá para jogar** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e roda algumas telas do jogo a partir do C do decomp, na velocidade do console, com teclado e controle já ligados (ainda sem uso: nada aparece na tela). As primeiras telas já são desenhadas de forma nativa, idênticas ao original pixel a pixel: o cartão de título, a tela da senha e o menu de opções (com o brilho do cursor). As outras telas ainda ficam pretas. Ainda não há saves, configurações, mods, widescreen nem gameplay.
 
 | Etapa | Marco | Estado |
 |---|---|---|
 | 1 | Esqueleto (CMake, download do SDL3, checagem SHA-1 da ROM, janela vazia, CI) | ✅ Feito |
 | 2 | Camada de plataforma (laço de quadros, controles; [desenho](docs/proposals/video-layer.md)) | ✅ Feito |
 | 3 | Interface de som ([desenho](docs/proposals/sound.md); o tocador espera o decomp) | ✅ Desenhada |
-| 4 | Primeiros menus nativos (cartão de título e tela da senha prontos, idênticos pixel a pixel) | ⏳ Em andamento |
+| 4 | Primeiros menus nativos (cartão de título, senha e menu de opções prontos, idênticos pixel a pixel) | ⏳ Em andamento |
 
 ## Nem 1% emulador
 

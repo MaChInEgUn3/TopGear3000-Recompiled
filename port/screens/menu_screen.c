@@ -26,17 +26,23 @@ typedef struct {
     uint16_t text_first_tile;   /* first tile number of the text drawings block */
     uint16_t text_tile_count;   /* number of 4bpp tiles in the text drawings block */
     uint16_t text_blank_entry;  /* blank tilemap entry value at $7F:0000 */
+    int text_require_pal;       /* required palette (0..7), or -1 for any */
     bool text_require_in_front; /* whether bit 13 (in-front) must be set */
     bool text_flips_allowed;    /* whether h-flip (bit 14) / v-flip (bit 15) are allowed */
+    bool text_per_line_effects; /* options menu only: per-band centring ($0D00) and glow ($0D20) */
     bool has_objects;           /* whether objects are used on this screen */
     uint16_t obj_first_tile;    /* first tile number of the object drawings block */
     uint16_t obj_tile_count;    /* number of 4bpp tiles in the object drawings block */
+    size_t obj_expected_bytes;  /* expected raw asset size in bytes */
     uint16_t obj_priority;      /* required object priority (0..3) */
+    int obj_require_pal;        /* required object palette (0..7), or -1 for any */
+    bool obj_require_small;     /* whether size flag (bit 15 of $0500+x) must be set (8x8) */
+    bool obj_flips_allowed;     /* whether object h/v flips are allowed */
 } menu_screen_desc;
 
-/* Per-screen table of measured game facts (docs/DECISIONS.md, "The title card drawn natively"
-   and "The password display drawn natively"; each value checked against the original's
-   picture). */
+/* Per-screen table of measured game facts (docs/DECISIONS.md, "The title card drawn natively",
+   "The password display drawn natively", "The options menu drawn natively"; each value checked against
+   the original's picture). */
 static const menu_screen_desc menu_screen_table[] = {
     {
         .name = "title_card",
@@ -44,7 +50,8 @@ static const menu_screen_desc menu_screen_table[] = {
         .roles = {
             [ROLE_BG_DRAWINGS] = ASSET_MENU_BG_DRAWINGS,
             [ROLE_BG_ARRANGEMENT] = ASSET_MENU_BG_ARRANGEMENT,
-            [ROLE_TEXT_DRAWINGS] = ASSET_TITLE_TEXT_DRAWINGS,
+            [ROLE_TEXT_DRAWINGS_128] = ASSET_TITLE_TEXT_DRAWINGS,
+            [ROLE_TEXT_DRAWINGS_256] = -1,
             [ROLE_OBJ_DRAWINGS] = ASSET_TITLE_OBJ_DRAWINGS,
         },
         /* Setup $8A:C4B0 HOFS -4, title_card_show VOFS -65 (-1 sits at line 0) */
@@ -54,13 +61,19 @@ static const menu_screen_desc menu_screen_table[] = {
         .text_first_tile = 128u,
         .text_tile_count = 39u,
         .text_blank_entry = 0x003Du,
+        .text_require_pal = -1,
         .text_require_in_front = true,
         .text_flips_allowed = false,
+        .text_per_line_effects = false,
         /* measured on the title card (docs/DECISIONS.md, "The title card drawn natively"): $87:F5BC (28 tiles) at tile 0, 16x16, priority 2 */
         .has_objects = true,
         .obj_first_tile = 0u,
         .obj_tile_count = 28u,
+        .obj_expected_bytes = 28u * 32u,
         .obj_priority = 2u,
+        .obj_require_pal = -1,
+        .obj_require_small = false,
+        .obj_flips_allowed = false,
     },
     {
         .name = "password_show",
@@ -68,7 +81,8 @@ static const menu_screen_desc menu_screen_table[] = {
         .roles = {
             [ROLE_BG_DRAWINGS] = ASSET_MENU_BG_DRAWINGS,
             [ROLE_BG_ARRANGEMENT] = ASSET_MENU_BG_ARRANGEMENT,
-            [ROLE_TEXT_DRAWINGS] = ASSET_PASSWORD_TEXT_DRAWINGS,
+            [ROLE_TEXT_DRAWINGS_128] = -1,
+            [ROLE_TEXT_DRAWINGS_256] = ASSET_PASSWORD_TEXT_DRAWINGS,
             [ROLE_OBJ_DRAWINGS] = -1,
         },
         /* Setup $8A:C4B0 BG1 HOFS 0xFFFC (-4), VOFS 0xFFFF (-1 sits at line 0) */
@@ -78,13 +92,50 @@ static const menu_screen_desc menu_screen_table[] = {
         .text_first_tile = 256u,
         .text_tile_count = 186u,
         .text_blank_entry = 0x003Du,
+        .text_require_pal = -1,
         .text_require_in_front = true,
         .text_flips_allowed = true,
+        .text_per_line_effects = false,
         /* measured on the password display (docs/DECISIONS.md, "The password display drawn natively"): 0 used object slots */
         .has_objects = false,
         .obj_first_tile = 0u,
         .obj_tile_count = 0u,
+        .obj_expected_bytes = 0u,
         .obj_priority = 0u,
+        .obj_require_pal = -1,
+        .obj_require_small = false,
+        .obj_flips_allowed = false,
+    },
+    {
+        .name = "options",
+        /* measured on the options menu (docs/DECISIONS.md): $96:EE52, $85:FA8B, $88:FEC3 (A), $88:F87F (B), $8A:C8E4 (cursor word run) */
+        .roles = {
+            [ROLE_BG_DRAWINGS] = ASSET_MENU_BG_DRAWINGS,
+            [ROLE_BG_ARRANGEMENT] = ASSET_MENU_BG_ARRANGEMENT,
+            [ROLE_TEXT_DRAWINGS_128] = ASSET_MENU_TEXT_A,
+            [ROLE_TEXT_DRAWINGS_256] = ASSET_MENU_TEXT_B,
+            [ROLE_OBJ_DRAWINGS] = ASSET_MENU_CURSOR_DRAWINGS,
+        },
+        /* Setup $8A:C4B0 BG1 HOFS 0xFFFC (-4), VOFS 0xFFFF (-1 sits at line 0) */
+        .bg_shift_x = 4,
+        .bg_shift_y = 0,
+        /* measured on the options menu (docs/DECISIONS.md): $88:F87F (88 tiles) at tile 256..343, blank $003D, pal=7, prio=1, flips=0 */
+        .text_first_tile = 256u,
+        .text_tile_count = 88u,
+        .text_blank_entry = 0x003Du,
+        .text_require_pal = 7,
+        .text_require_in_front = true,
+        .text_flips_allowed = false,
+        .text_per_line_effects = true,
+        /* measured on the options menu (docs/DECISIONS.md): 97 words at $8A:C8E4 (tiles 0..5), 8x8 (size flag set), priority 3, palette 0, h/v-flip used */
+        .has_objects = true,
+        .obj_first_tile = 0u,
+        .obj_tile_count = 6u,
+        .obj_expected_bytes = 97u * 2u,
+        .obj_priority = 3u,
+        .obj_require_pal = 0,
+        .obj_require_small = true,
+        .obj_flips_allowed = true,
     },
 };
 
@@ -157,8 +208,10 @@ static void menu_screen_build_once(int which) {
         port_fatal("menu screen: tile count exceeds cache capacity");
     }
 
+    asset_role text_role =
+        (s->text_first_tile == 128u) ? ROLE_TEXT_DRAWINGS_128 : ROLE_TEXT_DRAWINGS_256;
     size_t text_size = 0;
-    const uint8_t* text_raw = asset_bytes(s->roles[ROLE_TEXT_DRAWINGS], &text_size);
+    const uint8_t* text_raw = asset_bytes(s->roles[text_role], &text_size);
     if (text_raw == NULL || text_size != (size_t)s->text_tile_count * 32u) {
         char msg[96];
         snprintf(msg, sizeof(msg), "%s: unexpected TEXT_DRAWINGS size", s->name);
@@ -169,7 +222,7 @@ static void menu_screen_build_once(int which) {
     if (s->has_objects) {
         size_t obj_size = 0;
         const uint8_t* obj_raw = asset_bytes(s->roles[ROLE_OBJ_DRAWINGS], &obj_size);
-        if (obj_raw == NULL || obj_size != (size_t)s->obj_tile_count * 32u) {
+        if (obj_raw == NULL || obj_size != s->obj_expected_bytes) {
             char msg[96];
             snprintf(msg, sizeof(msg), "%s: unexpected OBJ_DRAWINGS size", s->name);
             port_fatal(msg);
@@ -182,7 +235,7 @@ static void menu_screen_build_once(int which) {
 
 static void draw_obj_tile(const menu_screen_desc* s, const menu_screen_cache* cache,
                           uint32_t* fb, const uint32_t pal_rgba[256], uint16_t tile,
-                          uint16_t pal, int ox, int oy) {
+                          uint16_t pal, int ox, int oy, bool hflip, bool vflip) {
     if (tile < s->obj_first_tile || tile >= s->obj_first_tile + s->obj_tile_count) {
         char msg[96];
         snprintf(msg, sizeof(msg), "%s: object tile %u out of range", s->name, (unsigned)tile);
@@ -194,14 +247,129 @@ static void draw_obj_tile(const menu_screen_desc* s, const menu_screen_cache* ca
         if (sy < 0 || sy >= SCREEN_HEIGHT) {
             continue;
         }
+        int ty = vflip ? (7 - py) : py;
         for (int px = 0; px < 8; ++px) {
             int sx = ox + px;
             if (sx < 0 || sx >= SCREEN_WIDTH) {
                 continue;
             }
-            uint8_t p = pixels[py * 8 + px];
+            int tx = hflip ? (7 - px) : px;
+            uint8_t p = pixels[ty * 8 + tx];
             if (p != 0) {
                 fb[sy * SCREEN_WIDTH + sx] = pal_rgba[128u + pal * 16u + p];
+            }
+        }
+    }
+}
+
+static void validate_text_entry(const menu_screen_desc* s, uint16_t entry) {
+    uint16_t tile = entry & 0x03FFu;
+    uint16_t pal = (entry >> 10) & 7u;
+    bool prio = (entry & 0x2000u) != 0;
+    bool hflip = (entry & 0x4000u) != 0;
+    bool vflip = (entry & 0x8000u) != 0;
+    if (tile < s->text_first_tile
+        || tile >= s->text_first_tile + s->text_tile_count
+        || (s->text_require_pal >= 0 && (int)pal != s->text_require_pal)
+        || (s->text_require_in_front && !prio)
+        || (!s->text_flips_allowed && (hflip || vflip))) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "%s: unexpected text entry 0x%04X", s->name, (unsigned)entry);
+        port_fatal(msg);
+    }
+}
+
+/* Options menu per-line text effects (options screen only; docs/DECISIONS.md, "The options menu drawn natively"):
+   (a) "menu item centring": WRAM $0D00 has 76 lines ($4C) with 16-bit horizontal offset at $0D01,
+       then 7 bands of 24 lines ($18 at $0D03+3k) with 16-bit offsets at $0D04+3k, terminated by
+       $0D18 == 0. Positive offset shifts the text layer LEFT by that many pixels.
+   (b) "menu item glow": WRAM $0D20 has 76 lines ($4C) with byte at $0D21, then 7 bands of 24
+       lines ($18 at $0D22+2k) with bytes at $0D23+2k, terminated by $0D30 == 0. Each byte must
+       have either no plane bits (0x00..0x1F: no change) or all three ($E0 | n), adding n to each
+       5-bit R, G, B channel of every text pixel on those lines (clamped at 31) before 5->8 bit
+       expansion and before brightness. Background and objects are unchanged. */
+static void draw_options_text_per_line(const menu_screen_desc* s, const menu_screen_cache* cache,
+                                       uint32_t* fb) {
+    int band_hofs[8];
+    uint8_t band_glow[8];
+
+    if (rd8(0x0D00u) != 0x4Cu || rd8(0x0D18u) != 0x00u) {
+        port_fatal("options: unexpected centring table header/terminator at $0D00");
+    }
+    band_hofs[0] = (int)(int16_t)rd16(0x0D01u);
+    for (int k = 0; k < 7; ++k) {
+        if (rd8(0x0D03u + (uint32_t)k * 3u) != 0x18u) {
+            port_fatal("options: unexpected centring band count at $0D00");
+        }
+        band_hofs[k + 1] = (int)(int16_t)rd16(0x0D04u + (uint32_t)k * 3u);
+    }
+
+    if (rd8(0x0D20u) != 0x4Cu || rd8(0x0D30u) != 0x00u) {
+        port_fatal("options: unexpected glow table header/terminator at $0D20");
+    }
+    for (int b_idx = 0; b_idx < 8; ++b_idx) {
+        uint8_t v;
+        if (b_idx == 0) {
+            v = rd8(0x0D21u);
+        } else {
+            int k = b_idx - 1;
+            if (rd8(0x0D22u + (uint32_t)k * 2u) != 0x18u) {
+                port_fatal("options: unexpected glow band count at $0D20");
+            }
+            v = rd8(0x0D23u + (uint32_t)k * 2u);
+        }
+        uint8_t planes = v & 0xE0u;
+        if (planes == 0x00u) {
+            band_glow[b_idx] = 0u;
+        } else if (planes == 0xE0u) {
+            band_glow[b_idx] = v & 0x1Fu;
+        } else {
+            port_fatal("options: unexpected glow plane bits at $0D20");
+        }
+    }
+
+    for (int row = 0; row < 28; ++row) {
+        for (int col = 0; col < 32; ++col) {
+            uint16_t entry = rd16((uint32_t)(0x10000 + 2 * (row * 32 + col)));
+            if (entry != s->text_blank_entry) {
+                validate_text_entry(s, entry);
+            }
+        }
+    }
+
+    for (int y = 0; y < SCREEN_HEIGHT; ++y) {
+        int band = (y < 76) ? 0 : (1 + (y - 76) / 24);
+        int hofs = band_hofs[band];
+        uint8_t glow = band_glow[band];
+        int row = y / 8;
+        int py = y & 7;
+        uint32_t* dst_row = &fb[y * SCREEN_WIDTH];
+
+        for (int x = 0; x < SCREEN_WIDTH; ++x) {
+            unsigned mx = (unsigned)(x + hofs) & 255u;
+            int col = (int)(mx / 8u);
+            int px = (int)(mx & 7u);
+            uint16_t entry = rd16((uint32_t)(0x10000 + 2 * (row * 32 + col)));
+            if (entry == s->text_blank_entry) {
+                continue;
+            }
+            uint16_t tile = entry & 0x03FFu;
+            uint16_t pal = (entry >> 10) & 7u;
+            const uint8_t* pixels =
+                &cache->text_tiles[(size_t)(tile - s->text_first_tile) * 64u];
+            uint8_t p = pixels[py * 8 + px];
+            if (p != 0) {
+                uint16_t bgr = palette_get((uint8_t)(pal * 16u + p));
+                if (glow != 0u) {
+                    uint32_t r5 = (uint32_t)(bgr & 0x1Fu) + glow;
+                    uint32_t g5 = (uint32_t)((bgr >> 5) & 0x1Fu) + glow;
+                    uint32_t b5 = (uint32_t)((bgr >> 10) & 0x1Fu) + glow;
+                    if (r5 > 31u) r5 = 31u;
+                    if (g5 > 31u) g5 = 31u;
+                    if (b5 > 31u) b5 = 31u;
+                    bgr = (uint16_t)(r5 | (g5 << 5) | (b5 << 10));
+                }
+                dst_row[x] = convert_color(bgr);
             }
         }
     }
@@ -273,38 +441,33 @@ void menu_screen_draw(int which, uint32_t* fb) {
     }
 
     /* 3. Text map at WRAM $7F:0000 */
-    for (int row = 0; row < 28; ++row) {
-        for (int col = 0; col < 32; ++col) {
-            uint16_t entry = rd16((uint32_t)(0x10000 + 2 * (row * 32 + col)));
-            if (entry == s->text_blank_entry) {
-                continue;
-            }
-            uint16_t tile = entry & 0x03FFu;
-            uint16_t pal = (entry >> 10) & 7u;
-            bool prio = (entry & 0x2000u) != 0;
-            bool hflip = (entry & 0x4000u) != 0;
-            bool vflip = (entry & 0x8000u) != 0;
-            if (tile < s->text_first_tile
-                || tile >= s->text_first_tile + s->text_tile_count
-                || (s->text_require_in_front && !prio)
-                || (!s->text_flips_allowed && (hflip || vflip))) {
-                char msg[96];
-                snprintf(msg, sizeof(msg), "%s: unexpected text entry 0x%04X", s->name,
-                         (unsigned)entry);
-                port_fatal(msg);
-            }
+    if (s->text_per_line_effects) {
+        draw_options_text_per_line(s, cache, fb);
+    } else {
+        for (int row = 0; row < 28; ++row) {
+            for (int col = 0; col < 32; ++col) {
+                uint16_t entry = rd16((uint32_t)(0x10000 + 2 * (row * 32 + col)));
+                if (entry == s->text_blank_entry) {
+                    continue;
+                }
+                validate_text_entry(s, entry);
+                uint16_t tile = entry & 0x03FFu;
+                uint16_t pal = (entry >> 10) & 7u;
+                bool hflip = (entry & 0x4000u) != 0;
+                bool vflip = (entry & 0x8000u) != 0;
 
-            const uint8_t* pixels =
-                &cache->text_tiles[(size_t)(tile - s->text_first_tile) * 64u];
-            for (int py = 0; py < 8; ++py) {
-                int sy = row * 8 + py;
-                int ty = vflip ? (7 - py) : py;
-                for (int px = 0; px < 8; ++px) {
-                    int sx = col * 8 + px;
-                    int tx = hflip ? (7 - px) : px;
-                    uint8_t p = pixels[ty * 8 + tx];
-                    if (p != 0) {
-                        fb[sy * SCREEN_WIDTH + sx] = pal_rgba[pal * 16u + p];
+                const uint8_t* pixels =
+                    &cache->text_tiles[(size_t)(tile - s->text_first_tile) * 64u];
+                for (int py = 0; py < 8; ++py) {
+                    int sy = row * 8 + py;
+                    int ty = vflip ? (7 - py) : py;
+                    for (int px = 0; px < 8; ++px) {
+                        int sx = col * 8 + px;
+                        int tx = hflip ? (7 - px) : px;
+                        uint8_t p = pixels[ty * 8 + tx];
+                        if (p != 0) {
+                            fb[sy * SCREEN_WIDTH + sx] = pal_rgba[pal * 16u + p];
+                        }
                     }
                 }
             }
@@ -322,6 +485,13 @@ void menu_screen_draw(int which, uint32_t* fb) {
             snprintf(msg, sizeof(msg), "%s: unexpected used object slot %d", s->name, x / 2);
             port_fatal(msg);
         }
+        bool is_small = (used & 0x8000u) != 0;
+        if (s->obj_require_small && !is_small) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "%s: unexpected object size flag 0x%04X", s->name,
+                     (unsigned)used);
+            port_fatal(msg);
+        }
         int ox = (int)(rd16((uint32_t)(0x0600 + x)) & 0x01FFu);
         if (ox >= 256) {
             ox -= 512;
@@ -336,20 +506,26 @@ void menu_screen_draw(int which, uint32_t* fb) {
         uint16_t tile = w & 0x01FFu;
         uint16_t pal = (w >> 9) & 7u;
         uint16_t prio = (w >> 12) & 3u;
-        uint16_t flips = (w >> 14) & 3u;
-        if (prio != s->obj_priority || flips != 0u) {
+        bool hflip = (w & 0x4000u) != 0;
+        bool vflip = (w & 0x8000u) != 0;
+        if (prio != s->obj_priority
+            || (s->obj_require_pal >= 0 && (int)pal != s->obj_require_pal)
+            || (!s->obj_flips_allowed && (hflip || vflip))) {
             char msg[96];
             snprintf(msg, sizeof(msg), "%s: unexpected object attr 0x%04X", s->name, (unsigned)w);
             port_fatal(msg);
         }
 
-        if ((used & 0x8000u) == 0) {
-            draw_obj_tile(s, cache, fb, pal_rgba, tile, pal, ox, oy);
-            draw_obj_tile(s, cache, fb, pal_rgba, (uint16_t)(tile + 1u), pal, ox + 8, oy);
-            draw_obj_tile(s, cache, fb, pal_rgba, (uint16_t)(tile + 16u), pal, ox, oy + 8);
-            draw_obj_tile(s, cache, fb, pal_rgba, (uint16_t)(tile + 17u), pal, ox + 8, oy + 8);
+        if (!is_small) {
+            draw_obj_tile(s, cache, fb, pal_rgba, tile, pal, ox, oy, hflip, vflip);
+            draw_obj_tile(s, cache, fb, pal_rgba, (uint16_t)(tile + 1u), pal, ox + 8, oy, hflip,
+                          vflip);
+            draw_obj_tile(s, cache, fb, pal_rgba, (uint16_t)(tile + 16u), pal, ox, oy + 8, hflip,
+                          vflip);
+            draw_obj_tile(s, cache, fb, pal_rgba, (uint16_t)(tile + 17u), pal, ox + 8, oy + 8,
+                          hflip, vflip);
         } else {
-            draw_obj_tile(s, cache, fb, pal_rgba, tile, pal, ox, oy);
+            draw_obj_tile(s, cache, fb, pal_rgba, tile, pal, ox, oy, hflip, vflip);
         }
     }
 

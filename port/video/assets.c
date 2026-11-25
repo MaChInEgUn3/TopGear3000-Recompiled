@@ -12,7 +12,8 @@
 typedef enum {
     ASSET_KIND_TILES_8BPP,
     ASSET_KIND_TILES_4BPP,
-    ASSET_KIND_MAP_16
+    ASSET_KIND_MAP_16,
+    ASSET_KIND_WORD_RUN
 } asset_kind;
 
 typedef struct {
@@ -20,20 +21,28 @@ typedef struct {
     uint32_t rom_bus;
     asset_kind kind;
     asset_role role;
+    size_t word_count; /* non-zero only for ASSET_KIND_WORD_RUN */
     uint8_t* data;
     size_t size;
     uint32_t hash;
 } asset_entry;
 
 static asset_entry g_assets[ASSET_COUNT] = {
-    [ASSET_MENU_BG_DRAWINGS] = {"MENU_BG_DRAWINGS", 0x96EE52u, ASSET_KIND_TILES_8BPP, ROLE_BG_DRAWINGS, NULL, 0, 0},
-    [ASSET_MENU_BG_ARRANGEMENT] = {"MENU_BG_ARRANGEMENT", 0x85FA8Bu, ASSET_KIND_MAP_16, ROLE_BG_ARRANGEMENT, NULL, 0, 0},
-    [ASSET_TITLE_TEXT_DRAWINGS] = {"TITLE_TEXT_DRAWINGS", 0x87F861u, ASSET_KIND_TILES_4BPP, ROLE_TEXT_DRAWINGS, NULL, 0, 0},
-    [ASSET_TITLE_OBJ_DRAWINGS] = {"TITLE_OBJ_DRAWINGS", 0x87F5BCu, ASSET_KIND_TILES_4BPP, ROLE_OBJ_DRAWINGS, NULL, 0, 0},
-    [ASSET_PASSWORD_TEXT_DRAWINGS] = {"PASSWORD_TEXT_DRAWINGS", 0x888601u, ASSET_KIND_TILES_4BPP, ROLE_TEXT_DRAWINGS, NULL, 0, 0},
+    [ASSET_MENU_BG_DRAWINGS] = {"MENU_BG_DRAWINGS", 0x96EE52u, ASSET_KIND_TILES_8BPP, ROLE_BG_DRAWINGS, 0, NULL, 0, 0},
+    [ASSET_MENU_BG_ARRANGEMENT] = {"MENU_BG_ARRANGEMENT", 0x85FA8Bu, ASSET_KIND_MAP_16, ROLE_BG_ARRANGEMENT, 0, NULL, 0, 0},
+    [ASSET_TITLE_TEXT_DRAWINGS] = {"TITLE_TEXT_DRAWINGS", 0x87F861u, ASSET_KIND_TILES_4BPP, ROLE_TEXT_DRAWINGS_128, 0, NULL, 0, 0},
+    [ASSET_TITLE_OBJ_DRAWINGS] = {"TITLE_OBJ_DRAWINGS", 0x87F5BCu, ASSET_KIND_TILES_4BPP, ROLE_OBJ_DRAWINGS, 0, NULL, 0, 0},
+    [ASSET_PASSWORD_TEXT_DRAWINGS] = {"PASSWORD_TEXT_DRAWINGS", 0x888601u, ASSET_KIND_TILES_4BPP, ROLE_TEXT_DRAWINGS_256, 0, NULL, 0, 0},
+    [ASSET_MENU_TEXT_A] = {"MENU_TEXT_A", 0x88FEC3u, ASSET_KIND_TILES_4BPP, ROLE_TEXT_DRAWINGS_128, 0, NULL, 0, 0},
+    [ASSET_MENU_TEXT_B] = {"MENU_TEXT_B", 0x88F87Fu, ASSET_KIND_TILES_4BPP, ROLE_TEXT_DRAWINGS_256, 0, NULL, 0, 0},
+    [ASSET_MENU_CURSOR_DRAWINGS] = {"MENU_CURSOR_DRAWINGS", 0x8AC8E4u, ASSET_KIND_WORD_RUN, ROLE_OBJ_DRAWINGS, 97u, NULL, 0, 0},
 };
 
-static int g_current[ROLE_COUNT] = {-1, -1, -1, -1};
+static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1};
+
+#define MAX_WORD_RUN_WORDS 256u
+static uint8_t g_word_run_buf[MAX_WORD_RUN_WORDS * 2u];
+static size_t g_word_run_words = 0;
 
 static uint32_t fnv1a_32(const uint8_t* data, size_t len) {
     uint32_t h = 0x811C9DC5u;
@@ -46,11 +55,32 @@ static uint32_t fnv1a_32(const uint8_t* data, size_t len) {
 
 void assets_init(void) {
     assets_clear_loaded();
+    assets_reset_word_run();
     for (int i = 0; i < ASSET_COUNT; ++i) {
         free(g_assets[i].data);
         g_assets[i].data = NULL;
         g_assets[i].size = 0;
         g_assets[i].hash = 0;
+
+        if (g_assets[i].kind == ASSET_KIND_WORD_RUN) {
+            size_t len = g_assets[i].word_count * 2u;
+            if (len == 0 || g_assets[i].word_count > MAX_WORD_RUN_WORDS) {
+                port_fatal("assets_init: invalid word_run length");
+            }
+            uint8_t* buf = (uint8_t*)malloc(len);
+            if (buf == NULL) {
+                port_fatal("assets_init: out of memory");
+            }
+            for (size_t w = 0; w < g_assets[i].word_count; ++w) {
+                uint16_t val = bus_rd16(g_assets[i].rom_bus + (uint32_t)w * 2u);
+                buf[w * 2u] = (uint8_t)(val & 0xFFu);
+                buf[w * 2u + 1u] = (uint8_t)(val >> 8);
+            }
+            g_assets[i].data = buf;
+            g_assets[i].size = len;
+            g_assets[i].hash = fnv1a_32(buf, len);
+            continue;
+        }
 
         uint8_t bank = (uint8_t)(g_assets[i].rom_bus >> 16);
         uint16_t addr = (uint16_t)(g_assets[i].rom_bus & 0xFFFFu);
@@ -72,6 +102,30 @@ void assets_init(void) {
     }
 
     memset(g_ram, 0, sizeof(g_ram));
+}
+
+void assets_reset_word_run(void) {
+    g_word_run_words = 0;
+}
+
+void assets_note_word(uint16_t value) {
+    if (g_word_run_words >= MAX_WORD_RUN_WORDS) {
+        g_word_run_words = MAX_WORD_RUN_WORDS + 1u;
+        return;
+    }
+    g_word_run_buf[g_word_run_words * 2u] = (uint8_t)(value & 0xFFu);
+    g_word_run_buf[g_word_run_words * 2u + 1u] = (uint8_t)(value >> 8);
+    g_word_run_words++;
+
+    size_t byte_len = g_word_run_words * 2u;
+    for (int i = 0; i < ASSET_COUNT; ++i) {
+        if (g_assets[i].kind == ASSET_KIND_WORD_RUN && g_assets[i].size == byte_len) {
+            uint32_t h = fnv1a_32(g_word_run_buf, byte_len);
+            if (h == g_assets[i].hash) {
+                g_current[g_assets[i].role] = i;
+            }
+        }
+    }
 }
 
 void assets_note_upload(uint32_t src, uint32_t size) {

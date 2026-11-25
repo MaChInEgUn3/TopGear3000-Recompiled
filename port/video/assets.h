@@ -10,7 +10,8 @@
 typedef enum {
     ROLE_BG_DRAWINGS = 0,
     ROLE_BG_ARRANGEMENT,
-    ROLE_TEXT_DRAWINGS,
+    ROLE_TEXT_DRAWINGS_128,
+    ROLE_TEXT_DRAWINGS_256,
     ROLE_OBJ_DRAWINGS,
     ROLE_COUNT
 } asset_role;
@@ -21,6 +22,9 @@ typedef enum {
     ASSET_TITLE_TEXT_DRAWINGS,
     ASSET_TITLE_OBJ_DRAWINGS,
     ASSET_PASSWORD_TEXT_DRAWINGS,
+    ASSET_MENU_TEXT_A,
+    ASSET_MENU_TEXT_B,
+    ASSET_MENU_CURSOR_DRAWINGS,
     ASSET_COUNT
 } asset_id;
 
@@ -29,6 +33,12 @@ void assets_init(void);
 
 /* Note a graphics upload from WRAM $7F:0000 (matched by size+hash) or direct ROM address. */
 void assets_note_upload(uint32_t src, uint32_t size);
+
+/* Append a word written to VRAM; matches a known "word run" block by length and FNV-1a 32 hash. */
+void assets_note_word(uint16_t value);
+
+/* Reset the running word-write sequence (called on any other video event). */
+void assets_reset_word_run(void);
 
 /* Mark all roles empty (the game cleared all graphics). */
 void assets_clear_loaded(void);
