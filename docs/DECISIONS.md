@@ -278,9 +278,15 @@ estamos fazendo com o DSP-4?".
   path in C (`--screen intro,options`: `intro_screen`, `results_init`, `options_screens(0)`; the
   original runs nothing else between them) and replays the bench movie `vs_race.txt`'s buttons
   (`--movie`, `--movie-offset 403`: aligned on the intro's first fade-in step, measured on both
-  sides). At the VS screen's entry the port's memory differs from the original's in 17 bytes
-  outside the stack: frame and pad counters, the menu glow byte, and the sound state (the sound
-  sets are not loaded in the port: their loader is still assembly, decomp request 4).
+  sides; "nothing else runs between the screens" comes from a subagent's reading of the
+  assembly, and the memory comparison supports it for this movie only). At the VS screen's entry
+  the port's memory differs from the original's in 17 bytes outside the stack. Identified: the
+  frame counter `$0024`; the menu glow byte `$0D25`; the sound state `$045B-$045E`, `$0463`,
+  `$046D-$046E` (the sound sets are not loaded in the port: their loader is still assembly,
+  decomp request 4); and **controller 2**: `$0010`/`$0012` (pad 2) and `$0020-$0021` (the
+  multitap read) show the original with a controller in port 2 and the port declaring it absent
+  (its input layer answers "no multitap pads"). That is a gap of the port's input layer, on the
+  multi-player screen, not fixed yet. Not identified: `$0156`, `$0158`, `$1520`, `$152E`.
 - **First try from the options menu's own entry failed, measured:** the title screen's "skip the
   pads" flag (`$0026` bit 2) is cleared by the title screen's last instructions, in the same step
   the options menu starts; memory saved at the end of the previous step still has it, so the
@@ -291,7 +297,11 @@ estamos fazendo com o DSP-4?".
   `$8D:F696` and the panels' arrangement the game writes word by word (1024 words of its fill
   `$0023`, then 896 words built by `vs_graphics_load`); the port keeps those 896 words as the
   game hands them over, named by that write pattern while the VS drawings are current, and never
-  recomputes them. Text from the menus' text drawings A (still loaded: the VS screen does not
+  recomputes them. **This bends the recorded reading of the owner's answer 2** ("pictures
+  converted from the cartridge blocks, never decoded from the uploaded bytes"): this one
+  arrangement is built by game code at run time, so the only sources are the words the game
+  sends or a port-side copy of that game logic (tried, rejected: game logic belongs to the
+  decomp). Owner told. Decomp request 6 asks for the game to hand it over by name. Text from the menus' text drawings A (still loaded: the VS screen does not
   clear video memory), tile 189 drawn as nothing (no block covers it); objects from the cursor
   drawings and text drawings A; colours `$8A:C5D8` plus those the menu left.
 - **New test options:** `--movie FILE --movie-offset N` (bench input movies), `--wram-out F PATH`
