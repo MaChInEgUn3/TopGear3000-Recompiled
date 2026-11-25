@@ -35,8 +35,9 @@ typedef struct {
     uint16_t obj_tile_count;    /* number of 4bpp tiles in the object drawings block */
     size_t obj_expected_bytes;  /* expected raw asset size in bytes */
     uint16_t obj_priority;      /* required object priority (0..3) */
-    int obj_require_pal;        /* required object palette (0..7), or -1 for any */
-    bool obj_require_small;     /* whether size flag (bit 15 of $0500+x) must be set (8x8) */
+    uint8_t obj_pal_mask;       /* bitmask of allowed object palettes (bits 0..7) */
+    uint16_t obj_used_word;     /* expected non-zero used word at $0500+x */
+    bool obj_require_small;     /* true = 8x8 (bit 15 of $0500+x set), false = 16x16 (bit 15 clear) */
     bool obj_flips_allowed;     /* whether object h/v flips are allowed */
 } menu_screen_desc;
 
@@ -65,13 +66,14 @@ static const menu_screen_desc menu_screen_table[] = {
         .text_require_in_front = true,
         .text_flips_allowed = false,
         .text_per_line_effects = false,
-        /* measured on the title card (docs/DECISIONS.md, "The title card drawn natively"): $87:F5BC (28 tiles) at tile 0, 16x16, priority 2 */
+        /* measured on the title card (docs/DECISIONS.md, "The title card drawn natively"): $87:F5BC (28 tiles) at tile 0, 16x16, priority 2, palette 0 */
         .has_objects = true,
         .obj_first_tile = 0u,
         .obj_tile_count = 28u,
         .obj_expected_bytes = 28u * 32u,
         .obj_priority = 2u,
-        .obj_require_pal = -1,
+        .obj_pal_mask = (uint8_t)(1u << 0),
+        .obj_used_word = 0x0001u,
         .obj_require_small = false,
         .obj_flips_allowed = false,
     },
@@ -102,7 +104,8 @@ static const menu_screen_desc menu_screen_table[] = {
         .obj_tile_count = 0u,
         .obj_expected_bytes = 0u,
         .obj_priority = 0u,
-        .obj_require_pal = -1,
+        .obj_pal_mask = 0u,
+        .obj_used_word = 0u,
         .obj_require_small = false,
         .obj_flips_allowed = false,
     },
@@ -133,7 +136,8 @@ static const menu_screen_desc menu_screen_table[] = {
         .obj_tile_count = 6u,
         .obj_expected_bytes = 97u * 2u,
         .obj_priority = 3u,
-        .obj_require_pal = 0,
+        .obj_pal_mask = (uint8_t)(1u << 0),
+        .obj_used_word = 0xFFFFu,
         .obj_require_small = true,
         .obj_flips_allowed = true,
     },
@@ -164,7 +168,8 @@ static const menu_screen_desc menu_screen_table[] = {
         .obj_tile_count = 3u,
         .obj_expected_bytes = 97u * 2u,
         .obj_priority = 3u,
-        .obj_require_pal = 0,
+        .obj_pal_mask = (uint8_t)(1u << 0),
+        .obj_used_word = 0xFFFFu,
         .obj_require_small = true,
         .obj_flips_allowed = true,
     },
@@ -174,26 +179,63 @@ static const menu_screen_desc menu_screen_table[] = {
 
 typedef struct {
     bool built;
+    uint32_t text_gen;
+    uint32_t obj_gen;
     uint8_t text_tiles[MAX_TEXT_TILES * 64u];
     uint8_t obj_tiles[MAX_OBJ_TILES * 64u];
 } menu_screen_cache;
 
 static bool g_bg_built = false;
+static uint32_t g_bg_draw_gen = 0;
+static uint32_t g_bg_arr_gen = 0;
 static uint8_t g_bg_image[256 * 256];
 static menu_screen_cache g_cache[MENU_SCREEN_COUNT];
 
+/* VS screen measured facts (notes/probe/VS.md, docs/DECISIONS.md "The VS screen drawn natively"):
+   - BG1: $8D:F696 (134 4bpp tiles), arrangement $8A:C86C (896 words, fill $0023), palettes 0..3,
+     HOFS -4 / VOFS -4 (-1 sits at line 0 -> shift x=4, y=3).
+   - Text (BG2): MENU_TEXT_A ($88:FEC3) at tile 128, blank entry $003D, blank tile 189,
+     used tiles 128..157, palette 6, in-front (prio 1), flips=0.
+   - Objects: 8x8 (bit 15 set), prio 3; cursor tiles 0..5 (MENU_CURSOR_DRAWINGS, pal 0, h/v-flip
+     allowed) and text tiles 128..157 (MENU_TEXT_A, pal 7, flips=0). */
 #define VS_BG_TILE_COUNT 134u
 #define VS_BG_ARR_ENTRIES 896u
+#define VS_BG_FILL_ENTRY 0x0023u
+#define VS_BG_MAX_PAL 3u
+#define VS_BG_SHIFT_X 4
+#define VS_BG_SHIFT_Y 3
+#define VS_TEXT_FIRST_TILE 128u
+#define VS_TEXT_TILE_COUNT 30u
+#define VS_TEXT_MIN_TILE 128u
+#define VS_TEXT_MAX_TILE 157u
+#define VS_TEXT_BLANK_ENTRY 0x003Du
+#define VS_TEXT_BLANK_TILE 189u
+#define VS_TEXT_PAL 6u
+#define VS_TEXT_FLIPS_ALLOWED false
 #define VS_CURSOR_TILE_COUNT 6u
+#define VS_OBJ_USED_WORD 0xFFFFu
+#define VS_OBJ_PRIORITY 3u
+#define VS_OBJ_CURSOR_MAX_TILE 5u
+#define VS_OBJ_CURSOR_PAL 0u
+#define VS_OBJ_CURSOR_FLIPS_ALLOWED true
+#define VS_OBJ_TEXT_MIN_TILE 128u
+#define VS_OBJ_TEXT_MAX_TILE 157u
+#define VS_OBJ_TEXT_PAL 7u
+#define VS_OBJ_TEXT_FLIPS_ALLOWED false
 
 static bool g_vs_built = false;
+static uint32_t g_vs_bg_draw_gen = 0;
 static uint32_t g_vs_arr_gen = 0;
+static uint32_t g_vs_text_gen = 0;
+static uint32_t g_vs_obj_gen = 0;
 static uint8_t g_vs_bg_image[256 * 256];
 static uint8_t g_vs_text_tiles[MAX_TEXT_TILES * 64u];
 static uint8_t g_vs_cursor_tiles[VS_CURSOR_TILE_COUNT * 64u];
 
 static void menu_bg_build_once(void) {
-    if (g_bg_built) {
+    uint32_t draw_gen = asset_generation(ASSET_MENU_BG_DRAWINGS);
+    uint32_t arr_gen = asset_generation(ASSET_MENU_BG_ARRANGEMENT);
+    if (g_bg_built && g_bg_draw_gen == draw_gen && g_bg_arr_gen == arr_gen) {
         return;
     }
 
@@ -233,24 +275,33 @@ static void menu_bg_build_once(void) {
         }
     }
 
+    g_bg_draw_gen = draw_gen;
+    g_bg_arr_gen = arr_gen;
     g_bg_built = true;
 }
 
 static void menu_screen_build_once(int which) {
     menu_bg_build_once();
 
+    const menu_screen_desc* s = &menu_screen_table[which];
+    if (s->text_first_tile != 128u && s->text_first_tile != 256u) {
+        port_fatal("menu screen: unexpected text_first_tile");
+    }
+    asset_role text_role =
+        (s->text_first_tile == 128u) ? ROLE_TEXT_DRAWINGS_128 : ROLE_TEXT_DRAWINGS_256;
+    uint32_t text_gen = asset_generation(s->roles[text_role]);
+    uint32_t obj_gen = s->has_objects ? asset_generation(s->roles[ROLE_OBJ_DRAWINGS]) : 0u;
+
     menu_screen_cache* cache = &g_cache[which];
-    if (cache->built) {
+    if (cache->built && cache->text_gen == text_gen
+        && (!s->has_objects || cache->obj_gen == obj_gen)) {
         return;
     }
 
-    const menu_screen_desc* s = &menu_screen_table[which];
     if (s->text_tile_count > MAX_TEXT_TILES || s->obj_tile_count > MAX_OBJ_TILES) {
         port_fatal("menu screen: tile count exceeds cache capacity");
     }
 
-    asset_role text_role =
-        (s->text_first_tile == 128u) ? ROLE_TEXT_DRAWINGS_128 : ROLE_TEXT_DRAWINGS_256;
     size_t text_size = 0;
     const uint8_t* text_raw = asset_bytes(s->roles[text_role], &text_size);
     if (text_raw == NULL || text_size != (size_t)s->text_tile_count * 32u) {
@@ -261,6 +312,12 @@ static void menu_screen_build_once(int which) {
     convert_tiles_4bpp(text_raw, s->text_tile_count, cache->text_tiles);
 
     if (s->has_objects) {
+        if (s->obj_expected_bytes < (size_t)s->obj_tile_count * 32u) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "%s: obj_expected_bytes smaller than obj_tile_count * 32",
+                     s->name);
+            port_fatal(msg);
+        }
         size_t obj_size = 0;
         const uint8_t* obj_raw = asset_bytes(s->roles[ROLE_OBJ_DRAWINGS], &obj_size);
         if (obj_raw == NULL || obj_size != s->obj_expected_bytes) {
@@ -271,6 +328,8 @@ static void menu_screen_build_once(int which) {
         convert_tiles_4bpp(obj_raw, s->obj_tile_count, cache->obj_tiles);
     }
 
+    cache->text_gen = text_gen;
+    cache->obj_gen = obj_gen;
     cache->built = true;
 }
 
@@ -338,11 +397,17 @@ static void draw_menu_text_per_line(const menu_screen_desc* s, const menu_screen
         port_fatal("options: unexpected centring table header/terminator at $0D00");
     }
     band_hofs[0] = (int)(int16_t)rd16(0x0D01u);
+    if (band_hofs[0] != 0 && band_hofs[0] != 4) {
+        port_fatal("options: unexpected centring offset at $0D00");
+    }
     for (int k = 0; k < 7; ++k) {
         if (rd8(0x0D03u + (uint32_t)k * 3u) != 0x18u) {
             port_fatal("options: unexpected centring band count at $0D00");
         }
         band_hofs[k + 1] = (int)(int16_t)rd16(0x0D04u + (uint32_t)k * 3u);
+        if (band_hofs[k + 1] != 0 && band_hofs[k + 1] != 4) {
+            port_fatal("options: unexpected centring offset at $0D00");
+        }
     }
 
     if (rd8(0x0D20u) != 0x4Cu || rd8(0x0D30u) != 0x00u) {
@@ -360,10 +425,14 @@ static void draw_menu_text_per_line(const menu_screen_desc* s, const menu_screen
             v = rd8(0x0D23u + (uint32_t)k * 2u);
         }
         uint8_t planes = v & 0xE0u;
+        uint8_t amount = v & 0x1Fu;
+        if (amount > 15u) {
+            port_fatal("options: unexpected glow amount at $0D20");
+        }
         if (planes == 0x00u) {
             band_glow[b_idx] = 0u;
         } else if (planes == 0xE0u) {
-            band_glow[b_idx] = v & 0x1Fu;
+            band_glow[b_idx] = amount;
         } else {
             port_fatal("options: unexpected glow plane bits at $0D20");
         }
@@ -443,8 +512,12 @@ static void draw_tile_8x8(uint32_t* fb, const uint32_t pal_rgba[256], const uint
 }
 
 static void vs_build_once(void) {
+    uint32_t bg_draw_gen = asset_generation(ASSET_VS_BG_DRAWINGS);
     uint32_t arr_gen = asset_generation(ASSET_VS_PANELS_ARRANGEMENT);
-    if (g_vs_built && g_vs_arr_gen == arr_gen) {
+    uint32_t text_gen = asset_generation(ASSET_MENU_TEXT_A);
+    uint32_t obj_gen = asset_generation(ASSET_MENU_CURSOR_DRAWINGS);
+    if (g_vs_built && g_vs_bg_draw_gen == bg_draw_gen && g_vs_arr_gen == arr_gen
+        && g_vs_text_gen == text_gen && g_vs_obj_gen == obj_gen) {
         return;
     }
 
@@ -465,14 +538,14 @@ static void vs_build_once(void) {
 
     for (unsigned tr = 0; tr < 32u; ++tr) {
         for (unsigned tc = 0; tc < 32u; ++tc) {
-            uint16_t entry = 0x0023u;
+            uint16_t entry = VS_BG_FILL_ENTRY;
             if (tr < 28u) {
                 size_t idx = (size_t)(tr * 32u + tc) * 2u;
                 entry = (uint16_t)(bg_arr[idx] | ((uint16_t)bg_arr[idx + 1u] << 8));
             }
             uint16_t tile = entry & 0x03FFu;
             uint16_t pal = (entry >> 10) & 7u;
-            if (tile >= VS_BG_TILE_COUNT || pal > 3u || (entry & 0xE000u) != 0u) {
+            if (tile >= VS_BG_TILE_COUNT || pal > VS_BG_MAX_PAL || (entry & 0xE000u) != 0u) {
                 port_fatal("vs: unexpected background entry");
             }
             const uint8_t* src_tile = &bg_tiles[(size_t)tile * 64u];
@@ -488,11 +561,12 @@ static void vs_build_once(void) {
 
     size_t text_size = 0;
     const uint8_t* text_raw = asset_bytes(ASSET_MENU_TEXT_A, &text_size);
-    if (text_raw == NULL || (text_size % 32u) != 0u || text_size < 30u * 32u
-        || text_size > MAX_TEXT_TILES * 32u) {
-        port_fatal("vs: unexpected MENU_TEXT_A size");
+    if (text_raw == NULL || text_size != (size_t)VS_TEXT_TILE_COUNT * 32u) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "vs: unexpected MENU_TEXT_A size (%zu)", text_size);
+        port_fatal(msg);
     }
-    convert_tiles_4bpp(text_raw, (uint16_t)(text_size / 32u), g_vs_text_tiles);
+    convert_tiles_4bpp(text_raw, VS_TEXT_TILE_COUNT, g_vs_text_tiles);
 
     size_t obj_size = 0;
     const uint8_t* obj_raw = asset_bytes(ASSET_MENU_CURSOR_DRAWINGS, &obj_size);
@@ -501,7 +575,10 @@ static void vs_build_once(void) {
     }
     convert_tiles_4bpp(obj_raw, VS_CURSOR_TILE_COUNT, g_vs_cursor_tiles);
 
+    g_vs_bg_draw_gen = bg_draw_gen;
     g_vs_arr_gen = arr_gen;
+    g_vs_text_gen = text_gen;
+    g_vs_obj_gen = obj_gen;
     g_vs_built = true;
 }
 
@@ -516,11 +593,11 @@ static void vs_screen_draw(uint32_t* fb, const uint32_t pal_rgba[256]) {
 
     /* 2. Background picture (BG1 scrolls -4/-4 -> shift x 4, y 3) */
     for (int y = 0; y < SCREEN_HEIGHT; ++y) {
-        unsigned r = (unsigned)(y - 3) & 255u;
+        unsigned r = (unsigned)(y - VS_BG_SHIFT_Y) & 255u;
         const uint8_t* src_row = &g_vs_bg_image[r * 256u];
         uint32_t* dst_row = &fb[y * SCREEN_WIDTH];
         for (int x = 0; x < SCREEN_WIDTH; ++x) {
-            uint8_t c = src_row[(unsigned)(x - 4) & 255u];
+            uint8_t c = src_row[(unsigned)(x - VS_BG_SHIFT_X) & 255u];
             if (c != 0u) {
                 dst_row[x] = pal_rgba[c];
             }
@@ -531,28 +608,29 @@ static void vs_screen_draw(uint32_t* fb, const uint32_t pal_rgba[256]) {
     for (int row = 0; row < 28; ++row) {
         for (int col = 0; col < 32; ++col) {
             uint16_t entry = rd16((uint32_t)(0x10000 + 2 * (row * 32 + col)));
-            if (entry == 0x003Du) {
+            if (entry == VS_TEXT_BLANK_ENTRY) {
                 continue;
             }
             uint16_t tile = entry & 0x03FFu;
             uint16_t pal = (entry >> 10) & 7u;
             bool prio = (entry & 0x2000u) != 0;
             bool flips = (entry & 0xC000u) != 0;
-            if (pal != 6u || !prio || flips) {
+            if (pal != VS_TEXT_PAL || !prio || (!VS_TEXT_FLIPS_ALLOWED && flips)) {
                 char msg[96];
                 snprintf(msg, sizeof(msg), "vs: unexpected text entry 0x%04X", (unsigned)entry);
                 port_fatal(msg);
             }
-            if (tile == 189u) {
+            if (tile == VS_TEXT_BLANK_TILE) {
                 continue;
             }
-            if (tile < 128u || tile > 157u) {
+            if (tile < VS_TEXT_MIN_TILE || tile > VS_TEXT_MAX_TILE) {
                 char msg[96];
                 snprintf(msg, sizeof(msg), "vs: unexpected text entry 0x%04X", (unsigned)entry);
                 port_fatal(msg);
             }
-            const uint8_t* pixels = &g_vs_text_tiles[(size_t)(tile - 128u) * 64u];
-            draw_tile_8x8(fb, pal_rgba, pixels, 6u, col * 8, row * 8, false, false);
+            const uint8_t* pixels =
+                &g_vs_text_tiles[(size_t)(tile - VS_TEXT_FIRST_TILE) * 64u];
+            draw_tile_8x8(fb, pal_rgba, pixels, VS_TEXT_PAL, col * 8, row * 8, false, false);
         }
     }
 
@@ -562,12 +640,23 @@ static void vs_screen_draw(uint32_t* fb, const uint32_t pal_rgba[256]) {
         if (used == 0u) {
             continue;
         }
+        if (used != VS_OBJ_USED_WORD) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "vs: unexpected object used word 0x%04X", (unsigned)used);
+            port_fatal(msg);
+        }
         if ((used & 0x8000u) == 0u) {
             char msg[96];
             snprintf(msg, sizeof(msg), "vs: unexpected object size flag 0x%04X", (unsigned)used);
             port_fatal(msg);
         }
-        int ox = (int)(rd16((uint32_t)(0x0600 + x)) & 0x01FFu);
+        uint16_t xraw = rd16((uint32_t)(0x0600 + x));
+        if ((xraw & 0xFE00u) != 0u) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "vs: unexpected object X word 0x%04X", (unsigned)xraw);
+            port_fatal(msg);
+        }
+        int ox = (int)(xraw & 0x01FFu);
         if (ox >= 256) {
             ox -= 512;
         }
@@ -583,17 +672,21 @@ static void vs_screen_draw(uint32_t* fb, const uint32_t pal_rgba[256]) {
         uint16_t prio = (w >> 12) & 3u;
         bool hflip = (w & 0x4000u) != 0u;
         bool vflip = (w & 0x8000u) != 0u;
-        if (prio != 3u) {
+        if (prio != VS_OBJ_PRIORITY) {
             char msg[96];
             snprintf(msg, sizeof(msg), "vs: unexpected object attr 0x%04X", (unsigned)w);
             port_fatal(msg);
         }
-        if (tile <= 5u && pal == 0u) {
-            draw_tile_8x8(fb, pal_rgba, &g_vs_cursor_tiles[(size_t)tile * 64u], 8u, ox, oy,
-                          hflip, vflip);
-        } else if (tile >= 128u && tile <= 157u && pal == 7u) {
-            draw_tile_8x8(fb, pal_rgba, &g_vs_text_tiles[(size_t)(tile - 128u) * 64u], 15u, ox,
-                          oy, hflip, vflip);
+        if (tile <= VS_OBJ_CURSOR_MAX_TILE && pal == VS_OBJ_CURSOR_PAL
+            && (VS_OBJ_CURSOR_FLIPS_ALLOWED || (!hflip && !vflip))) {
+            draw_tile_8x8(fb, pal_rgba, &g_vs_cursor_tiles[(size_t)tile * 64u],
+                          8u + VS_OBJ_CURSOR_PAL, ox, oy, hflip, vflip);
+        } else if (tile >= VS_OBJ_TEXT_MIN_TILE && tile <= VS_OBJ_TEXT_MAX_TILE
+                   && pal == VS_OBJ_TEXT_PAL
+                   && (VS_OBJ_TEXT_FLIPS_ALLOWED || (!hflip && !vflip))) {
+            draw_tile_8x8(fb, pal_rgba,
+                          &g_vs_text_tiles[(size_t)(tile - VS_TEXT_FIRST_TILE) * 64u],
+                          8u + VS_OBJ_TEXT_PAL, ox, oy, hflip, vflip);
         } else {
             char msg[96];
             snprintf(msg, sizeof(msg), "vs: unexpected object attr 0x%04X", (unsigned)w);
@@ -615,9 +708,11 @@ int menu_screen_active(void) {
             return (int)i;
         }
     }
+    int text_256 = asset_current(ROLE_TEXT_DRAWINGS_256);
     if (asset_current(ROLE_BG_DRAWINGS) == ASSET_VS_BG_DRAWINGS
         && asset_current(ROLE_BG_ARRANGEMENT) == ASSET_VS_PANELS_ARRANGEMENT
         && asset_current(ROLE_TEXT_DRAWINGS_128) == ASSET_MENU_TEXT_A
+        && (text_256 == -1 || text_256 == ASSET_MENU_TEXT_B)
         && asset_current(ROLE_OBJ_DRAWINGS) == ASSET_MENU_CURSOR_DRAWINGS) {
         return (int)MENU_SCREEN_COUNT;
     }
@@ -639,8 +734,16 @@ void menu_screen_draw(int which, uint32_t* fb) {
         port_fatal("menu_screen_draw: invalid screen index");
     }
 
-    /* Brightness 0 is black (the game also uses $7F:0000 as scratch while faded out). */
-    uint8_t b = rd8(0x019Bu) & 0x0Fu;
+    /* Brightness 0 or bit 7 set is black (the game also uses $7F:0000 as scratch while faded out).
+       Bits 4..6 are unmeasured and must be zero. */
+    uint8_t b_raw = rd8(0x019Bu);
+    if ((b_raw & 0x70u) != 0u) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "%s: unexpected brightness byte 0x%02X", menu_screen_name(which),
+                 (unsigned)b_raw);
+        port_fatal(msg);
+    }
+    uint8_t b = ((b_raw & 0x80u) != 0u) ? 0u : (b_raw & 0x0Fu);
     if (b == 0u) {
         for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
             fb[i] = 0xFF000000u;
@@ -694,6 +797,8 @@ void menu_screen_draw(int which, uint32_t* fb) {
     if (s->text_per_line_effects) {
         draw_menu_text_per_line(s, cache, fb);
     } else {
+        /* Screens without band effects (title_card, password_show) do not enable the menus'
+           band tables; $0D00/$0D20 are not checked here because they may hold leftovers. */
         for (int row = 0; row < 28; ++row) {
             for (int col = 0; col < 32; ++col) {
                 uint16_t entry = rd16((uint32_t)(0x10000 + 2 * (row * 32 + col)));
@@ -735,14 +840,27 @@ void menu_screen_draw(int which, uint32_t* fb) {
             snprintf(msg, sizeof(msg), "%s: unexpected used object slot %d", s->name, x / 2);
             port_fatal(msg);
         }
+        if (used != s->obj_used_word) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "%s: unexpected object used word 0x%04X", s->name,
+                     (unsigned)used);
+            port_fatal(msg);
+        }
         bool is_small = (used & 0x8000u) != 0;
-        if (s->obj_require_small && !is_small) {
+        if (is_small != s->obj_require_small) {
             char msg[96];
             snprintf(msg, sizeof(msg), "%s: unexpected object size flag 0x%04X", s->name,
                      (unsigned)used);
             port_fatal(msg);
         }
-        int ox = (int)(rd16((uint32_t)(0x0600 + x)) & 0x01FFu);
+        uint16_t xraw = rd16((uint32_t)(0x0600 + x));
+        if ((xraw & 0xFE00u) != 0u) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "%s: unexpected object X word 0x%04X", s->name,
+                     (unsigned)xraw);
+            port_fatal(msg);
+        }
+        int ox = (int)(xraw & 0x01FFu);
         if (ox >= 256) {
             ox -= 512;
         }
@@ -759,8 +877,9 @@ void menu_screen_draw(int which, uint32_t* fb) {
         bool hflip = (w & 0x4000u) != 0;
         bool vflip = (w & 0x8000u) != 0;
         if (prio != s->obj_priority
-            || (s->obj_require_pal >= 0 && (int)pal != s->obj_require_pal)
-            || (!s->obj_flips_allowed && (hflip || vflip))) {
+            || ((s->obj_pal_mask & (1u << pal)) == 0u)
+            || (!s->obj_flips_allowed && (hflip || vflip))
+            || (!is_small && (hflip || vflip))) {
             char msg[96];
             snprintf(msg, sizeof(msg), "%s: unexpected object attr 0x%04X", s->name, (unsigned)w);
             port_fatal(msg);
