@@ -35,13 +35,13 @@ Você precisa fornecer sua própria cópia legal da ROM **Top Gear 3000 (USA)**:
 
 ## Estado atual
 
-O projeto está na **Etapa 1 de 4** (pré-alfa). **O jogo ainda não roda** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e abre uma janela preta vazia (`768x672`). Ainda não há saves, configurações, mods, widescreen nem gameplay.
+O projeto está na **etapa 2 de 4** (pré-alfa). **Ainda não dá para jogar** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e roda algumas telas do jogo a partir do C do decomp, na velocidade do console, lendo teclado e controle. Nada é desenhado ainda: a janela fica preta. Ainda não há saves, configurações, mods, widescreen nem gameplay.
 
 | Etapa | Marco | Estado |
 |---|---|---|
 | 1 | Esqueleto (CMake, download do SDL3, checagem SHA-1 da ROM, janela vazia, CI) | ✅ Feito |
-| 2 | Projeto da camada de plataforma (fronteira de dados do jogo acima de `platform.h`) | ⏳ Em andamento |
-| 3 | Interface de som (reprodução nativa de música e efeitos) | Planejado |
+| 2 | Camada de plataforma (laço de quadros, controles; [desenho](docs/proposals/video-layer.md)) | ✅ Feito |
+| 3 | Interface de som (reprodução nativa de música e efeitos) | ⏳ Próxima |
 | 4 | Primeiros menus nativos (primeiras telas desenhadas nativamente a partir da RAM) | Planejado |
 
 ## Nem 1% emulador

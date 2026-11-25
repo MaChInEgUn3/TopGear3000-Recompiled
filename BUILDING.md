@@ -93,4 +93,11 @@ git submodule update --init --recursive
 ## Running Checks and CLI Options
 
 * `ctest --test-dir build --output-on-failure` runs `tg3000 --selftest` (`rom_sha1_selftest`), which verifies the built-in SHA-1 implementation against standard test vectors without initializing SDL video.
+* `ctest` also runs `game_smoke_title_card`: the title card screen for 300 frames with no window
+  (`SDL_VIDEODRIVER=dummy`). Without a ROM in `input/` it is reported as skipped.
+* `tg3000 --screen NAME --frames N`: run one of the game's screens (`title_card`,
+  `password_show`, `vs`, `options`) and quit after N frames (0 = until the window closes).
+  `TG3000_HEADLESS=1` turns error message boxes off.
+* Controls: arrows = D-pad, Z = B, X = A, A = Y, S = X, Q = L, W = R, Enter = Start,
+  Right Shift = Select, Esc = quit; or the first connected gamepad (SNES button positions).
 * `tg3000 --check-rom [path]` verifies ROM size (`1,048,576` bytes) and SHA-1 without opening a window. If `[path]` is omitted, it checks `input/TG3000.sfc` first and falls back to `TG3000.sfc` in the current directory.

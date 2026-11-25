@@ -54,10 +54,17 @@ add_executable(tg3000
   port/main.c
   port/rom.c
   port/sha1.c
+  port/platform/ignored.c
+  port/platform/video_events.c
+  port/platform/input.c
+  port/platform/frame.c
 )
-target_include_directories(tg3000 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/port")
+target_include_directories(tg3000 PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/port"
+  "${CMAKE_CURRENT_SOURCE_DIR}/port/platform"
+)
 target_compile_options(tg3000 PRIVATE -Wall -Wextra -Wpedantic)
-target_link_libraries(tg3000 PRIVATE ${TG3000_SDL_TARGET})
+target_link_libraries(tg3000 PRIVATE tg3000_logic ${TG3000_SDL_TARGET})
 set_target_properties(tg3000 PROPERTIES WIN32_EXECUTABLE OFF)
 
 if(MINGW)
@@ -66,3 +73,11 @@ endif()
 
 enable_testing()
 add_test(NAME rom_sha1_selftest COMMAND tg3000 --selftest)
+add_test(NAME game_smoke_title_card
+  COMMAND tg3000 --screen title_card --frames 300
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_smoke_title_card PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)

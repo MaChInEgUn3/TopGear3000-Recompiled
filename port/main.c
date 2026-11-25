@@ -3,8 +3,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "port.h"
 #include "rom.h"
 #include "sha1.h"
+#include "tg3000.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -85,6 +87,9 @@ static rom_status load_default_or_path(const char* explicit_path,
 int main(int argc, char* argv[]) {
     bool selftest = false;
     bool check_rom = false;
+    bool frames_given = false;
+    unsigned long frame_limit = 0;
+    const char* screen = "title_card";
     const char* rom_path = NULL;
 
     for (int i = 1; i < argc; ++i) {
@@ -92,14 +97,21 @@ int main(int argc, char* argv[]) {
             selftest = true;
         } else if (strcmp(argv[i], "--check-rom") == 0) {
             check_rom = true;
+        } else if (strcmp(argv[i], "--screen") == 0 && i + 1 < argc) {
+            screen = argv[++i];
+        } else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
+            frames_given = true;
+            frame_limit = strtoul(argv[++i], NULL, 10);
         } else if (argv[i][0] == '-') {
-            fprintf(stderr, "Usage: %s [--selftest] [--check-rom] [path/to/TG3000.sfc]\n",
+            fprintf(stderr,
+                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [path/to/TG3000.sfc]\n",
                     argv[0]);
             return 1;
         } else if (rom_path == NULL) {
             rom_path = argv[i];
         } else {
-            fprintf(stderr, "Usage: %s [--selftest] [--check-rom] [path/to/TG3000.sfc]\n",
+            fprintf(stderr,
+                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [path/to/TG3000.sfc]\n",
                     argv[0]);
             return 1;
         }
@@ -125,18 +137,25 @@ int main(int argc, char* argv[]) {
     }
 
     if (st != ROM_OK) {
+        if (frames_given && st == ROM_NOT_FOUND) {
+            fprintf(stderr, "SKIP: ROM not found (%s)\n", used_path);
+            return 77;
+        }
         char msg[512];
         snprintf(msg, sizeof(msg), "Failed to load ROM (%s): %s",
                  used_path, rom_status_text(st));
         fprintf(stderr, "%s\n", msg);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Top Gear 3000", msg, NULL);
+        if (getenv("TG3000_HEADLESS") == NULL) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Top Gear 3000", msg, NULL);
+        }
         return 1;
     }
 
-    rom_free(rom_data);
+    g_rom = rom_data;
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        rom_free(rom_data);
         return 1;
     }
 
@@ -144,6 +163,7 @@ int main(int argc, char* argv[]) {
     if (window == NULL) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();
+        rom_free(rom_data);
         return 1;
     }
 
@@ -152,29 +172,17 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
         SDL_DestroyWindow(window);
         SDL_Quit();
+        rom_free(rom_data);
         return 1;
     }
 
-    SDL_SetRenderVSync(renderer, 1);
+    SDL_SetRenderLogicalPresentation(renderer, 256, 224, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
 
-    bool running = true;
-    while (running) {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                running = false;
-            } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
-                running = false;
-            }
-        }
-
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-        SDL_RenderPresent(renderer);
-    }
+    int rc = port_run(renderer, screen, frame_limit);
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    return 0;
+    rom_free(rom_data);
+    return rc;
 }

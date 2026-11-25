@@ -8,7 +8,12 @@
 
 ## Directory layout
 - `extern/tg3000-decomp/` — read-only submodule with verified readable C of the SNES game logic.
-- `port/` — native PC port code (`main.c`, `rom.c`, `rom.h`, `sha1.c`, `sha1.h`).
+- `port/` — native PC port code: `main.c` (command line, ROM check, window), `rom.c`, `sha1.c`.
+- `port/platform/` — the port's side of the decomp's `platform.h`: `frame.c` (the frame boundary,
+  `g_ram`/`g_rom`, timing, sound message, DSP-4 stop), `input.c` (keyboard and gamepad),
+  `video_events.c` (named graphics/palette events, empty until step 4), `ignored.c` (every
+  register-style call, empty bodies, one file so review is trivial).
+- `docs/proposals/` — accepted design proposals (`video-layer.md`).
 - `tools/` — helper CMake scripts (`fetch_deps.cmake`).
 - `deps/` — fetched third-party dependencies (`deps/SDL3`, git-ignored).
 - `input/` — default user ROM location (`input/TG3000.sfc`, git-ignored).
@@ -16,16 +21,31 @@
 - `docs/` — architectural decisions (`docs/DECISIONS.md`) and `docs/img/` (original banner).
 - `README.md` (English) / `README.pt-br.md`, `BUILDING.md` — user-facing docs.
 
-## Current data flow (Step 1)
+## Current data flow (step 2)
 ```
-main() -> rom_load() [checks 1048576 bytes + SHA-1] -> SDL_Init(VIDEO) -> 768x672 window (black clear + vsync)
+main() -> rom_load() [1048576 bytes + SHA-1] -> g_rom -> SDL window + renderer (logical 256x224,
+  integer scale) -> port_run(screen): zero g_ram, interrupt_vectors_init(), call the game's
+  screen function (blocking) -> ... the game calls platform_wait_vblank() at every frame wait:
+    1. the game's frame code (its NMI, in C): JML target at $0000, then nmi_prologue() and the
+       target word at $0008 (fixed table; unknown -> port_fatal with the value)
+    2. SDL events (quit/Escape -> longjmp back to port_run; input state)
+    3. draw (black until step 4) and present
+    4. pace at 60.0988 fps (SDL_DelayPrecise)
 ```
+The game owns the loop; the port lives at the frame boundary (docs/proposals/video-layer.md).
 CLI modes:
 - `--selftest`: runs SHA-1 test vectors without initializing SDL video (used by `ctest` target `rom_sha1_selftest`).
 - `--check-rom [path]`: verifies ROM size and SHA-1 without opening a window.
+- `--screen NAME` (`title_card`, `password_show`, `vs`, `options`; default `title_card`):
+  which game screen to run, until the decomp has its boot and dispatcher in C.
+- `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
 
-## Boundary plan (next steps)
-The decomp's `src/platform.h` mirrors SNES hardware registers for differential testing. The port will introduce a native platform layer above it operating on game-level RAM data (tile maps, sprite lists, palettes, per-line road tables) and native audio, following the **"not even 1% emulator"** rule (see `docs/DECISIONS.md`).
+## Boundary
+The decomp's `src/platform.h` is chip-shaped on purpose (its bench compares with the
+original). The port answers it one level up: register-style calls are ignored, graphics and
+palettes become named events (step 4), and each kind of screen is drawn by its own code from
+game RAM and pictures converted from the cartridge. Rules: `docs/proposals/video-layer.md` and
+`docs/DECISIONS.md`, "Video layer: the owner's answers".
 
 ## Build and test
 ```bash

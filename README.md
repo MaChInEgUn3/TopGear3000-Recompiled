@@ -35,13 +35,13 @@ You must provide your own legally obtained copy of **Top Gear 3000 (USA)**:
 
 ## Status
 
-The project is currently at **Step 1 of 4** (pre-alpha). **The game does not run yet** and **no releases exist yet**. Today, the executable builds on Linux and Windows x86-64, verifies your ROM (size and SHA-1), and opens an empty black window (`768x672`). No saves, settings, mods, widescreen, or gameplay exist yet.
+The project is currently at **step 2 of 4** (pre-alpha). **The game is not playable yet** and **no releases exist yet**. Today, the executable builds on Linux and Windows x86-64, verifies your ROM (size and SHA-1), and runs a few of the game's screens from the decomp's C at the console's frame rate, reading keyboard and gamepad. Nothing is drawn yet: the window stays black. No saves, settings, mods, widescreen, or gameplay exist yet.
 
 | Step | Milestone | State |
 |---|---|---|
 | 1 | Skeleton (CMake, SDL3 fetch, ROM SHA-1 check, empty window, CI) | ✅ Done |
-| 2 | Platform layer design (game-data boundary above `platform.h`) | ⏳ In progress |
-| 3 | Sound interface (native music and SFX playback) | Planned |
+| 2 | Platform layer (frame loop, input; [design](docs/proposals/video-layer.md)) | ✅ Done |
+| 3 | Sound interface (native music and SFX playback) | ⏳ Next |
 | 4 | First native menus (first screens drawn natively from RAM data) | Planned |
 
 ## Not Even 1% Emulator

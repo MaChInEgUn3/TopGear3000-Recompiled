@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `f84afeb`, bumped from `2ade543` the same day) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `8238cd1`; `2ade543`, then `f84afeb`, the same day) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -88,6 +88,35 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
    bodies, so review is trivial. Screens that share the background still get one table each
    (their drawings and objects differ).
 3. **Picture size.** Owner: no preference. Chosen: the original 256x224, scaled to the window.
+
+## The frame boundary in code (step 2, 2026-11-24)
+
+- **Decomp bumped to `8238cd1`** (from `f84afeb`): composed rows (screens whole) and DSP-4
+  measurements; nothing in `platform.h` changed.
+- **`port/platform/`** answers all 71 `platform.h` functions as the accepted proposal says:
+  `ignored.c` (register-style and per-line calls, empty bodies, one file), `video_events.c`
+  (graphics and palette uploads, empty until step 4), `input.c`, `frame.c`.
+- **`platform_wait_vblank`** runs the game's frame code (the JML at `$0000`, then
+  `nmi_prologue` and the word at `$0008` through a fixed table; the two-task menus' target, the
+  race's handler and anything unknown stop with a message), pumps SDL events, presents a black
+  frame, and paces at 60.0988 frames per second. Quit is a long jump back to `port_run`.
+- **Pacing uses `SDL_DelayPrecise`.** `SDL_DelayNS` on Windows overshoots by up to a timer tick
+  (about 15 ms), and the frame rate swung between about 51 and 79 frames per second; with the
+  precise delay the measured average is 16.639 ms per frame (120-frame windows, 960 frames).
+- **Known difference from the console:** the game's frame code runs only at the game's frame
+  waits. On the console the NMI can land mid-routine; the decomp records one case (glue-3: an
+  NMI during the VS screen's graphics unpacking, with the menus' target still live). The port
+  does not reproduce that preemption; the decomp's bench still replays the original
+  interrupts for composed rows, so it gives no C-only frame order to copy.
+- **Controls:** arrows, Z/X/A/S = B/A/Y/X, Q/W = L/R, Enter = Start, Right Shift = Select,
+  Esc = quit; the first gamepad by SNES button positions (left stick as D-pad, half dead zone).
+  No multitap: the game reads pads 2-5 as absent.
+- **Until the decomp's boot and dispatcher are C** (request 1), `--screen` picks which screen
+  function runs from zeroed memory plus `interrupt_vectors_init()`.
+- **Checked:** Windows (GCC 16) and Linux (WSL Ubuntu 20.04, GCC 9): no warnings in `port/`;
+  `ctest` passes (`game_smoke_title_card` skips without a ROM, as on CI); title card, password
+  display, VS and options each run 240-360 frames and quit cleanly; a bad screen name stops
+  with its message. Start-up takes about 2 s on Windows (SDL initialisation), not investigated.
 
 ## Steps (2026-11-24)
 
