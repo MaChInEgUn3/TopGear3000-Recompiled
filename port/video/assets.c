@@ -19,18 +19,20 @@ typedef struct {
     const char* name;
     uint32_t rom_bus;
     asset_kind kind;
+    asset_role role;
     uint8_t* data;
     size_t size;
     uint32_t hash;
-    bool loaded;
 } asset_entry;
 
 static asset_entry g_assets[ASSET_COUNT] = {
-    [ASSET_BG_TITLE_DRAWINGS] = {"BG_TITLE_DRAWINGS", 0x96EE52u, ASSET_KIND_TILES_8BPP, NULL, 0, 0, false},
-    [ASSET_BG_TITLE_ARRANGEMENT] = {"BG_TITLE_ARRANGEMENT", 0x85FA8Bu, ASSET_KIND_MAP_16, NULL, 0, 0, false},
-    [ASSET_TEXT_TITLE_DRAWINGS] = {"TEXT_TITLE_DRAWINGS", 0x87F861u, ASSET_KIND_TILES_4BPP, NULL, 0, 0, false},
-    [ASSET_OBJ_TITLE_DRAWINGS] = {"OBJ_TITLE_DRAWINGS", 0x87F5BCu, ASSET_KIND_TILES_4BPP, NULL, 0, 0, false},
+    [ASSET_MENU_BG_DRAWINGS] = {"MENU_BG_DRAWINGS", 0x96EE52u, ASSET_KIND_TILES_8BPP, ROLE_BG_DRAWINGS, NULL, 0, 0},
+    [ASSET_MENU_BG_ARRANGEMENT] = {"MENU_BG_ARRANGEMENT", 0x85FA8Bu, ASSET_KIND_MAP_16, ROLE_BG_ARRANGEMENT, NULL, 0, 0},
+    [ASSET_TITLE_TEXT_DRAWINGS] = {"TITLE_TEXT_DRAWINGS", 0x87F861u, ASSET_KIND_TILES_4BPP, ROLE_TEXT_DRAWINGS, NULL, 0, 0},
+    [ASSET_TITLE_OBJ_DRAWINGS] = {"TITLE_OBJ_DRAWINGS", 0x87F5BCu, ASSET_KIND_TILES_4BPP, ROLE_OBJ_DRAWINGS, NULL, 0, 0},
 };
+
+static int g_current[ROLE_COUNT] = {-1, -1, -1, -1};
 
 static uint32_t fnv1a_32(const uint8_t* data, size_t len) {
     uint32_t h = 0x811C9DC5u;
@@ -42,12 +44,12 @@ static uint32_t fnv1a_32(const uint8_t* data, size_t len) {
 }
 
 void assets_init(void) {
+    assets_clear_loaded();
     for (int i = 0; i < ASSET_COUNT; ++i) {
         free(g_assets[i].data);
         g_assets[i].data = NULL;
         g_assets[i].size = 0;
         g_assets[i].hash = 0;
-        g_assets[i].loaded = false;
 
         uint8_t bank = (uint8_t)(g_assets[i].rom_bus >> 16);
         uint16_t addr = (uint16_t)(g_assets[i].rom_bus & 0xFFFFu);
@@ -79,7 +81,7 @@ void assets_note_upload(uint32_t src, uint32_t size) {
         uint32_t h = fnv1a_32(&g_ram[0x10000], size);
         for (int i = 0; i < ASSET_COUNT; ++i) {
             if (g_assets[i].size == size && g_assets[i].hash == h) {
-                g_assets[i].loaded = true;
+                g_current[g_assets[i].role] = i;
             }
         }
         return;
@@ -89,23 +91,23 @@ void assets_note_upload(uint32_t src, uint32_t size) {
     if (!bus_wram(src, &wram_idx)) {
         for (int i = 0; i < ASSET_COUNT; ++i) {
             if (g_assets[i].rom_bus == src) {
-                g_assets[i].loaded = true;
+                g_current[g_assets[i].role] = i;
             }
         }
     }
 }
 
 void assets_clear_loaded(void) {
-    for (int i = 0; i < ASSET_COUNT; ++i) {
-        g_assets[i].loaded = false;
+    for (int r = 0; r < ROLE_COUNT; ++r) {
+        g_current[r] = -1;
     }
 }
 
-bool asset_loaded(int id) {
-    if (id < 0 || id >= ASSET_COUNT) {
-        return false;
+int asset_current(asset_role r) {
+    if ((int)r < 0 || (int)r >= ROLE_COUNT) {
+        return -1;
     }
-    return g_assets[id].loaded;
+    return g_current[r];
 }
 
 const uint8_t* asset_bytes(int id, size_t* size) {

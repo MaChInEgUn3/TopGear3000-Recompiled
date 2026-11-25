@@ -190,12 +190,28 @@ estamos fazendo com o DSP-4?".
   game's convention puts a vertical scroll of -1 at the top line (its text layer). Objects at
   their table's Y. Found by comparing pictures, region by region.
 - **Brightness** (`$019B`, 0-15, the game's fade): linear, `c * b * 17 / 256`. During fades the
-  bench's picture differs by at most 1 in 255 per colour channel (its own rounding); the fade's
-  timing matches to the frame. Not chased further: it is the bench emulator's rounding.
+  bench's picture differs by at most 1 in 255 per colour channel (cause not established).
+  Timing, measured: the game's brightness value steps on the same frames in both (it is the
+  game's own C); the bench's picture of step n shows the value the game held at step n-2, the
+  port's picture shows the value of its current frame. So the port's fade can appear up to 2
+  frames earlier than the bench's picture. Whether that is the bench's dump timing or a real
+  display latency of the console is not established.
 - **Regression test:** `game_picture_title_card` checks the fingerprint (FNV-1a 64 of the RGB
   picture) of that frame; only the hash is in the repository. `--shot F PATH` (PATH `-` = no
   file) prints it and saves a BMP for local comparison (pictures stay outside the repo, under
   the excluded `notes/`).
+- **The window:** the picture is scaled with nearest-pixel sampling (SDL3's default is
+  linear); `--shot` also reads the window back and checks each game pixel is a solid block:
+  768x672 at (0,0), 0 mismatched pixels, with the real Windows video driver and the dummy one.
+- **The screen's colours** are the one table the port keeps that the chip also keeps. It holds
+  only named cartridge palettes (catalogue checked by address and size; an unknown one stops),
+  plus single colours the game writes; uploads from game RAM are ignored (screens that keep
+  their colours in RAM are drawn by reading that RAM). Owner told; the owner's call.
+- **Which screen is drawn** comes from roles: background drawings, background arrangement,
+  text drawings, object drawings each hold the block the game uploaded last; the title card is
+  drawn while its four blocks hold them. Test `game_screen_sequence`: title card then password
+  display in one run; once the password display loads its own blocks the port stops drawing the
+  title card. Its other screens still show black.
 - **Per-line effects done:** none (the title card has none).
 
 ## Steps (2026-11-24)

@@ -156,7 +156,6 @@ void platform_wait_vblank(void) {
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
         SDL_RenderClear(g_renderer);
     }
-    SDL_RenderPresent(g_renderer);
 
     if (g_shot_path != NULL && g_frame_count == g_shot_frame) {
         /* The picture's fingerprint (FNV-1a 64 of its RGB bytes, top to bottom): a test can
@@ -168,53 +167,122 @@ void platform_wait_vblank(void) {
                 h *= 0x100000001B3ULL;
             }
         }
-        printf("frame %lu picture hash %016llx\n", g_frame_count, (unsigned long long)h);
-        fflush(stdout);
-    }
-    if (g_shot_path != NULL && g_frame_count == g_shot_frame && strcmp(g_shot_path, "-") != 0) {
-        FILE* f = fopen(g_shot_path, "wb");
-        if (f == NULL) {
-            port_fatal("failed to open screenshot path for writing");
-        }
-        const uint32_t width = SCREEN_WIDTH;
-        const uint32_t height = SCREEN_HEIGHT;
-        const uint32_t image_size = width * height * 3u;
-        const uint32_t file_size = 54u + image_size;
-        uint8_t hdr[54];
-        memset(hdr, 0, sizeof(hdr));
-        hdr[0] = 'B';
-        hdr[1] = 'M';
-        hdr[2] = (uint8_t)(file_size & 0xFFu);
-        hdr[3] = (uint8_t)((file_size >> 8) & 0xFFu);
-        hdr[4] = (uint8_t)((file_size >> 16) & 0xFFu);
-        hdr[5] = (uint8_t)((file_size >> 24) & 0xFFu);
-        hdr[10] = 54u;
-        hdr[14] = 40u;
-        hdr[18] = (uint8_t)(width & 0xFFu);
-        hdr[19] = (uint8_t)((width >> 8) & 0xFFu);
-        hdr[22] = (uint8_t)(height & 0xFFu);
-        hdr[23] = (uint8_t)((height >> 8) & 0xFFu);
-        hdr[26] = 1u;
-        hdr[28] = 24u;
-        hdr[34] = (uint8_t)(image_size & 0xFFu);
-        hdr[35] = (uint8_t)((image_size >> 8) & 0xFFu);
-        hdr[36] = (uint8_t)((image_size >> 16) & 0xFFu);
-        hdr[37] = (uint8_t)((image_size >> 24) & 0xFFu);
-        fwrite(hdr, 1, sizeof(hdr), f);
-        uint8_t row[SCREEN_WIDTH * 3];
-        for (int y = SCREEN_HEIGHT - 1; y >= 0; --y) {
-            const uint32_t* src = &g_fb[y * SCREEN_WIDTH];
-            for (int x = 0; x < SCREEN_WIDTH; ++x) {
-                uint32_t px = src[x];
-                row[x * 3 + 0] = (uint8_t)(px & 0xFFu);
-                row[x * 3 + 1] = (uint8_t)((px >> 8) & 0xFFu);
-                row[x * 3 + 2] = (uint8_t)((px >> 16) & 0xFFu);
+        printf("frame %lu picture hash %016llx brightness %u drawn %s\n", g_frame_count,
+               (unsigned long long)h, (unsigned)(rd8(0x019Bu) & 0x0Fu),
+               title_card_active() ? "title_card" : "none");
+
+        SDL_Surface* surf = SDL_RenderReadPixels(g_renderer, NULL);
+        if (surf == NULL) {
+            printf("window check: unavailable (%s)\n", SDL_GetError());
+        } else {
+            SDL_FRect dst_rect;
+            if (!SDL_GetRenderLogicalPresentationRect(g_renderer, &dst_rect)) {
+                printf("window check: unavailable (%s)\n", SDL_GetError());
+                SDL_DestroySurface(surf);
+            } else {
+                SDL_Surface* argb = surf;
+                if (surf->format != SDL_PIXELFORMAT_ARGB8888) {
+                    argb = SDL_ConvertSurface(surf, SDL_PIXELFORMAT_ARGB8888);
+                    SDL_DestroySurface(surf);
+                }
+                if (argb == NULL) {
+                    printf("window check: unavailable (%s)\n", SDL_GetError());
+                } else {
+                    int rx = (int)(dst_rect.x + 0.5f);
+                    int ry = (int)(dst_rect.y + 0.5f);
+                    int rw = (int)(dst_rect.w + 0.5f);
+                    int rh = (int)(dst_rect.h + 0.5f);
+                    int mismatched = 0;
+                    if (SDL_MUSTLOCK(argb)) {
+                        SDL_LockSurface(argb);
+                    }
+                    const uint8_t* base = (const uint8_t*)argb->pixels;
+                    for (int gy = 0; gy < SCREEN_HEIGHT; ++gy) {
+                        int y0 = ry + (gy * rh) / SCREEN_HEIGHT;
+                        int y1 = ry + ((gy + 1) * rh) / SCREEN_HEIGHT;
+                        for (int gx = 0; gx < SCREEN_WIDTH; ++gx) {
+                            int x0 = rx + (gx * rw) / SCREEN_WIDTH;
+                            int x1 = rx + ((gx + 1) * rw) / SCREEN_WIDTH;
+                            uint32_t expected_rgb = g_fb[gy * SCREEN_WIDTH + gx] & 0x00FFFFFFu;
+                            bool match = (x1 > x0) && (y1 > y0);
+                            for (int wy = y0; wy < y1 && match; ++wy) {
+                                if (wy < 0 || wy >= argb->h) {
+                                    match = false;
+                                    break;
+                                }
+                                const uint32_t* row =
+                                    (const uint32_t*)(base + (size_t)wy * (size_t)argb->pitch);
+                                for (int wx = x0; wx < x1; ++wx) {
+                                    if (wx < 0 || wx >= argb->w ||
+                                        (row[wx] & 0x00FFFFFFu) != expected_rgb) {
+                                        match = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!match) {
+                                ++mismatched;
+                            }
+                        }
+                    }
+                    if (SDL_MUSTLOCK(argb)) {
+                        SDL_UnlockSurface(argb);
+                    }
+                    SDL_DestroySurface(argb);
+                    printf("window check: scale %dx%d at (%d,%d), %d mismatched game pixels\n",
+                           rw, rh, rx, ry, mismatched);
+                }
             }
-            fwrite(row, 1, sizeof(row), f);
         }
-        fclose(f);
+        fflush(stdout);
+
+        if (strcmp(g_shot_path, "-") != 0) {
+            FILE* f = fopen(g_shot_path, "wb");
+            if (f == NULL) {
+                port_fatal("failed to open screenshot path for writing");
+            }
+            const uint32_t width = SCREEN_WIDTH;
+            const uint32_t height = SCREEN_HEIGHT;
+            const uint32_t image_size = width * height * 3u;
+            const uint32_t file_size = 54u + image_size;
+            uint8_t hdr[54];
+            memset(hdr, 0, sizeof(hdr));
+            hdr[0] = 'B';
+            hdr[1] = 'M';
+            hdr[2] = (uint8_t)(file_size & 0xFFu);
+            hdr[3] = (uint8_t)((file_size >> 8) & 0xFFu);
+            hdr[4] = (uint8_t)((file_size >> 16) & 0xFFu);
+            hdr[5] = (uint8_t)((file_size >> 24) & 0xFFu);
+            hdr[10] = 54u;
+            hdr[14] = 40u;
+            hdr[18] = (uint8_t)(width & 0xFFu);
+            hdr[19] = (uint8_t)((width >> 8) & 0xFFu);
+            hdr[22] = (uint8_t)(height & 0xFFu);
+            hdr[23] = (uint8_t)((height >> 8) & 0xFFu);
+            hdr[26] = 1u;
+            hdr[28] = 24u;
+            hdr[34] = (uint8_t)(image_size & 0xFFu);
+            hdr[35] = (uint8_t)((image_size >> 8) & 0xFFu);
+            hdr[36] = (uint8_t)((image_size >> 16) & 0xFFu);
+            hdr[37] = (uint8_t)((image_size >> 24) & 0xFFu);
+            fwrite(hdr, 1, sizeof(hdr), f);
+            uint8_t row[SCREEN_WIDTH * 3];
+            for (int y = SCREEN_HEIGHT - 1; y >= 0; --y) {
+                const uint32_t* src = &g_fb[y * SCREEN_WIDTH];
+                for (int x = 0; x < SCREEN_WIDTH; ++x) {
+                    uint32_t px = src[x];
+                    row[x * 3 + 0] = (uint8_t)(px & 0xFFu);
+                    row[x * 3 + 1] = (uint8_t)((px >> 8) & 0xFFu);
+                    row[x * 3 + 2] = (uint8_t)((px >> 16) & 0xFFu);
+                }
+                fwrite(row, 1, sizeof(row), f);
+            }
+            fclose(f);
+        }
         g_shot_path = NULL;
     }
+
+    SDL_RenderPresent(g_renderer);
 
     /* d) Pace to 60.0988 fps */
     const uint64_t frame_ns = 16639267ULL;
@@ -281,23 +349,29 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
     interrupt_vectors_init();
     nmi_enabled = true;
 
-    if (strcmp(screen, "title_card") == 0) {
-        title_card_show();
-    } else if (strcmp(screen, "password_show") == 0) {
-        password_show();
-    } else if (strcmp(screen, "vs") == 0) {
-        vs_screen();
-    } else if (strcmp(screen, "options") == 0) {
-        options_screens(0);
-    } else {
-        char msg[128];
-        snprintf(msg, sizeof(msg), "unknown screen: %s", screen);
-        port_fatal(msg);
+    /* `screen` may list several screens, comma-separated, run one after the other in the same
+       game memory (tests: what the port draws when one screen follows another). */
+    char names[256];
+    snprintf(names, sizeof(names), "%s", screen);
+    for (char* name = strtok(names, ","); name != NULL; name = strtok(NULL, ",")) {
+        if (strcmp(name, "title_card") == 0) {
+            title_card_show();
+        } else if (strcmp(name, "password_show") == 0) {
+            password_show();
+        } else if (strcmp(name, "vs") == 0) {
+            vs_screen();
+        } else if (strcmp(name, "options") == 0) {
+            options_screens(0);
+        } else {
+            char msg[128];
+            snprintf(msg, sizeof(msg), "unknown screen: %s", name);
+            port_fatal(msg);
+        }
+        printf("screen %s returned at frame %lu (game frame counter %u)\n", name, g_frame_count,
+               (unsigned)rd16(FRAME_COUNTER));
+        fflush(stdout);
     }
     g_screen_returned = true;
-    printf("screen %s returned at frame %lu (game frame counter %u)\n", screen, g_frame_count,
-           (unsigned)rd16(FRAME_COUNTER));
-    fflush(stdout);
 
     for (;;) {
         platform_wait_vblank();

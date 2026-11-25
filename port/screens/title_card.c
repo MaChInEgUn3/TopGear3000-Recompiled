@@ -41,27 +41,27 @@ static void title_card_build_once(void) {
     }
 
     size_t bg_draw_size = 0;
-    const uint8_t* bg_draw = asset_bytes(ASSET_BG_TITLE_DRAWINGS, &bg_draw_size);
+    const uint8_t* bg_draw = asset_bytes(ASSET_MENU_BG_DRAWINGS, &bg_draw_size);
     if (bg_draw == NULL || bg_draw_size != BG_TILE_COUNT * 64u) {
-        port_fatal("title card: unexpected BG_TITLE_DRAWINGS size");
+        port_fatal("title card: unexpected MENU_BG_DRAWINGS size");
     }
 
     size_t bg_arr_size = 0;
-    const uint8_t* bg_arr = asset_bytes(ASSET_BG_TITLE_ARRANGEMENT, &bg_arr_size);
+    const uint8_t* bg_arr = asset_bytes(ASSET_MENU_BG_ARRANGEMENT, &bg_arr_size);
     if (bg_arr == NULL || bg_arr_size != BG_ARR_ENTRIES * 2u) {
-        port_fatal("title card: unexpected BG_TITLE_ARRANGEMENT size");
+        port_fatal("title card: unexpected MENU_BG_ARRANGEMENT size");
     }
 
     size_t text_size = 0;
-    const uint8_t* text_raw = asset_bytes(ASSET_TEXT_TITLE_DRAWINGS, &text_size);
+    const uint8_t* text_raw = asset_bytes(ASSET_TITLE_TEXT_DRAWINGS, &text_size);
     if (text_raw == NULL || text_size != TEXT_TILE_COUNT * 32u) {
-        port_fatal("title card: unexpected TEXT_TITLE_DRAWINGS size");
+        port_fatal("title card: unexpected TITLE_TEXT_DRAWINGS size");
     }
 
     size_t obj_size = 0;
-    const uint8_t* obj_raw = asset_bytes(ASSET_OBJ_TITLE_DRAWINGS, &obj_size);
+    const uint8_t* obj_raw = asset_bytes(ASSET_TITLE_OBJ_DRAWINGS, &obj_size);
     if (obj_raw == NULL || obj_size != OBJ_TILE_COUNT * 32u) {
-        port_fatal("title card: unexpected OBJ_TITLE_DRAWINGS size");
+        port_fatal("title card: unexpected TITLE_OBJ_DRAWINGS size");
     }
 
     uint8_t bg_tiles[BG_TILE_COUNT * 64u];
@@ -120,10 +120,10 @@ static void draw_obj_tile(uint32_t* fb, const uint32_t pal_rgba[256], uint16_t t
 }
 
 bool title_card_active(void) {
-    return asset_loaded(ASSET_BG_TITLE_DRAWINGS)
-        && asset_loaded(ASSET_BG_TITLE_ARRANGEMENT)
-        && asset_loaded(ASSET_TEXT_TITLE_DRAWINGS)
-        && asset_loaded(ASSET_OBJ_TITLE_DRAWINGS);
+    return asset_current(ROLE_BG_DRAWINGS) == ASSET_MENU_BG_DRAWINGS
+        && asset_current(ROLE_BG_ARRANGEMENT) == ASSET_MENU_BG_ARRANGEMENT
+        && asset_current(ROLE_TEXT_DRAWINGS) == ASSET_TITLE_TEXT_DRAWINGS
+        && asset_current(ROLE_OBJ_DRAWINGS) == ASSET_TITLE_OBJ_DRAWINGS;
 }
 
 void title_card_draw(uint32_t* fb) {
