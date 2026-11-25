@@ -13,6 +13,7 @@ typedef enum {
     ROLE_TEXT_DRAWINGS_128,
     ROLE_TEXT_DRAWINGS_256,
     ROLE_OBJ_DRAWINGS,
+    ROLE_OBJ_DRAWINGS_HI, /* object drawings starting at tile 320 */
     ROLE_COUNT
 } asset_role;
 
@@ -27,6 +28,7 @@ typedef enum {
     ASSET_MENU_CURSOR_DRAWINGS,
     ASSET_VS_BG_DRAWINGS,
     ASSET_VS_PANELS_ARRANGEMENT,
+    ASSET_RESULTS_STARS_DRAWINGS,
     ASSET_COUNT
 } asset_id;
 

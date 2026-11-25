@@ -354,6 +354,29 @@ estamos fazendo com o DSP-4?".
   measured ones (6 and 7); the two new platform calls that stop (`video_read_vram_word`,
   `dma_hdma_get_table`) are called only by `vs_hud_draw` and `irq_vs_split` (the VS race).
 
+## The results screen drawn natively (step 4, 2026-11-25)
+
+- **The seventh screen, identical to the original pixel for pixel, animation included:** the
+  results screen (`results_screen_run`), from the original's memory saved at the end of step
+  16489 of `autopilot_60k.txt` (entry at 16490; `tools/make_reference_memory.sh` regenerates
+  it). Port frames 73 and 74 match the bench's pictures of steps 16580 and 16581 (0 of 57,344
+  pixels different each). A new kind of screen, `port/screens/results_screen.c`.
+- **What it uses (measured):** mode 1; no background picture (its layer is blank); the text
+  from the game's map at `$7F:0000` (vertical scroll 8) drawn with three drawings sources by
+  tile range (`$87:F861` from 128, the cursor word run from 256 over the start of `$88:8601`,
+  then `$88:8601`), palettes 0, 1, 6, 7; 128 stars drawn from the game's sprite table at `$0900`
+  (computed by the game's 3D star code; no 2D object table exists here), drawings `$91:AADF`,
+  priority 0, between the text's two priorities; four named colour blocks.
+- **Per-line effect (listed for the owner's veto): the results' text fade.** The game's table
+  at `$0D00` (54 lines, then 21 bands of 8 lines) holds one byte per band, stepped by
+  `hdma_table_0d00_settle`; the screen subtracts its intensity from each colour channel of the
+  text on those lines (the screen set-up's colour math subtracts on that layer only). Read at
+  fixed addresses with this screen's fixed bands; any other count or plane value stops.
+- **Temporary bridge, owner told:** the screen's frame code `$80:FC14` is still assembly in the
+  decomp; three lines of it are translated by hand in `port/platform/frame.c` (marked), not
+  verified by the decomp's differential test. Decomp request 8 asks for it in C.
+- **Test:** `game_picture_results`.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

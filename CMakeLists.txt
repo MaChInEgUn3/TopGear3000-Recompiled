@@ -62,6 +62,7 @@ add_executable(tg3000
   port/video/assets.c
   port/video/palette.c
   port/screens/menu_screen.c
+  port/screens/results_screen.c
 )
 target_include_directories(tg3000 PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/port"
@@ -161,7 +162,18 @@ add_test(NAME game_picture_options_submenu
 set_tests_properties(game_picture_options_submenu PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 2775 picture hash b288ee1fcad88168 brightness 15 drawn options"
 )
-set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu PROPERTIES
+# The results screen from the original's own game memory (saved on the decomp's bench just
+# before the screen, autopilot_60k.txt step 16489; a local file under notes/, never in git):
+# frames 73 and 74 matched the original's pictures (steps 16580 and 16581, frame_16582.png and
+# frame_16583.png) pixel for pixel. Skipped where the local WRAM file is absent.
+add_test(NAME game_picture_results
+  COMMAND tg3000 --wram notes/res/wram_before_res.bin --screen results --fast --frames 74 --shot 73 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_results PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 73 picture hash 5124a4f2bbfb1ccb brightness 15 drawn results"
+)
+set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu game_picture_results PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

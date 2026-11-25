@@ -16,7 +16,9 @@
 - `port/video/` — `convert.c` (every format conversion), `assets.c` (named cartridge blocks,
   recognised when the game uploads them), `palette.c` (the screen's colours as the game sets them).
 - `port/screens/` — one drawing function per kind of screen: `menu_screen.c` (the menus' text
-  screens: title card, password display, options menu with its two per-line effects), driven by one table of measured facts per screen.
+  screens: title card, password display, options menu with its two per-line effects, and VS
+  screen), `results_screen.c` (the results screen with 3D starfield sprites and `$0D00`
+  per-line subtraction), driven by tables of measured facts per screen.
 - `docs/proposals/` — accepted design proposals (`video-layer.md`, `sound.md`).
 - `tools/` — helper CMake scripts (`fetch_deps.cmake`).
 - `deps/` — fetched third-party dependencies (`deps/SDL3`, git-ignored).
@@ -41,7 +43,7 @@ The game owns the loop; the port lives at the frame boundary (docs/proposals/vid
 CLI modes:
 - `--selftest`: runs SHA-1 test vectors without initializing SDL video (used by `ctest` target `rom_sha1_selftest`).
 - `--check-rom [path]`: verifies ROM size and SHA-1 without opening a window.
-- `--screen NAME` (`title_card`, `password_show`, `vs`, `options`; default `title_card`):
+- `--screen NAME` (`title_card`, `password_show`, `vs`, `options`, `results`; default `title_card`):
   which game screen to run, until the decomp has its boot and dispatcher in C.
 - `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
 - `--expect-return` (tests): exit 2 if the screen function has not returned by then.

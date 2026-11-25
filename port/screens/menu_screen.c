@@ -54,6 +54,7 @@ static const menu_screen_desc menu_screen_table[] = {
             [ROLE_TEXT_DRAWINGS_128] = ASSET_TITLE_TEXT_DRAWINGS,
             [ROLE_TEXT_DRAWINGS_256] = -1,
             [ROLE_OBJ_DRAWINGS] = ASSET_TITLE_OBJ_DRAWINGS,
+            [ROLE_OBJ_DRAWINGS_HI] = -1,
         },
         /* Setup $8A:C4B0 HOFS -4, title_card_show VOFS -65 (-1 sits at line 0) */
         .bg_shift_x = 4,
@@ -86,6 +87,7 @@ static const menu_screen_desc menu_screen_table[] = {
             [ROLE_TEXT_DRAWINGS_128] = -1,
             [ROLE_TEXT_DRAWINGS_256] = ASSET_PASSWORD_TEXT_DRAWINGS,
             [ROLE_OBJ_DRAWINGS] = -1,
+            [ROLE_OBJ_DRAWINGS_HI] = -1,
         },
         /* Setup $8A:C4B0 BG1 HOFS 0xFFFC (-4), VOFS 0xFFFF (-1 sits at line 0) */
         .bg_shift_x = 4,
@@ -118,6 +120,7 @@ static const menu_screen_desc menu_screen_table[] = {
             [ROLE_TEXT_DRAWINGS_128] = ASSET_MENU_TEXT_A,
             [ROLE_TEXT_DRAWINGS_256] = ASSET_MENU_TEXT_B,
             [ROLE_OBJ_DRAWINGS] = ASSET_MENU_CURSOR_DRAWINGS,
+            [ROLE_OBJ_DRAWINGS_HI] = -1,
         },
         /* Setup $8A:C4B0 BG1 HOFS 0xFFFC (-4), VOFS 0xFFFF (-1 sits at line 0) */
         .bg_shift_x = 4,
@@ -150,6 +153,7 @@ static const menu_screen_desc menu_screen_table[] = {
             [ROLE_TEXT_DRAWINGS_128] = ASSET_MENU_TEXT_A,
             [ROLE_TEXT_DRAWINGS_256] = ASSET_PASSWORD_TEXT_DRAWINGS,
             [ROLE_OBJ_DRAWINGS] = ASSET_MENU_CURSOR_DRAWINGS,
+            [ROLE_OBJ_DRAWINGS_HI] = -1,
         },
         /* Setup $8A:C4B0 BG1 HOFS 0xFFFC (-4), VOFS 0xFFFF (-1 sits at line 0) */
         .bg_shift_x = 4,

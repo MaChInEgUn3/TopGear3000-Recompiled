@@ -24,6 +24,10 @@ static const palette_entry g_palette_catalogue[] = {
     {0x8AC984u, 0x40u,  "title card text colours"},
     {0x85FA37u, 0x40u,  "password screen text colours"},
     {0x8AC5D8u, 0x80u,  "VS screen colours"},
+    {0x86F40Bu, 0x40u,  "results text palette 6-7 colours"},
+    {0x8A9D2Du, 0x20u,  "results palette 1 colours"},
+    {0x8C95C3u, 0x20u,  "results stars object colours"},
+    {0x86F44Bu, 0x20u,  "results text palette 0 colours"},
 };
 
 void palette_set(uint8_t index, uint16_t bgr) {

@@ -130,6 +130,16 @@ static void run_nmi_dispatch(void) {
         switch (sub) {
             case 0x8934: nmi_tail(); break;
             case 0xFBD1: nmi_target_80FBD1(); break;
+            case 0xFC14:
+                /* TEMPORARY BRIDGE (decomp request 8): the results screen's frame code $80:FC14
+                   is still assembly in the decomp. These three lines translate it by hand
+                   (set bit 1 of $0026, func_8A987F, the common tail), unverified by the
+                   decomp's differential test. Game logic belongs in the decomp: replace with
+                   its C function as soon as it exists. */
+                wr16(0x0026, (uint16_t)(rd16(0x0026) | 0x0002));
+                func_8A987F();
+                nmi_tail();
+                break;
             case 0xFC5F: nmi_target_80FC5F(); break;
             case 0xE28C: nmi_target_80E28C(); break;
             case 0xE175: nmi_target_80E175(); break;
@@ -191,9 +201,17 @@ void platform_wait_vblank(void) {
     }
 
     /* c) Draw */
-    int active_menu = menu_screen_active();
-    if (active_menu >= 0) {
+    bool active_results = results_screen_active();
+    int active_menu = active_results ? -1 : menu_screen_active();
+    const char* drawn_name = "none";
+    if (active_results) {
+        results_screen_draw(g_fb);
+        drawn_name = "results";
+    } else if (active_menu >= 0) {
         menu_screen_draw(active_menu, g_fb);
+        drawn_name = menu_screen_name(active_menu);
+    }
+    if (active_results || active_menu >= 0) {
         SDL_UpdateTexture(g_texture, NULL, g_fb, SCREEN_WIDTH * (int)sizeof(uint32_t));
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
         SDL_RenderClear(g_renderer);
@@ -218,7 +236,7 @@ void platform_wait_vblank(void) {
         }
         printf("frame %lu picture hash %016llx brightness %u drawn %s\n", g_frame_count,
                (unsigned long long)h, (unsigned)(rd8(0x019Bu) & 0x0Fu),
-               active_menu >= 0 ? menu_screen_name(active_menu) : "none");
+               drawn_name);
 
         SDL_Surface* surf = SDL_RenderReadPixels(g_renderer, NULL);
         if (surf == NULL) {
@@ -500,6 +518,8 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
             vs_screen();
         } else if (strcmp(name, "options") == 0) {
             options_screens(0);
+        } else if (strcmp(name, "results") == 0) {
+            results_screen_run();
         } else {
             char msg[128];
             snprintf(msg, sizeof(msg), "unknown screen: %s", name);

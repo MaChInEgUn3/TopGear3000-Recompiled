@@ -13,4 +13,7 @@ int menu_screen_active(void);
 void menu_screen_draw(int which, uint32_t* fb);
 const char* menu_screen_name(int which);
 
+bool results_screen_active(void);
+void results_screen_draw(uint32_t* fb);
+
 #endif
