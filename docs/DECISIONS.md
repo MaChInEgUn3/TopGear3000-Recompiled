@@ -160,7 +160,7 @@ estamos fazendo com o DSP-4?".
   difference can be heard; only the envelope shapes the game's instruments use, anything else
   stops with a message.
 - **To revisit after listening:** when the menus' music plays, the owner compares it with the
-  original. If he hears a difference he does not accept, the exception for the mixer is decided
+  original. If the owner hears a difference they do not accept, the exception for the mixer is decided
   then (swapping the mixer is cheap: the sequencer and conversions are shared by both options).
 
 ## Steps (2026-11-24)
