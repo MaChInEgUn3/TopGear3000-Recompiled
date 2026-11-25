@@ -61,7 +61,7 @@ add_executable(tg3000
   port/video/convert.c
   port/video/assets.c
   port/video/palette.c
-  port/screens/title_card.c
+  port/screens/menu_screen.c
 )
 target_include_directories(tg3000 PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/port"
@@ -99,15 +99,26 @@ set_tests_properties(game_picture_title_card PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 119 picture hash 7c3658674cf68a42 brightness 15 drawn title_card"
 )
 # One screen after another: once the password display loads its own blocks, the title card's
-# drawing must stop (the port draws by the blocks each role holds, not by what was ever loaded).
+# drawing must stop and password_show must be drawn instead (the port draws by the blocks each
+# role holds, not by what was ever loaded).
 add_test(NAME game_screen_sequence
   COMMAND tg3000 --screen title_card,password_show --frames 600 --press 420 --shot 330 - --expect-return
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 set_tests_properties(game_screen_sequence PROPERTIES
-  PASS_REGULAR_EXPRESSION "frame 330 picture hash [0-9a-f]+ brightness [0-9]+ drawn none"
+  PASS_REGULAR_EXPRESSION "frame 330 picture hash [0-9a-f]+ brightness [0-9]+ drawn password_show"
 )
-set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence PROPERTIES
+# The password display from the original's own game memory (saved on the decomp's bench just
+# before the screen, autopilot_60k.txt step 41070; a local file under notes/, never in git):
+# frame 137 matched the original's picture pixel for pixel. Skipped where the file is absent.
+add_test(NAME game_picture_password_show
+  COMMAND tg3000 --wram notes/pw/wram_before_pw.bin --screen password_show --frames 140 --shot 137 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_password_show PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 137 picture hash 67be51b43114d1f5 brightness 15 drawn password_show"
+)
+set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

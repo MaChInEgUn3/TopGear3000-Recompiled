@@ -15,7 +15,8 @@
   register-style call, empty bodies, one file so review is trivial).
 - `port/video/` — `convert.c` (every format conversion), `assets.c` (named cartridge blocks,
   recognised when the game uploads them), `palette.c` (the screen's colours as the game sets them).
-- `port/screens/` — one drawing function per kind of screen (`title_card.c`).
+- `port/screens/` — one drawing function per kind of screen: `menu_screen.c` (the menus' text
+  screens: title card, password display), driven by one table of measured facts per screen.
 - `docs/proposals/` — accepted design proposals (`video-layer.md`, `sound.md`).
 - `tools/` — helper CMake scripts (`fetch_deps.cmake`).
 - `deps/` — fetched third-party dependencies (`deps/SDL3`, git-ignored).
@@ -45,6 +46,8 @@ CLI modes:
 - `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
 - `--expect-return` (tests): exit 2 if the screen function has not returned by then.
 - `--press F` (tests): hold A+B for 6 frames from frame F.
+- `--wram FILE` (tests): start from a saved 128 KB game memory (e.g. the original's, from the
+  decomp's bench) instead of zeroed memory.
 - `--shot F PATH` (tests): print the picture's fingerprint at frame F and save it as BMP (`-`: no file).
 
 ## Boundary

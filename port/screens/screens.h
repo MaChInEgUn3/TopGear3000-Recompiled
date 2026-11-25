@@ -9,7 +9,8 @@
 #define SCREEN_WIDTH 256
 #define SCREEN_HEIGHT 224
 
-bool title_card_active(void);
-void title_card_draw(uint32_t* fb);
+int menu_screen_active(void);
+void menu_screen_draw(int which, uint32_t* fb);
+const char* menu_screen_name(int which);
 
 #endif

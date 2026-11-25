@@ -88,6 +88,7 @@ int main(int argc, char* argv[]) {
     bool selftest = false;
     bool check_rom = false;
     bool frames_given = false;
+    const char* wram_path = NULL;
     bool expect_return = false;
     unsigned long press_frame = 0;
     unsigned long frame_limit = 0;
@@ -108,6 +109,9 @@ int main(int argc, char* argv[]) {
             frame_limit = strtoul(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--press") == 0 && i + 1 < argc) {
             press_frame = strtoul(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--wram") == 0 && i + 1 < argc) {
+            wram_path = argv[++i];
+            port_set_start_wram(wram_path);
         } else if (strcmp(argv[i], "--shot") == 0 && i + 2 < argc) {
             shot_frame = strtoul(argv[++i], NULL, 10);
             shot_path = argv[++i];
@@ -115,14 +119,14 @@ int main(int argc, char* argv[]) {
             expect_return = true;
         } else if (argv[i][0] == '-') {
             fprintf(stderr,
-                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] [--expect-return] [--press F] [--expect-return] [path/to/TG3000.sfc]\n",
+                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] [--expect-return] [--shot F PATH] [--wram FILE] [path/to/TG3000.sfc]\n",
                     argv[0]);
             return 1;
         } else if (rom_path == NULL) {
             rom_path = argv[i];
         } else {
             fprintf(stderr,
-                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [path/to/TG3000.sfc]\n",
+                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] [--expect-return] [--shot F PATH] [--wram FILE] [path/to/TG3000.sfc]\n",
                     argv[0]);
             return 1;
         }
@@ -163,6 +167,18 @@ int main(int argc, char* argv[]) {
     }
 
     g_rom = rom_data;
+
+    /* Tests that start from saved game memory (--wram) are skipped where that local file is
+       absent (it is game data and never in the repository). */
+    if (wram_path != NULL && frames_given) {
+        FILE* wf = fopen(wram_path, "rb");
+        if (wf == NULL) {
+            fprintf(stderr, "SKIP: game memory file not found (%s)\n", wram_path);
+            rom_free(rom_data);
+            return 77;
+        }
+        fclose(wf);
+    }
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());

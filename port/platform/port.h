@@ -19,5 +19,7 @@ void port_input_set_test_mask(uint16_t mask);
 void port_set_test_options(unsigned long press_frame, bool expect_return);
 /* Test only: save the 256x224 framebuffer as a 24-bit BMP when frame_count reaches frame. */
 void port_set_shot(unsigned long frame, const char* path);
+/* Test only: start the game from a saved 128 KB game memory instead of zeroed memory. */
+void port_set_start_wram(const char* path);
 
 #endif

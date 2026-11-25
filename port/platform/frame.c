@@ -37,6 +37,7 @@ static unsigned long g_test_press_frame = 0;
 static bool g_test_expect_return = false;
 static volatile bool g_screen_returned = false;  /* read after longjmp */
 static unsigned long g_shot_frame = 0;
+static const char* g_start_wram_path = NULL;
 static const char* g_shot_path = NULL;
 
 void platform_set_interrupts(uint8_t value) {
@@ -143,8 +144,9 @@ void platform_wait_vblank(void) {
     }
 
     /* c) Draw */
-    if (title_card_active()) {
-        title_card_draw(g_fb);
+    int active_menu = menu_screen_active();
+    if (active_menu >= 0) {
+        menu_screen_draw(active_menu, g_fb);
         SDL_UpdateTexture(g_texture, NULL, g_fb, SCREEN_WIDTH * (int)sizeof(uint32_t));
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
         SDL_RenderClear(g_renderer);
@@ -169,7 +171,7 @@ void platform_wait_vblank(void) {
         }
         printf("frame %lu picture hash %016llx brightness %u drawn %s\n", g_frame_count,
                (unsigned long long)h, (unsigned)(rd8(0x019Bu) & 0x0Fu),
-               title_card_active() ? "title_card" : "none");
+               active_menu >= 0 ? menu_screen_name(active_menu) : "none");
 
         SDL_Surface* surf = SDL_RenderReadPixels(g_renderer, NULL);
         if (surf == NULL) {
@@ -310,6 +312,10 @@ void port_set_test_options(unsigned long press_frame, bool expect_return) {
     g_test_expect_return = expect_return;
 }
 
+void port_set_start_wram(const char* path) {
+    g_start_wram_path = path;
+}
+
 void port_set_shot(unsigned long frame, const char* path) {
     g_shot_frame = frame;
     g_shot_path = path;
@@ -346,7 +352,17 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
 
     assets_init();
     memset(g_ram, 0, sizeof(g_ram));
-    interrupt_vectors_init();
+    if (g_start_wram_path != NULL) {
+        /* Test only: start from game memory saved elsewhere (e.g. the decomp's bench just before
+           a screen), so the port shows the same game state as the original. */
+        FILE* f = fopen(g_start_wram_path, "rb");
+        if (f == NULL || fread(g_ram, 1, sizeof(g_ram), f) != sizeof(g_ram)) {
+            port_fatal("--wram: cannot read a 131072-byte game memory file");
+        }
+        fclose(f);
+    } else {
+        interrupt_vectors_init();
+    }
     nmi_enabled = true;
 
     /* `screen` may list several screens, comma-separated, run one after the other in the same

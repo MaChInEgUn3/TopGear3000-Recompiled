@@ -214,6 +214,32 @@ estamos fazendo com o DSP-4?".
   title card. Its other screens still show black.
 - **Per-line effects done:** none (the title card has none).
 
+## The password display drawn natively (step 4, 2026-11-25)
+
+- **The second screen, identical to the original pixel for pixel:** the player's password shown
+  (`password_show`), frame 137 of the screen against the decomp bench's picture of step 41208 of
+  `autopilot_60k.txt`: 0 of 57,344 pixels different.
+- **Same game state as the original:** the shown password depends on the player's progress, so
+  the port starts from the original's own game memory, saved on the bench at the end of step
+  41070 (the original enters `$8A:BE2E` at step 41071, found by the WRAM stream and by a
+  one-off program-counter print in a separate local copy of the bench, reverted afterwards).
+  New test option `--wram FILE` (a 128 KB memory image; local, never in git; tests using it are
+  skipped where it is absent).
+- **What the screen uses (measured):** the menus' common background picture, unshifted
+  vertically (scrolls -4 / -1) and with its whole palette (the stars and nebula the title card
+  blacks out); text drawings `$88:8601` (186 tiles, first tile number 256), palettes `$8A:C658`
+  and `$85:FA37`; text entries all in front, some flipped horizontally or vertically; no
+  objects (the sparkles are part of the picture); no per-line effects.
+- **One function for both screens:** `port/screens/menu_screen.c`, "the menus' text screens",
+  with one table of measured facts per screen (blocks per role, picture shift, text tile range,
+  blank entry, flips allowed, objects or none). Anything a table does not allow stops.
+- **Known difference, measured:** the screen comes up about 10 frames earlier in the port (its
+  first per-frame text map upload at frame 36 of the call against 46 steps on the bench): the
+  port unpacks the graphics instantly, the console spends frames on it. The pictures once lit
+  are identical.
+- **Test:** `game_picture_password_show` (fingerprint of frame 137 from the saved memory).
+- **Per-line effects done:** none.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

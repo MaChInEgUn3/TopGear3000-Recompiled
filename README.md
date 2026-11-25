@@ -35,14 +35,14 @@ You must provide your own legally obtained copy of **Top Gear 3000 (USA)**:
 
 ## Status
 
-The project is currently at **step 4 of 4** (pre-alpha). **The game is not playable yet** and **no releases exist yet**. Today, the executable builds on Linux and Windows x86-64, verifies your ROM (size and SHA-1), and runs a few of the game's screens from the decomp's C at the console's frame rate, with keyboard and gamepad input wired in (not yet usable: nothing is shown). The first screen is drawn natively: the title card, identical to the original pixel for pixel. Other screens stay black for now. No saves, settings, mods, widescreen, or gameplay exist yet.
+The project is currently at **step 4 of 4** (pre-alpha). **The game is not playable yet** and **no releases exist yet**. Today, the executable builds on Linux and Windows x86-64, verifies your ROM (size and SHA-1), and runs a few of the game's screens from the decomp's C at the console's frame rate, with keyboard and gamepad input wired in (not yet usable: nothing is shown). The first screens are drawn natively, identical to the original pixel for pixel: the title card and the password display. Other screens stay black for now. No saves, settings, mods, widescreen, or gameplay exist yet.
 
 | Step | Milestone | State |
 |---|---|---|
 | 1 | Skeleton (CMake, SDL3 fetch, ROM SHA-1 check, empty window, CI) | ✅ Done |
 | 2 | Platform layer (frame loop, input; [design](docs/proposals/video-layer.md)) | ✅ Done |
 | 3 | Sound interface ([design](docs/proposals/sound.md); player waits on the decomp) | ✅ Designed |
-| 4 | First native menus (title card done, pixel-exact) | ⏳ In progress |
+| 4 | First native menus (title card and password display done, pixel-exact) | ⏳ In progress |
 
 ## Not Even 1% Emulator
 
