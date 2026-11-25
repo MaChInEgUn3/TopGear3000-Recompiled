@@ -403,6 +403,20 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
 - every value checked against what was measured for that screen; anything else stops;
 - each Mode 7 use listed in the step's report, so the owner can veto it.
 
+## The intro: measured, an open question before code (step 4, 2026-11-25)
+
+- Measured (`explore_options.txt` steps 368-2955; port frame + 402 = bench step): about 30
+  phases (`$013E` 0-32): a Mode 7 picture zooming in with 128 3D stars, a title logo built in
+  slices (`$91:AB17` unpacked to `$7E:2000`, uploaded in 1,556-byte slices), a curved window
+  (`$1500`/`$1540`), typed text, a colour cycle; per-band mode and layer switches by static
+  tables in ROM (`$81:D712`-`$81:D74C`); window tables in RAM that change per frame.
+- **Open question:** in the measured moments the Mode 7 matrix is not a table in RAM: the game
+  computes it (`mode7_view`, `mode7_zoom_view`) and writes it straight to the Mode 7 registers
+  (`video_set_m7a-d`, ignored by the port). The owner's Mode 7 permission covers "reading the
+  matrix table the game computed"; keeping register values would be chip state. To be settled
+  before any intro code (options: a named data event "the game's Mode 7 view this frame" from
+  those calls, owner to rule; or the game's own view variables, without duplicating its maths).
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
