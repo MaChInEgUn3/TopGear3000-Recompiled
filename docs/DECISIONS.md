@@ -270,6 +270,34 @@ estamos fazendo com o DSP-4?".
   would not work.
 - **Test:** `game_picture_options` (fingerprint of frame 132 from the saved memory).
 
+## The VS screen drawn natively, reached through the game's own code (step 4, 2026-11-25)
+
+- **Reached the way the original does:** the VS screen reuses graphics the options menu loaded,
+  so it has no clean entry. The port starts from the original's memory saved before the intro
+  (`explore_options.txt`, end of step 367; entry of `intro_screen` at step 368), runs the boot
+  path in C (`--screen intro,options`: `intro_screen`, `results_init`, `options_screens(0)`; the
+  original runs nothing else between them) and replays the bench movie `vs_race.txt`'s buttons
+  (`--movie`, `--movie-offset 403`: aligned on the intro's first fade-in step, measured on both
+  sides). At the VS screen's entry the port's memory differs from the original's in 17 bytes
+  outside the stack: frame and pad counters, the menu glow byte, and the sound state (the sound
+  sets are not loaded in the port: their loader is still assembly, decomp request 4).
+- **First try from the options menu's own entry failed, measured:** the title screen's "skip the
+  pads" flag (`$0026` bit 2) is cleared by the title screen's last instructions, in the same step
+  the options menu starts; memory saved at the end of the previous step still has it, so the
+  menu never read the pads. Not patched by hand: started one screen earlier instead.
+- **Identical to the original pixel for pixel, animation included:** frames 3788 and 3789 match
+  the bench's pictures of steps 4200 and 4201 (0 of 57,344 pixels different each).
+- **What it uses (measured):** a mode-1 screen: its own background picture from drawings
+  `$8D:F696` and the panels' arrangement the game writes word by word (1024 words of its fill
+  `$0023`, then 896 words built by `vs_graphics_load`); the port keeps those 896 words as the
+  game hands them over, named by that write pattern while the VS drawings are current, and never
+  recomputes them. Text from the menus' text drawings A (still loaded: the VS screen does not
+  clear video memory), tile 189 drawn as nothing (no block covers it); objects from the cursor
+  drawings and text drawings A; colours `$8A:C5D8` plus those the menu left.
+- **New test options:** `--movie FILE --movie-offset N` (bench input movies), `--wram-out F PATH`
+  (save game memory at a frame), `--fast` (no pacing). Test `game_picture_vs`.
+- **Per-line effects done:** none here.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

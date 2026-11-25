@@ -129,7 +129,17 @@ add_test(NAME game_picture_options
 set_tests_properties(game_picture_options PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 132 picture hash 818ba9b5248b7647 brightness 15 drawn options"
 )
-set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options PROPERTIES
+# The VS screen reached from the title/intro memory via the bench movie (explore_options /
+# vs_race.txt, offset 403): frame 3788 matched the original's picture (step 4200,
+# frame_04201.png) pixel for pixel. Skipped where the local WRAM file is absent.
+add_test(NAME game_picture_vs
+  COMMAND tg3000 --wram notes/opt/wram_before_title.bin --screen intro,options --movie extern/tg3000-decomp/tools/bench/movies/vs_race.txt --movie-offset 403 --fast --frames 3790 --shot 3788 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_vs PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 3788 picture hash ad9e0aad0d4d3811 brightness 15 drawn vs"
+)
+set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

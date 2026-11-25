@@ -46,6 +46,8 @@ CLI modes:
 - `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
 - `--expect-return` (tests): exit 2 if the screen function has not returned by then.
 - `--press F` (tests): hold A+B for 6 frames from frame F.
+- `--movie FILE --movie-offset N` (tests): replay a decomp bench input movie; `--wram-out F PATH`
+  saves game memory at frame F; `--fast`: no pacing.
 - `--wram FILE` (tests): start from a saved 128 KB game memory (e.g. the original's, from the
   decomp's bench) instead of zeroed memory.
 - `--shot F PATH` (tests): print the picture's fingerprint at frame F and save it as BMP (`-`: no file).

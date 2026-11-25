@@ -84,16 +84,29 @@ static rom_status load_default_or_path(const char* explicit_path,
     return st;
 }
 
+static void print_usage(const char* prog) {
+    fprintf(stderr,
+            "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] "
+            "[--movie FILE] [--movie-offset N] [--expect-return] [--fast] [--shot F PATH] "
+            "[--wram FILE] [--wram-out F PATH] [path/to/TG3000.sfc]\n",
+            prog);
+}
+
 int main(int argc, char* argv[]) {
     bool selftest = false;
     bool check_rom = false;
     bool frames_given = false;
     const char* wram_path = NULL;
     bool expect_return = false;
+    bool fast = false;
     unsigned long press_frame = 0;
     unsigned long frame_limit = 0;
     unsigned long shot_frame = 0;
     const char* shot_path = NULL;
+    const char* movie_path = NULL;
+    long movie_offset = 0;
+    unsigned long wram_out_frame = 0;
+    const char* wram_out_path = NULL;
     const char* screen = "title_card";
     const char* rom_path = NULL;
 
@@ -109,25 +122,30 @@ int main(int argc, char* argv[]) {
             frame_limit = strtoul(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--press") == 0 && i + 1 < argc) {
             press_frame = strtoul(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--movie") == 0 && i + 1 < argc) {
+            movie_path = argv[++i];
+        } else if (strcmp(argv[i], "--movie-offset") == 0 && i + 1 < argc) {
+            movie_offset = strtol(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--wram") == 0 && i + 1 < argc) {
             wram_path = argv[++i];
             port_set_start_wram(wram_path);
+        } else if (strcmp(argv[i], "--wram-out") == 0 && i + 2 < argc) {
+            wram_out_frame = strtoul(argv[++i], NULL, 10);
+            wram_out_path = argv[++i];
         } else if (strcmp(argv[i], "--shot") == 0 && i + 2 < argc) {
             shot_frame = strtoul(argv[++i], NULL, 10);
             shot_path = argv[++i];
         } else if (strcmp(argv[i], "--expect-return") == 0) {
             expect_return = true;
+        } else if (strcmp(argv[i], "--fast") == 0) {
+            fast = true;
         } else if (argv[i][0] == '-') {
-            fprintf(stderr,
-                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] [--expect-return] [--shot F PATH] [--wram FILE] [path/to/TG3000.sfc]\n",
-                    argv[0]);
+            print_usage(argv[0]);
             return 1;
         } else if (rom_path == NULL) {
             rom_path = argv[i];
         } else {
-            fprintf(stderr,
-                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] [--expect-return] [--shot F PATH] [--wram FILE] [path/to/TG3000.sfc]\n",
-                    argv[0]);
+            print_usage(argv[0]);
             return 1;
         }
     }
@@ -206,7 +224,14 @@ int main(int argc, char* argv[]) {
     SDL_SetRenderLogicalPresentation(renderer, 256, 224, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
 
     port_set_test_options(press_frame, expect_return);
+    port_set_fast(fast);
     port_set_shot(shot_frame, shot_path);
+    if (movie_path != NULL) {
+        port_set_movie(movie_path, movie_offset);
+    }
+    if (wram_out_path != NULL) {
+        port_set_wram_out(wram_out_frame, wram_out_path);
+    }
     int rc = port_run(renderer, screen, frame_limit);
 
     SDL_DestroyRenderer(renderer);

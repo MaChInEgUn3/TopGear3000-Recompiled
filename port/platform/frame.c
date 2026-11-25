@@ -39,6 +39,32 @@ static volatile bool g_screen_returned = false;  /* read after longjmp */
 static unsigned long g_shot_frame = 0;
 static const char* g_start_wram_path = NULL;
 static const char* g_shot_path = NULL;
+static unsigned long g_wram_out_frame = 0;
+static const char* g_wram_out_path = NULL;
+static bool g_fast = false;
+
+typedef struct {
+    long step;
+    uint16_t mask;
+} MovieEvent;
+
+static MovieEvent* g_movie_events = NULL;
+static size_t g_movie_len = 0;
+static size_t g_movie_idx = 0;
+static uint16_t g_movie_held = 0;
+static long g_movie_offset = 0;
+
+static uint16_t movie_buttons_for_frame(unsigned long frame) {
+    if (g_movie_events == NULL) {
+        return 0;
+    }
+    long step = (long)frame + g_movie_offset;
+    while (g_movie_idx < g_movie_len && g_movie_events[g_movie_idx].step <= step) {
+        g_movie_held = g_movie_events[g_movie_idx].mask;
+        ++g_movie_idx;
+    }
+    return g_movie_held;
+}
 
 void platform_set_interrupts(uint8_t value) {
     nmi_enabled = (value & 0x80) != 0;
@@ -132,11 +158,26 @@ void platform_wait_vblank(void) {
         }
         port_input_event(&event);
     }
-    /* Test-only scripted press (--press): the buttons of g_test_press_mask held for a few
-       frames from g_test_press_frame. */
-    port_input_set_test_mask(
-        (g_test_press_frame != 0 && g_frame_count >= g_test_press_frame &&
-         g_frame_count < g_test_press_frame + 6) ? 0x8080u : 0);
+    /* Test-only scripted press (--press) and movie replay (--movie): OR'd into controller 1. */
+    uint16_t test_mask = 0;
+    if (g_test_press_frame != 0 && g_frame_count >= g_test_press_frame &&
+        g_frame_count < g_test_press_frame + 6) {
+        test_mask |= 0x8080u;
+    }
+    test_mask |= movie_buttons_for_frame(g_frame_count);
+    port_input_set_test_mask(test_mask);
+
+    if (g_wram_out_path != NULL && g_frame_count == g_wram_out_frame) {
+        FILE* wf = fopen(g_wram_out_path, "wb");
+        if (wf == NULL || fwrite(g_ram, 1, sizeof(g_ram), wf) != sizeof(g_ram)) {
+            if (wf != NULL) {
+                fclose(wf);
+            }
+            port_fatal("--wram-out: failed to write game memory file");
+        }
+        fclose(wf);
+        g_wram_out_path = NULL;
+    }
 
     /* b) Run the game's frame code */
     if (nmi_enabled) {
@@ -287,18 +328,20 @@ void platform_wait_vblank(void) {
     SDL_RenderPresent(g_renderer);
 
     /* d) Pace to 60.0988 fps */
-    const uint64_t frame_ns = 16639267ULL;
-    uint64_t now = SDL_GetTicksNS();
-    if (g_next_frame_ns == 0) {
-        g_next_frame_ns = now + frame_ns;
-    }
-    if (now < g_next_frame_ns) {
-        SDL_DelayPrecise(g_next_frame_ns - now);
-        g_next_frame_ns += frame_ns;
-    } else if (now - g_next_frame_ns > frame_ns * 3ULL) {
-        g_next_frame_ns = now + frame_ns;
-    } else {
-        g_next_frame_ns += frame_ns;
+    if (!g_fast) {
+        const uint64_t frame_ns = 16639267ULL;
+        uint64_t now = SDL_GetTicksNS();
+        if (g_next_frame_ns == 0) {
+            g_next_frame_ns = now + frame_ns;
+        }
+        if (now < g_next_frame_ns) {
+            SDL_DelayPrecise(g_next_frame_ns - now);
+            g_next_frame_ns += frame_ns;
+        } else if (now - g_next_frame_ns > frame_ns * 3ULL) {
+            g_next_frame_ns = now + frame_ns;
+        } else {
+            g_next_frame_ns += frame_ns;
+        }
     }
 
     /* e) Frame counter and limit check */
@@ -321,12 +364,70 @@ void port_set_shot(unsigned long frame, const char* path) {
     g_shot_path = path;
 }
 
+void port_set_wram_out(unsigned long frame, const char* path) {
+    g_wram_out_frame = frame;
+    g_wram_out_path = path;
+}
+
+void port_set_fast(bool fast) {
+    g_fast = fast;
+}
+
+void port_set_movie(const char* path, long offset) {
+    static const char button_chars[] = "BYsSUDLRAXlr";
+    free(g_movie_events);
+    g_movie_events = NULL;
+    g_movie_len = 0;
+    g_movie_idx = 0;
+    g_movie_held = 0;
+    g_movie_offset = offset;
+
+    FILE* f = fopen(path, "r");
+    if (f == NULL) {
+        port_fatal("--movie: failed to open movie file");
+    }
+    char line[256];
+    size_t cap = 0;
+    while (fgets(line, sizeof(line), f) != NULL) {
+        if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') {
+            continue;
+        }
+        long step = 0;
+        char buttons[64] = ".";
+        if (sscanf(line, "%ld %63s", &step, buttons) < 1) {
+            continue;
+        }
+        uint16_t mask = 0;
+        for (const char* c = buttons; *c != '\0'; ++c) {
+            const char* p = strchr(button_chars, *c);
+            if (p != NULL) {
+                mask |= (uint16_t)(0x8000u >> (p - button_chars));
+            }
+        }
+        if (g_movie_len == cap) {
+            cap = cap != 0 ? cap * 2 : 64;
+            MovieEvent* next = (MovieEvent*)realloc(g_movie_events, cap * sizeof(*next));
+            if (next == NULL) {
+                fclose(f);
+                port_fatal("--movie: out of memory");
+            }
+            g_movie_events = next;
+        }
+        g_movie_events[g_movie_len].step = step;
+        g_movie_events[g_movie_len].mask = mask;
+        ++g_movie_len;
+    }
+    fclose(f);
+}
+
 int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
     g_renderer = r;
     g_frame_limit = frame_limit;
     g_frame_count = 0;
     g_next_frame_ns = 0;
     g_screen_returned = false;
+    g_movie_idx = 0;
+    g_movie_held = 0;
 
     if (g_texture == NULL) {
         g_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_ARGB8888,
@@ -338,6 +439,9 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
     }
 
     if (setjmp(g_quit_jmp) != 0) {
+        free(g_movie_events);
+        g_movie_events = NULL;
+        g_movie_len = 0;
         if (g_texture != NULL) {
             SDL_DestroyTexture(g_texture);
             g_texture = NULL;
@@ -372,6 +476,9 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
     for (char* name = strtok(names, ","); name != NULL; name = strtok(NULL, ",")) {
         if (strcmp(name, "title_card") == 0) {
             title_card_show();
+        } else if (strcmp(name, "intro") == 0) {
+            intro_screen();
+            results_init();
         } else if (strcmp(name, "password_show") == 0) {
             password_show();
         } else if (strcmp(name, "vs") == 0) {

@@ -21,5 +21,11 @@ void port_set_test_options(unsigned long press_frame, bool expect_return);
 void port_set_shot(unsigned long frame, const char* path);
 /* Test only: start the game from a saved 128 KB game memory instead of zeroed memory. */
 void port_set_start_wram(const char* path);
+/* Test only: replay controller-1 input from a bench movie file with frame offset. */
+void port_set_movie(const char* path, long offset);
+/* Test only: write the 128 KB game memory to path at frame (before frame code runs). */
+void port_set_wram_out(unsigned long frame, const char* path);
+/* Test only: disable 60.0988 fps frame pacing when fast is true. */
+void port_set_fast(bool fast);
 
 #endif

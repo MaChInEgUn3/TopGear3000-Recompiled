@@ -25,6 +25,8 @@ typedef enum {
     ASSET_MENU_TEXT_A,
     ASSET_MENU_TEXT_B,
     ASSET_MENU_CURSOR_DRAWINGS,
+    ASSET_VS_BG_DRAWINGS,
+    ASSET_VS_PANELS_ARRANGEMENT,
     ASSET_COUNT
 } asset_id;
 
@@ -45,5 +47,6 @@ void assets_clear_loaded(void);
 
 int asset_current(asset_role r);
 const uint8_t* asset_bytes(int id, size_t* size);
+uint32_t asset_generation(int id);
 
 #endif

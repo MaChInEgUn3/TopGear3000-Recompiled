@@ -151,6 +151,16 @@ static bool g_bg_built = false;
 static uint8_t g_bg_image[256 * 256];
 static menu_screen_cache g_cache[MENU_SCREEN_COUNT];
 
+#define VS_BG_TILE_COUNT 134u
+#define VS_BG_ARR_ENTRIES 896u
+#define VS_CURSOR_TILE_COUNT 6u
+
+static bool g_vs_built = false;
+static uint32_t g_vs_arr_gen = 0;
+static uint8_t g_vs_bg_image[256 * 256];
+static uint8_t g_vs_text_tiles[MAX_TEXT_TILES * 64u];
+static uint8_t g_vs_cursor_tiles[VS_CURSOR_TILE_COUNT * 64u];
+
 static void menu_bg_build_once(void) {
     if (g_bg_built) {
         return;
@@ -375,6 +385,188 @@ static void draw_options_text_per_line(const menu_screen_desc* s, const menu_scr
     }
 }
 
+static void draw_tile_8x8(uint32_t* fb, const uint32_t pal_rgba[256], const uint8_t* pixels,
+                          uint16_t pal, int ox, int oy, bool hflip, bool vflip) {
+    for (int py = 0; py < 8; ++py) {
+        int sy = oy + py;
+        if (sy < 0 || sy >= SCREEN_HEIGHT) {
+            continue;
+        }
+        int ty = vflip ? (7 - py) : py;
+        for (int px = 0; px < 8; ++px) {
+            int sx = ox + px;
+            if (sx < 0 || sx >= SCREEN_WIDTH) {
+                continue;
+            }
+            int tx = hflip ? (7 - px) : px;
+            uint8_t p = pixels[ty * 8 + tx];
+            if (p != 0) {
+                fb[sy * SCREEN_WIDTH + sx] = pal_rgba[pal * 16u + p];
+            }
+        }
+    }
+}
+
+static void vs_build_once(void) {
+    uint32_t arr_gen = asset_generation(ASSET_VS_PANELS_ARRANGEMENT);
+    if (g_vs_built && g_vs_arr_gen == arr_gen) {
+        return;
+    }
+
+    size_t bg_draw_size = 0;
+    const uint8_t* bg_draw = asset_bytes(ASSET_VS_BG_DRAWINGS, &bg_draw_size);
+    if (bg_draw == NULL || bg_draw_size != VS_BG_TILE_COUNT * 32u) {
+        port_fatal("vs: unexpected VS_BG_DRAWINGS size");
+    }
+
+    size_t bg_arr_size = 0;
+    const uint8_t* bg_arr = asset_bytes(ASSET_VS_PANELS_ARRANGEMENT, &bg_arr_size);
+    if (bg_arr == NULL || bg_arr_size != VS_BG_ARR_ENTRIES * 2u) {
+        port_fatal("vs: unexpected VS_PANELS_ARRANGEMENT size");
+    }
+
+    uint8_t bg_tiles[VS_BG_TILE_COUNT * 64u];
+    convert_tiles_4bpp(bg_draw, VS_BG_TILE_COUNT, bg_tiles);
+
+    for (unsigned tr = 0; tr < 32u; ++tr) {
+        for (unsigned tc = 0; tc < 32u; ++tc) {
+            uint16_t entry = 0x0023u;
+            if (tr < 28u) {
+                size_t idx = (size_t)(tr * 32u + tc) * 2u;
+                entry = (uint16_t)(bg_arr[idx] | ((uint16_t)bg_arr[idx + 1u] << 8));
+            }
+            uint16_t tile = entry & 0x03FFu;
+            uint16_t pal = (entry >> 10) & 7u;
+            if (tile >= VS_BG_TILE_COUNT || pal > 3u || (entry & 0xE000u) != 0u) {
+                port_fatal("vs: unexpected background entry");
+            }
+            const uint8_t* src_tile = &bg_tiles[(size_t)tile * 64u];
+            for (unsigned py = 0; py < 8u; ++py) {
+                uint8_t* dst_row = &g_vs_bg_image[(tr * 8u + py) * 256u + tc * 8u];
+                for (unsigned px = 0; px < 8u; ++px) {
+                    uint8_t p = src_tile[py * 8u + px];
+                    dst_row[px] = (p != 0u) ? (uint8_t)(pal * 16u + p) : 0u;
+                }
+            }
+        }
+    }
+
+    size_t text_size = 0;
+    const uint8_t* text_raw = asset_bytes(ASSET_MENU_TEXT_A, &text_size);
+    if (text_raw == NULL || (text_size % 32u) != 0u || text_size < 30u * 32u
+        || text_size > MAX_TEXT_TILES * 32u) {
+        port_fatal("vs: unexpected MENU_TEXT_A size");
+    }
+    convert_tiles_4bpp(text_raw, (uint16_t)(text_size / 32u), g_vs_text_tiles);
+
+    size_t obj_size = 0;
+    const uint8_t* obj_raw = asset_bytes(ASSET_MENU_CURSOR_DRAWINGS, &obj_size);
+    if (obj_raw == NULL || obj_size != 97u * 2u) {
+        port_fatal("vs: unexpected MENU_CURSOR_DRAWINGS size");
+    }
+    convert_tiles_4bpp(obj_raw, VS_CURSOR_TILE_COUNT, g_vs_cursor_tiles);
+
+    g_vs_arr_gen = arr_gen;
+    g_vs_built = true;
+}
+
+static void vs_screen_draw(uint32_t* fb, const uint32_t pal_rgba[256]) {
+    vs_build_once();
+
+    /* 1. Backdrop */
+    uint32_t backdrop = pal_rgba[0];
+    for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
+        fb[i] = backdrop;
+    }
+
+    /* 2. Background picture (BG1 scrolls -4/-4 -> shift x 4, y 3) */
+    for (int y = 0; y < SCREEN_HEIGHT; ++y) {
+        unsigned r = (unsigned)(y - 3) & 255u;
+        const uint8_t* src_row = &g_vs_bg_image[r * 256u];
+        uint32_t* dst_row = &fb[y * SCREEN_WIDTH];
+        for (int x = 0; x < SCREEN_WIDTH; ++x) {
+            uint8_t c = src_row[(unsigned)(x - 4) & 255u];
+            if (c != 0u) {
+                dst_row[x] = pal_rgba[c];
+            }
+        }
+    }
+
+    /* 3. Text map at WRAM $7F:0000 */
+    for (int row = 0; row < 28; ++row) {
+        for (int col = 0; col < 32; ++col) {
+            uint16_t entry = rd16((uint32_t)(0x10000 + 2 * (row * 32 + col)));
+            if (entry == 0x003Du) {
+                continue;
+            }
+            uint16_t tile = entry & 0x03FFu;
+            uint16_t pal = (entry >> 10) & 7u;
+            bool prio = (entry & 0x2000u) != 0;
+            bool flips = (entry & 0xC000u) != 0;
+            if (pal != 6u || !prio || flips) {
+                char msg[96];
+                snprintf(msg, sizeof(msg), "vs: unexpected text entry 0x%04X", (unsigned)entry);
+                port_fatal(msg);
+            }
+            if (tile == 189u) {
+                continue;
+            }
+            if (tile < 128u || tile > 157u) {
+                char msg[96];
+                snprintf(msg, sizeof(msg), "vs: unexpected text entry 0x%04X", (unsigned)entry);
+                port_fatal(msg);
+            }
+            const uint8_t* pixels = &g_vs_text_tiles[(size_t)(tile - 128u) * 64u];
+            draw_tile_8x8(fb, pal_rgba, pixels, 6u, col * 8, row * 8, false, false);
+        }
+    }
+
+    /* 4. Objects from $0500-$08FF (last to first so lower slot ends on top) */
+    for (int x = 254; x >= 0; x -= 2) {
+        uint16_t used = rd16((uint32_t)(0x0500 + x));
+        if (used == 0u) {
+            continue;
+        }
+        if ((used & 0x8000u) == 0u) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "vs: unexpected object size flag 0x%04X", (unsigned)used);
+            port_fatal(msg);
+        }
+        int ox = (int)(rd16((uint32_t)(0x0600 + x)) & 0x01FFu);
+        if (ox >= 256) {
+            ox -= 512;
+        }
+        uint16_t yraw = rd16((uint32_t)(0x0700 + x));
+        if ((yraw & 0x8000u) != 0u || yraw >= 0x00F0u) {
+            continue;
+        }
+        int oy = (int)yraw;
+
+        uint16_t w = rd16((uint32_t)(0x0800 + x));
+        uint16_t tile = w & 0x01FFu;
+        uint16_t pal = (w >> 9) & 7u;
+        uint16_t prio = (w >> 12) & 3u;
+        bool hflip = (w & 0x4000u) != 0u;
+        bool vflip = (w & 0x8000u) != 0u;
+        if (prio != 3u) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "vs: unexpected object attr 0x%04X", (unsigned)w);
+            port_fatal(msg);
+        }
+        if (tile <= 5u && pal == 0u) {
+            draw_tile_8x8(fb, pal_rgba, &g_vs_cursor_tiles[(size_t)tile * 64u], 8u, ox, oy,
+                          hflip, vflip);
+        } else if (tile >= 128u && tile <= 157u && pal == 7u) {
+            draw_tile_8x8(fb, pal_rgba, &g_vs_text_tiles[(size_t)(tile - 128u) * 64u], 15u, ox,
+                          oy, hflip, vflip);
+        } else {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "vs: unexpected object attr 0x%04X", (unsigned)w);
+            port_fatal(msg);
+        }
+    }
+}
+
 int menu_screen_active(void) {
     for (size_t i = 0; i < MENU_SCREEN_COUNT; ++i) {
         bool match = true;
@@ -388,10 +580,19 @@ int menu_screen_active(void) {
             return (int)i;
         }
     }
+    if (asset_current(ROLE_BG_DRAWINGS) == ASSET_VS_BG_DRAWINGS
+        && asset_current(ROLE_BG_ARRANGEMENT) == ASSET_VS_PANELS_ARRANGEMENT
+        && asset_current(ROLE_TEXT_DRAWINGS_128) == ASSET_MENU_TEXT_A
+        && asset_current(ROLE_OBJ_DRAWINGS) == ASSET_MENU_CURSOR_DRAWINGS) {
+        return (int)MENU_SCREEN_COUNT;
+    }
     return -1;
 }
 
 const char* menu_screen_name(int which) {
+    if (which == (int)MENU_SCREEN_COUNT) {
+        return "vs";
+    }
     if (which < 0 || (size_t)which >= MENU_SCREEN_COUNT) {
         return "none";
     }
@@ -399,7 +600,7 @@ const char* menu_screen_name(int which) {
 }
 
 void menu_screen_draw(int which, uint32_t* fb) {
-    if (which < 0 || (size_t)which >= MENU_SCREEN_COUNT) {
+    if (which < 0 || (size_t)which > MENU_SCREEN_COUNT) {
         port_fatal("menu_screen_draw: invalid screen index");
     }
 
@@ -412,14 +613,28 @@ void menu_screen_draw(int which, uint32_t* fb) {
         return;
     }
 
-    menu_screen_build_once(which);
-    const menu_screen_desc* s = &menu_screen_table[which];
-    const menu_screen_cache* cache = &g_cache[which];
-
     uint32_t pal_rgba[256];
     for (unsigned i = 0; i < 256u; ++i) {
         pal_rgba[i] = convert_color(palette_get((uint8_t)i));
     }
+
+    if (which == (int)MENU_SCREEN_COUNT) {
+        vs_screen_draw(fb, pal_rgba);
+        if (b < 15u) {
+            for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
+                uint32_t px = fb[i];
+                uint32_t r = (((px >> 16) & 0xFFu) * b * 17u) >> 8;
+                uint32_t g = (((px >> 8) & 0xFFu) * b * 17u) >> 8;
+                uint32_t bl = ((px & 0xFFu) * b * 17u) >> 8;
+                fb[i] = 0xFF000000u | (r << 16) | (g << 8) | bl;
+            }
+        }
+        return;
+    }
+
+    menu_screen_build_once(which);
+    const menu_screen_desc* s = &menu_screen_table[which];
+    const menu_screen_cache* cache = &g_cache[which];
 
     /* 1. Backdrop */
     uint32_t backdrop = pal_rgba[0];
