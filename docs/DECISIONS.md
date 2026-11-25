@@ -234,9 +234,9 @@ estamos fazendo com o DSP-4?".
   with one table of measured facts per screen (blocks per role, picture shift, text tile range,
   blank entry, flips allowed, objects or none). Anything a table does not allow stops.
 - **Known difference, measured:** the screen comes up about 10 frames earlier in the port (its
-  first per-frame text map upload at frame 36 of the call against 46 steps on the bench): the
-  port unpacks the graphics instantly, the console spends frames on it. The pictures once lit
-  are identical.
+  first per-frame text map upload at frame 36 of the call against 46 steps on the bench).
+  Hypothesis, not measured: the port unpacks the graphics at once where the console spends
+  frames on it. The pictures once lit are identical.
 - **Test:** `game_picture_password_show` (fingerprint of frame 137 from the saved memory).
 - **Per-line effects done:** none.
 
