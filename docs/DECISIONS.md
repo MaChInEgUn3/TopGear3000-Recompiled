@@ -309,6 +309,21 @@ estamos fazendo com o DSP-4?".
   (save game memory at a frame), `--fast` (no pacing). Test `game_picture_vs`.
 - **Per-line effects done:** none here.
 
+## The password entry drawn natively (step 4, 2026-11-25)
+
+- **The fifth screen, identical to the original pixel for pixel, blinking caret included:** the
+  password entry (`password_screen_open` then `password_entry`), reached like the VS screen
+  through the game's own code (`--screen intro,options`, movie `explore_pw.txt`, which is
+  identical to `explore_options.txt` before step 368, offset 403). Frames 3132 and 3133 match the
+  bench's pictures of steps 3550 and 3551 (0 of 57,344 pixels different each).
+- **What it uses (measured):** the menus' picture, the password text drawings `$88:8601`
+  (tiles 266-434, palettes 6 and 7, in front, some flipped), the cursor box and the caret from
+  the cursor drawings the options menu wrote (8x8, priority 3), and the menus' two band tables.
+  Here both tables are neutral (glow intensity 0, no offset); the measured picture agrees.
+  The options-only per-line function now serves the menus' band tables (options and password
+  entry), with the same strict checks. No new kind of per-line effect.
+- **Test:** `game_picture_password_entry`.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

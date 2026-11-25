@@ -35,7 +35,7 @@ You must provide your own legally obtained copy of **Top Gear 3000 (USA)**:
 
 ## Status
 
-The project is currently at **step 4 of 4** (pre-alpha). **The game is not playable yet** and **no releases exist yet**. Today, the executable builds on Linux and Windows x86-64, verifies your ROM (size and SHA-1), and runs a few of the game's screens from the decomp's C at the console's frame rate, with keyboard and gamepad input wired in (not yet usable: nothing is shown). The first screens are drawn natively, identical to the original pixel for pixel: the title card, the password display, the main options menu (with its glowing cursor) and the VS screen. Other screens stay black for now. No saves, settings, mods, widescreen, or gameplay exist yet.
+The project is currently at **step 4 of 4** (pre-alpha). **The game is not playable yet** and **no releases exist yet**. Today, the executable builds on Linux and Windows x86-64, verifies your ROM (size and SHA-1), and runs a few of the game's screens from the decomp's C at the console's frame rate, with keyboard and gamepad input wired in (not yet usable: nothing is shown). The first screens are drawn natively, identical to the original pixel for pixel: the title card, the password display, the main options menu (with its glowing cursor), the password entry and the VS screen. Other screens stay black for now. No saves, settings, mods, widescreen, or gameplay exist yet.
 
 | Step | Milestone | State |
 |---|---|---|

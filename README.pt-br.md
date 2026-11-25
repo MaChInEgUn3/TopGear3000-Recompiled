@@ -35,7 +35,7 @@ Você precisa fornecer sua própria cópia legal da ROM **Top Gear 3000 (USA)**:
 
 ## Estado atual
 
-O projeto está na **etapa 4 de 4** (pré-alfa). **Ainda não dá para jogar** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e roda algumas telas do jogo a partir do C do decomp, na velocidade do console, com teclado e controle já ligados (ainda sem uso: nada aparece na tela). As primeiras telas já são desenhadas de forma nativa, idênticas ao original pixel a pixel: o cartão de título, a tela da senha, o menu de opções (com o brilho do cursor) e a tela VS. As outras telas ainda ficam pretas. Ainda não há saves, configurações, mods, widescreen nem gameplay.
+O projeto está na **etapa 4 de 4** (pré-alfa). **Ainda não dá para jogar** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e roda algumas telas do jogo a partir do C do decomp, na velocidade do console, com teclado e controle já ligados (ainda sem uso: nada aparece na tela). As primeiras telas já são desenhadas de forma nativa, idênticas ao original pixel a pixel: o cartão de título, a tela da senha, o menu de opções (com o brilho do cursor), a digitação da senha e a tela VS. As outras telas ainda ficam pretas. Ainda não há saves, configurações, mods, widescreen nem gameplay.
 
 | Etapa | Marco | Estado |
 |---|---|---|

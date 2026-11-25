@@ -26,10 +26,10 @@ typedef struct {
     uint16_t text_first_tile;   /* first tile number of the text drawings block */
     uint16_t text_tile_count;   /* number of 4bpp tiles in the text drawings block */
     uint16_t text_blank_entry;  /* blank tilemap entry value at $7F:0000 */
-    int text_require_pal;       /* required palette (0..7), or -1 for any */
+    uint8_t text_pal_mask;      /* bitmask of allowed palettes (bits 0..7) */
     bool text_require_in_front; /* whether bit 13 (in-front) must be set */
     bool text_flips_allowed;    /* whether h-flip (bit 14) / v-flip (bit 15) are allowed */
-    bool text_per_line_effects; /* options menu only: per-band centring ($0D00) and glow ($0D20) */
+    bool text_per_line_effects; /* menus' band tables: per-band centring ($0D00) and glow ($0D20) */
     bool has_objects;           /* whether objects are used on this screen */
     uint16_t obj_first_tile;    /* first tile number of the object drawings block */
     uint16_t obj_tile_count;    /* number of 4bpp tiles in the object drawings block */
@@ -61,7 +61,7 @@ static const menu_screen_desc menu_screen_table[] = {
         .text_first_tile = 128u,
         .text_tile_count = 39u,
         .text_blank_entry = 0x003Du,
-        .text_require_pal = -1,
+        .text_pal_mask = 0xFFu,
         .text_require_in_front = true,
         .text_flips_allowed = false,
         .text_per_line_effects = false,
@@ -92,7 +92,7 @@ static const menu_screen_desc menu_screen_table[] = {
         .text_first_tile = 256u,
         .text_tile_count = 186u,
         .text_blank_entry = 0x003Du,
-        .text_require_pal = -1,
+        .text_pal_mask = 0xFFu,
         .text_require_in_front = true,
         .text_flips_allowed = true,
         .text_per_line_effects = false,
@@ -123,7 +123,7 @@ static const menu_screen_desc menu_screen_table[] = {
         .text_first_tile = 256u,
         .text_tile_count = 88u,
         .text_blank_entry = 0x003Du,
-        .text_require_pal = 7,
+        .text_pal_mask = (uint8_t)(1u << 7),
         .text_require_in_front = true,
         .text_flips_allowed = false,
         .text_per_line_effects = true,
@@ -131,6 +131,37 @@ static const menu_screen_desc menu_screen_table[] = {
         .has_objects = true,
         .obj_first_tile = 0u,
         .obj_tile_count = 6u,
+        .obj_expected_bytes = 97u * 2u,
+        .obj_priority = 3u,
+        .obj_require_pal = 0,
+        .obj_require_small = true,
+        .obj_flips_allowed = true,
+    },
+    {
+        .name = "password_entry",
+        /* measured on password_entry (notes/probe/PWENTRY.md): $96:EE52, $85:FA8B, $88:FEC3 (A, inherited), $88:8601 (256..441), $8A:C8E4 (cursor word run) */
+        .roles = {
+            [ROLE_BG_DRAWINGS] = ASSET_MENU_BG_DRAWINGS,
+            [ROLE_BG_ARRANGEMENT] = ASSET_MENU_BG_ARRANGEMENT,
+            [ROLE_TEXT_DRAWINGS_128] = ASSET_MENU_TEXT_A,
+            [ROLE_TEXT_DRAWINGS_256] = ASSET_PASSWORD_TEXT_DRAWINGS,
+            [ROLE_OBJ_DRAWINGS] = ASSET_MENU_CURSOR_DRAWINGS,
+        },
+        /* Setup $8A:C4B0 BG1 HOFS 0xFFFC (-4), VOFS 0xFFFF (-1 sits at line 0) */
+        .bg_shift_x = 4,
+        .bg_shift_y = 0,
+        /* measured on password_entry (notes/probe/PWENTRY.md): $88:8601 (186 tiles, 256..441; 266..434 used), blank $003D, pal 6 & 7, prio=1, flips allowed */
+        .text_first_tile = 256u,
+        .text_tile_count = 186u,
+        .text_blank_entry = 0x003Du,
+        .text_pal_mask = (uint8_t)((1u << 6) | (1u << 7)),
+        .text_require_in_front = true,
+        .text_flips_allowed = true,
+        .text_per_line_effects = true,
+        /* measured on password_entry (notes/probe/PWENTRY.md): 97 words at $8A:C8E4 (tiles 0..2 used), 8x8 (size flag set), priority 3, palette 0, h/v-flip used */
+        .has_objects = true,
+        .obj_first_tile = 0u,
+        .obj_tile_count = 3u,
         .obj_expected_bytes = 97u * 2u,
         .obj_priority = 3u,
         .obj_require_pal = 0,
@@ -280,7 +311,7 @@ static void validate_text_entry(const menu_screen_desc* s, uint16_t entry) {
     bool vflip = (entry & 0x8000u) != 0;
     if (tile < s->text_first_tile
         || tile >= s->text_first_tile + s->text_tile_count
-        || (s->text_require_pal >= 0 && (int)pal != s->text_require_pal)
+        || ((s->text_pal_mask & (1u << pal)) == 0u)
         || (s->text_require_in_front && !prio)
         || (!s->text_flips_allowed && (hflip || vflip))) {
         char msg[96];
@@ -289,7 +320,7 @@ static void validate_text_entry(const menu_screen_desc* s, uint16_t entry) {
     }
 }
 
-/* Options menu per-line text effects (options screen only; docs/DECISIONS.md, "The options menu drawn natively"):
+/* Menus' band-table per-line text effects (options and password_entry; docs/DECISIONS.md):
    (a) "menu item centring": WRAM $0D00 has 76 lines ($4C) with 16-bit horizontal offset at $0D01,
        then 7 bands of 24 lines ($18 at $0D03+3k) with 16-bit offsets at $0D04+3k, terminated by
        $0D18 == 0. Positive offset shifts the text layer LEFT by that many pixels.
@@ -298,8 +329,8 @@ static void validate_text_entry(const menu_screen_desc* s, uint16_t entry) {
        have either no plane bits (0x00..0x1F: no change) or all three ($E0 | n), adding n to each
        5-bit R, G, B channel of every text pixel on those lines (clamped at 31) before 5->8 bit
        expansion and before brightness. Background and objects are unchanged. */
-static void draw_options_text_per_line(const menu_screen_desc* s, const menu_screen_cache* cache,
-                                       uint32_t* fb) {
+static void draw_menu_text_per_line(const menu_screen_desc* s, const menu_screen_cache* cache,
+                                     uint32_t* fb) {
     int band_hofs[8];
     uint8_t band_glow[8];
 
@@ -365,9 +396,13 @@ static void draw_options_text_per_line(const menu_screen_desc* s, const menu_scr
             }
             uint16_t tile = entry & 0x03FFu;
             uint16_t pal = (entry >> 10) & 7u;
+            bool hflip = (entry & 0x4000u) != 0;
+            bool vflip = (entry & 0x8000u) != 0;
             const uint8_t* pixels =
                 &cache->text_tiles[(size_t)(tile - s->text_first_tile) * 64u];
-            uint8_t p = pixels[py * 8 + px];
+            int ty = vflip ? (7 - py) : py;
+            int tx = hflip ? (7 - px) : px;
+            uint8_t p = pixels[ty * 8 + tx];
             if (p != 0) {
                 uint16_t bgr = palette_get((uint8_t)(pal * 16u + p));
                 if (glow != 0u) {
@@ -657,7 +692,7 @@ void menu_screen_draw(int which, uint32_t* fb) {
 
     /* 3. Text map at WRAM $7F:0000 */
     if (s->text_per_line_effects) {
-        draw_options_text_per_line(s, cache, fb);
+        draw_menu_text_per_line(s, cache, fb);
     } else {
         for (int row = 0; row < 28; ++row) {
             for (int col = 0; col < 32; ++col) {
