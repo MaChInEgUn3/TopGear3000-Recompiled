@@ -93,8 +93,10 @@ git submodule update --init --recursive
 ## Running Checks and CLI Options
 
 * `ctest --test-dir build --output-on-failure` runs `tg3000 --selftest` (`rom_sha1_selftest`), which verifies the built-in SHA-1 implementation against standard test vectors without initializing SDL video.
-* `ctest` also runs `game_smoke_title_card`: the title card screen for 300 frames with no window
-  (`SDL_VIDEODRIVER=dummy`). Without a ROM in `input/` it is reported as skipped.
+* `ctest` also runs the game tests, with no window (`SDL_VIDEODRIVER=dummy`):
+  `game_smoke_title_card` (the title card must end by itself) and `game_smoke_password_press`
+  (a scripted button press must end the password display). Without a ROM in `input/` they are
+  reported as skipped.
 * `tg3000 --screen NAME --frames N`: run one of the game's screens (`title_card`,
   `password_show`, `vs`, `options`) and quit after N frames (0 = until the window closes).
   `TG3000_HEADLESS=1` turns error message boxes off.

@@ -35,7 +35,7 @@ You must provide your own legally obtained copy of **Top Gear 3000 (USA)**:
 
 ## Status
 
-The project is currently at **step 2 of 4** (pre-alpha). **The game is not playable yet** and **no releases exist yet**. Today, the executable builds on Linux and Windows x86-64, verifies your ROM (size and SHA-1), and runs a few of the game's screens from the decomp's C at the console's frame rate, reading keyboard and gamepad. Nothing is drawn yet: the window stays black. No saves, settings, mods, widescreen, or gameplay exist yet.
+The project is currently at **step 2 of 4** (pre-alpha). **The game is not playable yet** and **no releases exist yet**. Today, the executable builds on Linux and Windows x86-64, verifies your ROM (size and SHA-1), and runs a few of the game's screens from the decomp's C at the console's frame rate, with keyboard and gamepad input wired in (not yet usable: nothing is shown). Nothing is drawn yet: the window stays black. No saves, settings, mods, widescreen, or gameplay exist yet.
 
 | Step | Milestone | State |
 |---|---|---|
@@ -66,7 +66,7 @@ The items below are **goals, not promises** — none of them are implemented yet
 * Native video renderer drawn per screen from game data in memory
 * Native sound player for music and sound effects
 * Native DSP-4 math functions
-* Keyboard and controller support via SDL3
+* Configurable keyboard and controller mapping
 * Prebuilt releases for Linux and Windows x86-64
 
 ## FAQ
@@ -105,8 +105,9 @@ See [BUILDING.md](BUILDING.md) for full prerequisites, Ubuntu 20.04 notes, Windo
 ```text
 extern/tg3000-decomp/   read-only submodule with verified C game logic
 port/                   native PC port code (main.c, rom.c, sha1.c)
+port/platform/          the port's side of the game's platform calls (frame loop, input)
 tools/                  helper CMake scripts (fetch_deps.cmake)
-docs/                   architecture notes and decisions (DECISIONS.md)
+docs/                   decisions (DECISIONS.md) and accepted design proposals (proposals/)
 deps/                   fetched dependencies (SDL3, git-ignored)
 input/                  default user ROM location (TG3000.sfc, git-ignored)
 build/                  out-of-source build directory (git-ignored)

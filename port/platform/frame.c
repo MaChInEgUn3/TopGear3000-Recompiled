@@ -29,6 +29,9 @@ static unsigned long g_frame_limit = 0;
 static unsigned long g_frame_count = 0;
 static uint64_t g_next_frame_ns = 0;
 static jmp_buf g_quit_jmp;
+static unsigned long g_test_press_frame = 0;
+static bool g_test_expect_return = false;
+static volatile bool g_screen_returned = false;  /* read after longjmp */
 
 void platform_set_interrupts(uint8_t value) {
     nmi_enabled = (value & 0x80) != 0;
@@ -112,12 +115,8 @@ static void run_nmi_dispatch(void) {
 }
 
 void platform_wait_vblank(void) {
-    /* a) Run the game's frame code */
-    if (nmi_enabled) {
-        run_nmi_dispatch();
-    }
-
-    /* b) Pump SDL events */
+    /* a) Pump SDL events first, so the game's frame code (which reads the pads) sees this
+       frame's input, not the last one's. */
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_EVENT_QUIT ||
@@ -125,6 +124,16 @@ void platform_wait_vblank(void) {
             longjmp(g_quit_jmp, 1);
         }
         port_input_event(&event);
+    }
+    /* Test-only scripted press (--press): the buttons of g_test_press_mask held for a few
+       frames from g_test_press_frame. */
+    port_input_set_test_mask(
+        (g_test_press_frame != 0 && g_frame_count >= g_test_press_frame &&
+         g_frame_count < g_test_press_frame + 6) ? 0x8080u : 0);
+
+    /* b) Run the game's frame code */
+    if (nmi_enabled) {
+        run_nmi_dispatch();
     }
 
     /* c) Draw (no drawing in step 2) */
@@ -153,13 +162,24 @@ void platform_wait_vblank(void) {
     }
 }
 
+void port_set_test_options(unsigned long press_frame, bool expect_return) {
+    g_test_press_frame = press_frame;
+    g_test_expect_return = expect_return;
+}
+
 int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
     g_renderer = r;
     g_frame_limit = frame_limit;
     g_frame_count = 0;
     g_next_frame_ns = 0;
+    g_screen_returned = false;
 
     if (setjmp(g_quit_jmp) != 0) {
+        if (g_test_expect_return && !g_screen_returned) {
+            fprintf(stderr, "FAIL: screen %s did not return within %lu frames\n", screen,
+                    g_frame_count);
+            return 2;
+        }
         return 0;
     }
 
@@ -180,6 +200,10 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
         snprintf(msg, sizeof(msg), "unknown screen: %s", screen);
         port_fatal(msg);
     }
+    g_screen_returned = true;
+    printf("screen %s returned at frame %lu (game frame counter %u)\n", screen, g_frame_count,
+           (unsigned)rd16(FRAME_COUNTER));
+    fflush(stdout);
 
     for (;;) {
         platform_wait_vblank();

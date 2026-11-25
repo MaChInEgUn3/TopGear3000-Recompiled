@@ -26,9 +26,9 @@
 main() -> rom_load() [1048576 bytes + SHA-1] -> g_rom -> SDL window + renderer (logical 256x224,
   integer scale) -> port_run(screen): zero g_ram, interrupt_vectors_init(), call the game's
   screen function (blocking) -> ... the game calls platform_wait_vblank() at every frame wait:
+    0. SDL events (quit/Escape -> longjmp back to port_run; input state)
     1. the game's frame code (its NMI, in C): JML target at $0000, then nmi_prologue() and the
        target word at $0008 (fixed table; unknown -> port_fatal with the value)
-    2. SDL events (quit/Escape -> longjmp back to port_run; input state)
     3. draw (black until step 4) and present
     4. pace at 60.0988 fps (SDL_DelayPrecise)
 ```
@@ -39,6 +39,8 @@ CLI modes:
 - `--screen NAME` (`title_card`, `password_show`, `vs`, `options`; default `title_card`):
   which game screen to run, until the decomp has its boot and dispatcher in C.
 - `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
+- `--expect-return` (tests): exit 2 if the screen function has not returned by then.
+- `--press F` (tests): hold A+B for 6 frames from frame F.
 
 ## Boundary
 The decomp's `src/platform.h` is chip-shaped on purpose (its bench compares with the

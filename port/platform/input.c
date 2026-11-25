@@ -6,6 +6,11 @@
 #include "port.h"
 
 static SDL_Gamepad* g_gamepad = NULL;
+static uint16_t g_test_mask = 0;
+
+void port_input_set_test_mask(uint16_t mask) {
+    g_test_mask = mask;
+}
 
 void port_input_event(const SDL_Event* event) {
     if (event->type == SDL_EVENT_GAMEPAD_ADDED) {
@@ -21,7 +26,7 @@ void port_input_event(const SDL_Event* event) {
 }
 
 uint16_t input_pad1(void) {
-    uint16_t bits = 0;
+    uint16_t bits = g_test_mask;
 
     int numkeys = 0;
     const bool* keys = SDL_GetKeyboardState(&numkeys);

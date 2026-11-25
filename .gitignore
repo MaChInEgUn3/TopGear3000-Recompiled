@@ -5,6 +5,8 @@
 *.bin
 *.spc
 *.png
+*.jpg
+*.jpeg
 *.bmp
 *.wav
 *.ogg

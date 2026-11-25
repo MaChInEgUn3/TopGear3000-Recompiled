@@ -17,7 +17,7 @@ jobs:
 
       - name: Check no game data in git
         run: |
-          if git ls-files | grep -iE '\.(sfc|smc|rom|bin|spc|png|bmp|wav|ogg)$'; then
+          if git ls-files | grep -iE '\.(sfc|smc|rom|bin|spc|png|jpg|jpeg|bmp|wav|ogg)$'; then
             echo "ERROR: game data or binary asset found in git!"
             exit 1
           fi

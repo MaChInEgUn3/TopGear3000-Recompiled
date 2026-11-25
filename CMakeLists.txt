@@ -74,10 +74,15 @@ endif()
 enable_testing()
 add_test(NAME rom_sha1_selftest COMMAND tg3000 --selftest)
 add_test(NAME game_smoke_title_card
-  COMMAND tg3000 --screen title_card --frames 300
+  COMMAND tg3000 --screen title_card --frames 300 --expect-return
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-set_tests_properties(game_smoke_title_card PROPERTIES
+# The password display waits for any button: a scripted press must end it.
+add_test(NAME game_smoke_password_press
+  COMMAND tg3000 --screen password_show --frames 400 --press 120 --expect-return
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_smoke_title_card game_smoke_password_press PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

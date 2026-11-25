@@ -88,6 +88,8 @@ int main(int argc, char* argv[]) {
     bool selftest = false;
     bool check_rom = false;
     bool frames_given = false;
+    bool expect_return = false;
+    unsigned long press_frame = 0;
     unsigned long frame_limit = 0;
     const char* screen = "title_card";
     const char* rom_path = NULL;
@@ -102,9 +104,13 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             frames_given = true;
             frame_limit = strtoul(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--press") == 0 && i + 1 < argc) {
+            press_frame = strtoul(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--expect-return") == 0) {
+            expect_return = true;
         } else if (argv[i][0] == '-') {
             fprintf(stderr,
-                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [path/to/TG3000.sfc]\n",
+                    "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] [--expect-return] [--press F] [--expect-return] [path/to/TG3000.sfc]\n",
                     argv[0]);
             return 1;
         } else if (rom_path == NULL) {
@@ -178,6 +184,7 @@ int main(int argc, char* argv[]) {
 
     SDL_SetRenderLogicalPresentation(renderer, 256, 224, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
 
+    port_set_test_options(press_frame, expect_return);
     int rc = port_run(renderer, screen, frame_limit);
 
     SDL_DestroyRenderer(renderer);

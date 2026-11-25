@@ -35,7 +35,7 @@ Você precisa fornecer sua própria cópia legal da ROM **Top Gear 3000 (USA)**:
 
 ## Estado atual
 
-O projeto está na **etapa 2 de 4** (pré-alfa). **Ainda não dá para jogar** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e roda algumas telas do jogo a partir do C do decomp, na velocidade do console, lendo teclado e controle. Nada é desenhado ainda: a janela fica preta. Ainda não há saves, configurações, mods, widescreen nem gameplay.
+O projeto está na **etapa 2 de 4** (pré-alfa). **Ainda não dá para jogar** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e roda algumas telas do jogo a partir do C do decomp, na velocidade do console, com teclado e controle já ligados (ainda sem uso: nada aparece na tela). Nada é desenhado ainda: a janela fica preta. Ainda não há saves, configurações, mods, widescreen nem gameplay.
 
 | Etapa | Marco | Estado |
 |---|---|---|
@@ -66,7 +66,7 @@ Os itens abaixo são **metas, não promessas** — nenhum deles existe ainda:
 * Renderizador de vídeo nativo desenhado por tela a partir dos dados do jogo na memória
 * Reprodutor de som nativo para músicas e efeitos sonoros
 * Funções matemáticas nativas do DSP-4
-* Suporte a teclado e controle via SDL3
+* Mapeamento configurável de teclado e controle
 * Versões prontas para baixar, para Linux e Windows x86-64
 
 ## Perguntas frequentes (FAQ)
@@ -105,8 +105,9 @@ Veja o [BUILDING.md](BUILDING.md) (em inglês) para os pré-requisitos completos
 ```text
 extern/tg3000-decomp/   submódulo somente leitura com o C verificado da lógica do jogo
 port/                   código do port nativo para PC (main.c, rom.c, sha1.c)
+port/platform/          o lado do port nas chamadas de plataforma do jogo (laço de quadros, controles)
 tools/                  scripts auxiliares de CMake (fetch_deps.cmake)
-docs/                   notas e decisões de arquitetura (DECISIONS.md)
+docs/                   decisões (DECISIONS.md) e propostas de desenho aceitas (proposals/)
 deps/                   dependências baixadas (SDL3, ignorado pelo git)
 input/                  local padrão da ROM do usuário (TG3000.sfc, ignorado pelo git)
 build/                  diretório de compilação (ignorado pelo git)
