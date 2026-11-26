@@ -203,7 +203,8 @@ bool title_screen_active(void) {
     return rd16(0x0008u) == 0xFBD1u && assets_title_objs_loaded();
 }
 
-static void draw_title_sprites(uint32_t* fb, const uint32_t pal_rgba[256]) {
+static void draw_title_sprites(uint32_t* fb, const uint32_t pal_rgba[256],
+                               const bool m7_opaque[TITLE_M7_END_LINE * SCREEN_WIDTH]) {
     for (int i = (int)TITLE_SPRITE_COUNT - 1; i >= 0; --i) {
         uint32_t lo_addr = TITLE_OAM_LOW_BASE + (uint32_t)i * 4u;
         uint8_t x_lo = rd8(lo_addr);
@@ -213,6 +214,7 @@ static void draw_title_sprites(uint32_t* fb, const uint32_t pal_rgba[256]) {
         }
         uint8_t tile_lo = rd8(lo_addr + 2u);
         uint8_t attr = rd8(lo_addr + 3u);
+        uint16_t prio = (attr >> 4) & 3u;
         uint8_t hi = (uint8_t)((rd8(TITLE_OAM_HIGH_BASE + ((uint32_t)i >> 2))
                                 >> (((uint32_t)i & 3u) * 2u)) & 3u);
         bool is_large = (hi & 2u) != 0u;
@@ -251,6 +253,10 @@ static void draw_title_sprites(uint32_t* fb, const uint32_t pal_rgba[256]) {
                         int src_px = hflip ? (7 - px) : px;
                         uint8_t p = pixels[src_py * 8 + src_px];
                         if (p != 0u) {
+                            if (prio == 0u && sy < TITLE_M7_END_LINE
+                                && m7_opaque[sy * SCREEN_WIDTH + sx]) {
+                                continue;
+                            }
                             fb[sy * SCREEN_WIDTH + sx] = pal_rgba[128u + pal * 16u + p];
                         }
                     }
@@ -341,9 +347,13 @@ void title_screen_draw(uint32_t* fb) {
     int m7c = (int)(int16_t)rd16(0x0118u);
     int m7d = (int)(int16_t)rd16(0x011Au);
 
+    bool m7_opaque[TITLE_M7_END_LINE * SCREEN_WIDTH];
+    memset(m7_opaque, 0, sizeof(m7_opaque));
+
     for (int sy = 0; sy < TITLE_M7_END_LINE; ++sy) {
         int dy = (sy + 1) + m7_vofs - TITLE_M7_CENTRE_Y;
         uint32_t* dst = &fb[sy * SCREEN_WIDTH];
+        bool* op_dst = &m7_opaque[sy * SCREEN_WIDTH];
         for (int sx = 0; sx < SCREEN_WIDTH; ++sx) {
             int dx = sx + m7_hofs - TITLE_M7_CENTRE_X;
             int mx = TITLE_M7_CENTRE_X + floor_div256(m7a * dx + m7b * dy);
@@ -359,6 +369,7 @@ void title_screen_draw(uint32_t* fb) {
                     port_fatal("title: Mode 7 colour index out of measured range (1..15)");
                 }
                 dst[sx] = pal_rgba[p];
+                op_dst[sx] = true;
             }
         }
     }
@@ -407,8 +418,8 @@ void title_screen_draw(uint32_t* fb) {
         }
     }
 
-    /* 5. Sprites from OAM $0900/$0B00 (8x8 or 16x16, reverse order) */
-    draw_title_sprites(fb, pal_rgba);
+    /* 5. Sprites from OAM $0900/$0B00 (8x8 or 16x16, reverse order; prio 0 behind Mode 7) */
+    draw_title_sprites(fb, pal_rgba, m7_opaque);
 
     /* 6. Brightness */
     screen_apply_brightness(fb, b);

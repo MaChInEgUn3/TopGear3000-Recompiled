@@ -220,6 +220,17 @@ set_tests_properties(game_picture_title_screen PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# The title screen settled moment (bench steps 16865/16866, frame_16867.png/frame_16868.png):
+# port frames 155..164 match pixel for pixel (0 of 57,344 pixels different).
+add_test(NAME game_picture_title_settled
+  COMMAND tg3000 --wram notes/title/wram_before_title_screen.bin --screen title --fast --frames 160 --shot 159 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_title_settled PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 159 picture hash 3df7e846c8aca260 brightness 15 drawn title"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu game_picture_results game_picture_intro_zoom PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77

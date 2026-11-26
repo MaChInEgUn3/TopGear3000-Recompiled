@@ -491,12 +491,13 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
 
 ## The title screen drawn natively (step 4, 2026-11-25)
 
-- **Identical to the original pixel for pixel at the moving moment (`frame_16752.png`):**
+- **Identical to the original pixel for pixel at both moments:**
   started from `notes/title/wram_before_title_screen.bin` (`autopilot_60k.txt` step 16662,
-  entry of `title_screen_run(0)` at step 16663), port frame 40 matches `frame_16752.png` with
-  0 of 57,344 pixels different. At the static settled moment (`F = 155..164` vs
-  `frame_16867.png` / `frame_16868.png`), 57,309 of 57,344 pixels match; 35 pixels differ in
-  `x=122..126, y=145..155` (inside `OAM i=8` / Mode 7 overlap).
+  entry of `title_screen_run(0)` at step 16663), port frame 40 matches `frame_16752.png`
+  (moving moment) and port frames 155..164 match `frame_16867.png` / `frame_16868.png`
+  (settled moment) with 0 of 57,344 pixels different each. Priority-0 objects are drawn
+  behind non-transparent Mode 7 pixels (and priorities 1..3 in front), while preserving
+  OAM `127..0` sprite-vs-sprite order.
 - **How, under the rule:** `port/screens/title_screen.c`, `--screen title` ->
   `title_screen_run(0)`.
   - **Assets (`port/video/assets.c`):** `$9A:EB44` is unpacked at start-up to extract the
@@ -518,7 +519,7 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
     2. **Mode 7 / Mode 2 scroll tables (`$0D00` M7VOFS/BG1VOFS, `$0D20` M7HOFS/BG1HOFS):**
        read at fixed addresses with the screen's fixed band counts (`1, 127, 40, 1, 0`) written
        by `mode7_view`.
-- **Test:** `game_picture_title_screen`.
+- **Tests:** `game_picture_title_screen`, `game_picture_title_settled`.
 
 - **Measured (2026-11-25):** the port's game state matches the bench's frame by frame (port
   frame F = bench step F + 16707: the slide `$0136`, objects, scroll tables). The moving
