@@ -38,7 +38,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   carries a marked three-line hand translation, unverified, until then.
 - **F (request 2) — DONE in decomp `92d4d5a`, adopted by the port. `tg3000_unported` should call a platform hook first** (e.g.
   `void platform_unported(const char* what);`), so a player sees what was hit (24 traps today).
-- **G (request 5). A bench report of the sound driver's output per voice** (per tick: key on/off,
+- **G (request 5) — DONE in decomp `9bc4a9a` (bench `--voice-report`: every S-DSP write per voice).** A bench report of the sound driver's output per voice** (per tick: key on/off,
   sample, pitch, volume, envelope settings), the reference for the port's native sequencer.
 - **H (request 9) — DONE in decomp `436b6d7`/`d92e6e6` (the C keeps its own copies; both calls left platform.h), adopted. Earlier: measured in decomp `0cbbece` (values are the game's own); the port still needs the C to keep WRAM shadows instead (a VRAM strip copy or a register shadow in the port would break the rule). Chip state read back:** `video_read_vram_word` (`vs_hud_draw`) and
   `dma_hdma_get_table` (`irq_vs_split`) need state a non-emulating port does not keep. If
