@@ -700,6 +700,12 @@ static void vs_screen_draw(uint32_t* fb, const uint32_t pal_rgba[256]) {
 }
 
 int menu_screen_active(void) {
+    /* All menu screens (title_card, password_show, options, password_entry, vs)
+       run with NMI target $FC5F at $0008; other screens (championship $B97B,
+       race start $E175/$D784/$E28C) do not clear the menu asset roles. */
+    if (rd16(0x0008u) != 0xFC5Fu) {
+        return -1;
+    }
     for (size_t i = 0; i < MENU_SCREEN_COUNT; ++i) {
         bool match = true;
         for (int r = 0; r < ROLE_COUNT; ++r) {

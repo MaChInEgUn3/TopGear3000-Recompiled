@@ -620,6 +620,13 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   the ticker runs 625 frames from the saved memory, as long as the original's (lit about 560).
   The decomp's `platform.h` contract text omits `nmi_prologue()`; told the decomp.
 
+- **Fixed (2026-11-26): the whole game runs into the championship.** With
+  `autopilot_60k.txt` (offset 150) the port stopped at frame 3173: the menu screens' recogniser
+  matched the championship (NMI target `$B97B`) because the menu roles stay loaded after the
+  options screen. The menu screens all run with NMI target `$FC5F`, so the recogniser now also
+  needs `$0008 = $FC5F` (measured at frames 3165-3175 and 4322); the checks on lit menu frames
+  are unchanged. Test `game_main_movie_to_champ` (championship lit at frame 3200, not drawn yet).
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

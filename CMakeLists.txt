@@ -255,6 +255,17 @@ set_tests_properties(game_main_to_options PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# The whole game with autopilot_60k.txt (offset 150) reaches the championship screen ($0008 = $B97B,
+# split active, lit at brightness 15 by frame 3200; picture not drawn yet).
+add_test(NAME game_main_movie_to_champ
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --fast --frames 3205 --shot 3200 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_main_movie_to_champ PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 3200 picture hash [0-9a-f]+ brightness 15 drawn none"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu game_picture_results game_picture_intro_zoom PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
