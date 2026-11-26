@@ -614,11 +614,11 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   cleanly from `notes/tick/wram_before_tick.bin` (at frame 3, game frame counter 7957; picture
   not drawn yet).
 
-- **Not yet proven (2026-11-26):** from the bench memory saved before the ticker
-  (`notes/tick`, step 15857), `ticker_screen()` returns after 3 frames, where the original shows
-  the ticker for about 560; so `game_ticker_runs` shows the split/join path does not crash, not
-  that the two tasks ran a full screen. To investigate (the saved state, the ticker's exit
-  condition) before drawing the ticker.
+- **Fixed (2026-11-26):** the ticker returned after 3 frames because, with a split active, the
+  port called `nmi_menu_frame()` without `nmi_prologue()` first (every NMI starts with it: the
+  brightness fade lives there), so the screen never lit and its loop ended at once. With it,
+  the ticker runs 625 frames from the saved memory, as long as the original's (lit about 560).
+  The decomp's `platform.h` contract text omits `nmi_prologue()`; told the decomp.
 
 ## Steps (2026-11-24)
 

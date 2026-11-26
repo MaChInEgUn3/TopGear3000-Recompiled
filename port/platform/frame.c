@@ -465,6 +465,7 @@ void platform_wait_vblank(void) {
             SDL_WaitSemaphore(g_sem_task1);
         }
         present_frame();
+        nmi_prologue();   /* every NMI starts with it, then the $0008 target (here $B97B) */
         nmi_menu_frame();
         nmi_menu_frame_tail();
         nmi_tail();
