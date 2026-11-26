@@ -51,6 +51,9 @@ typedef enum {
 /* Decompress and hash all known cartridge blocks after g_rom is set and before the game runs. */
 void assets_init(void);
 
+/* The VS panels' arrangement named by the game (request J): built from its 14 WRAM rows. */
+void assets_note_vs_panels(uint32_t rows);
+
 /* Note the ROM source address of an unpacked upload (from video_note_source). */
 void assets_note_source(uint32_t rom);
 

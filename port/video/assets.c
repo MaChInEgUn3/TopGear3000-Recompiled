@@ -237,42 +237,50 @@ void assets_note_word(uint16_t value) {
             }
         }
     }
+}
 
-    /* The arrangement is data the game hands over word by word; the port names it by the
-       game's write pattern (1024 words of $0023 followed by 896 arrangement words), never by
-       a video address, and never recomputes it. */
-    const size_t vs_fill_words = 1024u;
-    const size_t vs_arr_words = 896u;
-    if (g_word_run_words == vs_fill_words + vs_arr_words) {
-        bool is_fill = true;
-        for (size_t w = 0; w < vs_fill_words; ++w) {
-            uint16_t v = (uint16_t)(g_word_run_buf[w * 2u] |
-                                    ((uint16_t)g_word_run_buf[w * 2u + 1u] << 8));
-            if (v != 0x0023u) {
-                is_fill = false;
-                break;
-            }
+/* Request J (decomp f22a687): the game names the VS panels' arrangement before writing it. It is
+   two halves, each the same 14 rows of the WRAM buffer `rows` ($20 bytes a row), each row two
+   copies of its 16 words, ORed with $0000/$0400 (first half) and $0800/$0C00 (second half): the
+   decomp's platform.h text. The port builds it from those rows; the word writes that follow are
+   only checked by the word-run matcher for other assets. */
+void assets_note_vs_panels(uint32_t rows) {
+    enum { ROWS = 14, ROW_WORDS = 16, ARR_WORDS = 2 * ROWS * 2 * ROW_WORDS };
+    static const uint16_t or_bits[2][2] = {{0x0000u, 0x0400u}, {0x0800u, 0x0C00u}};
+    uint32_t idx = 0;
+    if (rows != 0x7F0000u || !bus_wram(rows, &idx)) {
+        port_fatal("VS panels named from an unexpected buffer (measured: $7F:0000)");
+    }
+    if (g_current[ROLE_BG_DRAWINGS] != ASSET_VS_BG_DRAWINGS) {
+        port_fatal("VS panels arrangement named without VS background drawings loaded");
+    }
+    asset_entry* vs_arr = &g_assets[ASSET_VS_PANELS_ARRANGEMENT];
+    size_t arr_bytes = (size_t)ARR_WORDS * 2u;
+    if (vs_arr->data == NULL || vs_arr->size != arr_bytes) {
+        free(vs_arr->data);
+        vs_arr->data = (uint8_t*)malloc(arr_bytes);
+        if (vs_arr->data == NULL) {
+            port_fatal("assets_note_vs_panels: out of memory");
         }
-        if (is_fill) {
-            if (g_current[ROLE_BG_DRAWINGS] != ASSET_VS_BG_DRAWINGS) {
-                port_fatal("VS panels arrangement written without VS background drawings loaded");
-            }
-            asset_entry* vs_arr = &g_assets[ASSET_VS_PANELS_ARRANGEMENT];
-            size_t arr_bytes = vs_arr_words * 2u;
-            if (vs_arr->data == NULL || vs_arr->size != arr_bytes) {
-                free(vs_arr->data);
-                vs_arr->data = (uint8_t*)malloc(arr_bytes);
-                if (vs_arr->data == NULL) {
-                    port_fatal("assets_note_word: out of memory");
+        vs_arr->size = arr_bytes;
+    }
+    size_t out = 0;
+    for (int half = 0; half < 2; ++half) {
+        for (int r = 0; r < ROWS; ++r) {
+            for (int copy = 0; copy < 2; ++copy) {
+                for (int w = 0; w < ROW_WORDS; ++w) {
+                    uint32_t a = idx + (uint32_t)r * 0x20u + (uint32_t)w * 2u;
+                    uint16_t v = (uint16_t)(g_ram[a] | (g_ram[a + 1u] << 8));
+                    v |= or_bits[half][copy];
+                    vs_arr->data[out++] = (uint8_t)(v & 0xFFu);
+                    vs_arr->data[out++] = (uint8_t)(v >> 8);
                 }
-                vs_arr->size = arr_bytes;
             }
-            memcpy(vs_arr->data, &g_word_run_buf[vs_fill_words * 2u], arr_bytes);
-            vs_arr->hash = fnv1a_32(vs_arr->data, arr_bytes);
-            vs_arr->generation++;
-            g_current[ROLE_BG_ARRANGEMENT] = ASSET_VS_PANELS_ARRANGEMENT;
         }
     }
+    vs_arr->hash = fnv1a_32(vs_arr->data, arr_bytes);
+    vs_arr->generation++;
+    g_current[ROLE_BG_ARRANGEMENT] = ASSET_VS_PANELS_ARRANGEMENT;
 }
 
 void assets_note_source(uint32_t rom) {

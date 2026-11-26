@@ -42,3 +42,9 @@ void video_note_source(uint32_t rom, uint16_t vram_word) {
     assets_reset_word_run();
     assets_note_source(rom);
 }
+
+void video_note_vs_panels(uint16_t vram_word, uint32_t rows) {
+    (void)vram_word;
+    assets_reset_word_run();
+    assets_note_vs_panels(rows);
+}

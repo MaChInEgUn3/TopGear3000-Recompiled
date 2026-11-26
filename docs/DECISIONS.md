@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `d0eaf01`; earlier `9bc4a9a`, earlier `d92e6e6`, earlier `506cc7d`, earlier `6755322`, earlier `23be63d`, earlier `63e1df5`, earlier `f3f7d5a`, `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `416560f`; earlier `d0eaf01`, earlier `9bc4a9a`, earlier `d92e6e6`, earlier `506cc7d`, earlier `6755322`, earlier `23be63d`, earlier `63e1df5`, earlier `f3f7d5a`, `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -697,6 +697,19 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   two-task contract. The cursor glow before the first key press also cycles slower than on the
   console (the console's menu loop runs several passes per frame); only the 4 letters of the
   lit item differ.
+
+## Decomp at 416560f: requests J and C's top loop delivered (2026-11-26)
+
+- **J:** `video_note_vs_panels(vram_word, rows)` names the VS panels before the game writes them.
+  The port now builds the arrangement from the 14 WRAM rows it names, as the decomp's
+  `platform.h` describes it (two halves, each row twice, ORed with $0000/$0400 and $0800/$0C00);
+  the earlier capture by write pattern (the recorded bend of the rule) is removed. The VS picture
+  test is unchanged (same picture hash).
+- **C, the top loop's ends (`ecb9653`):** end of the championship, last track, not in the top
+  five, the two-player loop. No change needed in the port. The traps left are named one level
+  down; the port reports which ones its full runs reach.
+- **A, `416560f`:** the DSP-4 road command ($01) is being measured again (not waiting on the
+  owner any more); nothing to adopt yet.
 
 ## Steps (2026-11-24)
 

@@ -24,7 +24,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `$86:E2B4` (slot and loop are in hand at `$86:DF2A`; the bench can check them against the
   directory sent after). Then `$86:DDEF` (the set loader) and its helpers in C. Names and shape
   may change if the bench needs it.
-- **C (request 1). Boot and top-level dispatcher in C:** the reset path (`$80:8002-$80:809B`),
+- **C (request 1) — boot, `game_main`, the top loop and its ends DONE (decomp `b284d72`…`ecb9653`), adopted. Left: named traps one level down (`$8A:D017` ending, `$8A:96AD` two-player last screen, `$8A:C379` options choice 3, `$80:8A04`, `$03DC` bits 15/13), ported when a run reaches them.** Boot and top-level dispatcher in C: the reset path (`$80:8002-$80:809B`),
   `$80:89DB`, the top loop `$80:8A8C`/`$80:8AA4`.
 
 ## Medium
@@ -48,5 +48,5 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
 
 - **I (request 3) — DONE in decomp `d0eaf01` (`video_note_source`), adopted (ignored for now; content recognition kept).** Name the ROM source of decompressed uploads (e.g.
   `video_note_source(rom_bus, vram_word)`, ignored by the bench's comparison).
-- **J (request 6).** Hand over the VS panels' arrangement by name (`vs_graphics_load` writes it
+- **J (request 6) — DONE in decomp `f22a687` (`video_note_vs_panels`), adopted: the port builds the VS panels from the 14 rows the game names; the write-pattern capture is gone.** Hand over the VS panels' arrangement by name (`vs_graphics_load` writes it
   word by word today; the port recognises the write pattern).
