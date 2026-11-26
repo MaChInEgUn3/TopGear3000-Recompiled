@@ -55,12 +55,17 @@
 #define CHAMP_BG_A_COUNT 30u
 #define CHAMP_BG_B_FIRST 32u
 #define CHAMP_BG_B_COUNT 319u
+#define CHAMP_BG_NAME_COUNT 173u
+#define CHAMP_BG_CTRL_COUNT 207u
+#define CHAMP_BG_GEARS_COUNT 166u
 #define CHAMP_BG_NOISE_FIRST 352u
 #define CHAMP_BG_NOISE_COUNT 16u
 
 #define CHAMP_OBJ_B_FIRST 0u
 #define CHAMP_OBJ_B_OFFSET_TILES 224u
 #define CHAMP_OBJ_B_COUNT 95u
+#define CHAMP_OBJ_GEARS_FIRST 208u
+#define CHAMP_OBJ_GEARS_COUNT 48u
 #define CHAMP_OBJ_FONT_FIRST 256u
 #define CHAMP_OBJ_FONT_COUNT 80u
 #define CHAMP_OBJ_BAR_FIRST 336u
@@ -71,9 +76,13 @@
 #define CHAMP_SPRITE_COUNT 128u
 
 static bool g_built = false;
-static uint32_t g_gens[5];
+static uint32_t g_gens[9];
 static uint8_t g_bg_a_tiles[CHAMP_BG_A_COUNT * 64u];
 static uint8_t g_bg_b_tiles[CHAMP_BG_B_COUNT * 64u];
+static uint8_t g_bg_name_tiles[CHAMP_BG_NAME_COUNT * 64u];
+static uint8_t g_bg_ctrl_tiles[CHAMP_BG_CTRL_COUNT * 64u];
+static uint8_t g_bg_gears_tiles[CHAMP_BG_GEARS_COUNT * 64u];
+static uint8_t g_obj_gears_tiles[CHAMP_OBJ_GEARS_COUNT * 64u];
 static uint8_t g_obj_font_tiles[CHAMP_OBJ_FONT_COUNT * 64u];
 static uint8_t g_obj_bar_tiles[CHAMP_OBJ_BAR_COUNT * 64u];
 static uint8_t g_obj_gfx_tiles[CHAMP_OBJ_GFX_COUNT * 64u];
@@ -82,15 +91,19 @@ static uint32_t g_noise_gen[CHAMP_HALF_COUNT];
 static uint8_t g_noise_tiles[CHAMP_HALF_COUNT][CHAMP_BG_NOISE_COUNT * 64u];
 
 static void champ_build_once(void) {
-    static const int ids[5] = {
+    static const int ids[9] = {
         ASSET_CHAMP_BG_TILES_A,
         ASSET_CHAMP_BG_OBJ_TILES_B,
         ASSET_CHAMP_OBJ_FONT,
         ASSET_CHAMP_OBJ_BAR,
         ASSET_CHAMP_OBJ_GRAPHICS,
+        ASSET_CHAMP_NAME_BG_TILES,
+        ASSET_CHAMP_CTRL_BG_TILES,
+        ASSET_CHAMP_GEARS_BG_TILES,
+        ASSET_CHAMP_GEARS_OBJ_TILES,
     };
     bool same = g_built;
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 9; ++i) {
         if (asset_generation(ids[i]) != g_gens[i]) {
             same = false;
         }
@@ -108,6 +121,30 @@ static void champ_build_once(void) {
             port_fatal("champ: unexpected CHAMP_BG_OBJ_TILES_B size");
         }
         convert_tiles_4bpp(bg_b, CHAMP_BG_B_COUNT, g_bg_b_tiles);
+
+        const uint8_t* bg_name = asset_bytes(ASSET_CHAMP_NAME_BG_TILES, &sz);
+        if (bg_name == NULL || sz != CHAMP_BG_NAME_COUNT * 32u) {
+            port_fatal("champ: unexpected CHAMP_NAME_BG_TILES size");
+        }
+        convert_tiles_4bpp(bg_name, CHAMP_BG_NAME_COUNT, g_bg_name_tiles);
+
+        const uint8_t* bg_ctrl = asset_bytes(ASSET_CHAMP_CTRL_BG_TILES, &sz);
+        if (bg_ctrl == NULL || sz != CHAMP_BG_CTRL_COUNT * 32u) {
+            port_fatal("champ: unexpected CHAMP_CTRL_BG_TILES size");
+        }
+        convert_tiles_4bpp(bg_ctrl, CHAMP_BG_CTRL_COUNT, g_bg_ctrl_tiles);
+
+        const uint8_t* bg_gears = asset_bytes(ASSET_CHAMP_GEARS_BG_TILES, &sz);
+        if (bg_gears == NULL || sz != CHAMP_BG_GEARS_COUNT * 32u) {
+            port_fatal("champ: unexpected CHAMP_GEARS_BG_TILES size");
+        }
+        convert_tiles_4bpp(bg_gears, CHAMP_BG_GEARS_COUNT, g_bg_gears_tiles);
+
+        const uint8_t* obj_gears = asset_bytes(ASSET_CHAMP_GEARS_OBJ_TILES, &sz);
+        if (obj_gears == NULL || sz != CHAMP_OBJ_GEARS_COUNT * 32u) {
+            port_fatal("champ: unexpected CHAMP_GEARS_OBJ_TILES size");
+        }
+        convert_tiles_4bpp(obj_gears, CHAMP_OBJ_GEARS_COUNT, g_obj_gears_tiles);
 
         const uint8_t* obj_f = asset_bytes(ASSET_CHAMP_OBJ_FONT, &sz);
         if (obj_f == NULL || sz != CHAMP_OBJ_FONT_COUNT * 32u) {
@@ -127,7 +164,7 @@ static void champ_build_once(void) {
         }
         convert_tiles_4bpp(obj_gfx, CHAMP_OBJ_GFX_COUNT, g_obj_gfx_tiles);
 
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 9; ++i) {
             g_gens[i] = asset_generation(ids[i]);
         }
         g_built = true;
@@ -150,10 +187,22 @@ static const uint8_t* champ_bg_tile_pixels(int half, uint16_t tile) {
     if (tile < CHAMP_BG_A_FIRST + CHAMP_BG_A_COUNT) {
         return &g_bg_a_tiles[(size_t)(tile - CHAMP_BG_A_FIRST) * 64u];
     }
-    if (tile >= CHAMP_BG_B_FIRST && tile < CHAMP_BG_B_FIRST + CHAMP_BG_B_COUNT) {
-        return &g_bg_b_tiles[(size_t)(tile - CHAMP_BG_B_FIRST) * 64u];
-    }
     const champ_half_pieces* hp = assets_champ_half(half);
+    if (tile >= CHAMP_BG_B_FIRST && tile < CHAMP_BG_B_FIRST + CHAMP_BG_B_COUNT) {
+        size_t sub_idx = (size_t)(tile - CHAMP_BG_B_FIRST);
+        if (hp != NULL) {
+            if (hp->bg_b_asset == ASSET_CHAMP_NAME_BG_TILES && sub_idx < CHAMP_BG_NAME_COUNT) {
+                return &g_bg_name_tiles[sub_idx * 64u];
+            }
+            if (hp->bg_b_asset == ASSET_CHAMP_CTRL_BG_TILES && sub_idx < CHAMP_BG_CTRL_COUNT) {
+                return &g_bg_ctrl_tiles[sub_idx * 64u];
+            }
+            if (hp->bg_b_asset == ASSET_CHAMP_GEARS_BG_TILES && sub_idx < CHAMP_BG_GEARS_COUNT) {
+                return &g_bg_gears_tiles[sub_idx * 64u];
+            }
+        }
+        return &g_bg_b_tiles[sub_idx * 64u];
+    }
     if (hp != NULL && hp->has_noise_tiles
         && tile >= CHAMP_BG_NOISE_FIRST && tile < CHAMP_BG_NOISE_FIRST + CHAMP_BG_NOISE_COUNT) {
         return &g_noise_tiles[half][(size_t)(tile - CHAMP_BG_NOISE_FIRST) * 64u];
@@ -161,9 +210,14 @@ static const uint8_t* champ_bg_tile_pixels(int half, uint16_t tile) {
     return NULL;
 }
 
-static const uint8_t* champ_obj_tile_pixels(uint16_t tile) {
+static const uint8_t* champ_obj_tile_pixels(int half, uint16_t tile) {
     if (tile < CHAMP_OBJ_B_FIRST + CHAMP_OBJ_B_COUNT) {
         return &g_bg_b_tiles[(size_t)(CHAMP_OBJ_B_OFFSET_TILES + (tile - CHAMP_OBJ_B_FIRST)) * 64u];
+    }
+    const champ_half_pieces* hp = assets_champ_half(half);
+    if (hp != NULL && hp->has_gears_obj_tiles
+        && tile >= CHAMP_OBJ_GEARS_FIRST && tile < CHAMP_OBJ_GEARS_FIRST + CHAMP_OBJ_GEARS_COUNT) {
+        return &g_obj_gears_tiles[(size_t)(tile - CHAMP_OBJ_GEARS_FIRST) * 64u];
     }
     if (tile >= CHAMP_OBJ_FONT_FIRST && tile < CHAMP_OBJ_FONT_FIRST + CHAMP_OBJ_FONT_COUNT) {
         return &g_obj_font_tiles[(size_t)(tile - CHAMP_OBJ_FONT_FIRST) * 64u];
@@ -184,6 +238,7 @@ static void validate_half_registers(int half) {
     uint8_t exp_bg1sc = (half == 0) ? 0x00u : 0x40u;
     uint8_t exp_bg2sc = (half == 0) ? 0x04u : 0x44u;
     uint8_t exp_bg12nba = (half == 0) ? 0x11u : 0x55u;
+    uint8_t tm = rd8(dp + 0xBCu);
 
     if (rd16(dp + 0x9Cu) != 0u
         || bg1_vofs < -1 || bg1_vofs > 39
@@ -199,7 +254,7 @@ static void validate_half_registers(int half) {
         || rd8(dp + 0xB8u) != exp_bg12nba
         || rd8(dp + 0xBAu) != 0x00u
         || rd8(dp + 0xBBu) != 0x00u
-        || rd8(dp + 0xBCu) != 0x13u
+        || (tm != 0x12u && tm != 0x13u)
         || rd8(dp + 0xBDu) != 0x00u
         || rd8(dp + 0xBEu) != 0x00u
         || rd8(dp + 0xBFu) != 0x00u
@@ -290,7 +345,9 @@ static void validate_half_maps(int half, const champ_half_pieces* hp) {
                 uint16_t pal = (e1 >> 10) & 7u;
                 bool prio = (e1 & 0x2000u) != 0u;
                 bool vflip = (e1 & 0x8000u) != 0u;
-                if (tile < 256u || tile > 350u || pal != 2u || prio || vflip) {
+                bool ok_fire = (tile >= 256u && tile <= 350u && pal == 2u && !prio && !vflip);
+                bool ok_ctrl = (tile >= 172u && tile <= 238u && pal == 0u && !prio && !vflip);
+                if (!ok_fire && !ok_ctrl) {
                     char msg[96];
                     snprintf(msg, sizeof(msg), "champ: unexpected BG1 entry 0x%04X in half %d",
                              (unsigned)e1, half);
@@ -303,6 +360,7 @@ static void validate_half_maps(int half, const champ_half_pieces* hp) {
                 uint16_t tile = e2 & 0x03FFu;
                 uint16_t pal = (e2 >> 10) & 7u;
                 bool prio = (e2 & 0x2000u) != 0u;
+                bool hflip = (e2 & 0x4000u) != 0u;
                 bool vflip = (e2 & 0x8000u) != 0u;
                 bool is_noise = (tile >= CHAMP_BG_NOISE_FIRST
                                  && tile < CHAMP_BG_NOISE_FIRST + CHAMP_BG_NOISE_COUNT);
@@ -321,7 +379,9 @@ static void validate_half_maps(int half, const champ_half_pieces* hp) {
                         port_fatal(msg);
                     }
                 } else {
-                    if (tile == 0u || tile > 255u || pal > 1u || vflip) {
+                    bool ok_vflip = !vflip
+                        || (pal == 1u && !prio && !hflip && tile >= 32u && tile <= 204u);
+                    if (tile == 0u || tile > 255u || pal > 1u || !ok_vflip) {
                         char msg[96];
                         snprintf(msg, sizeof(msg), "champ: unexpected BG2 entry 0x%04X in half %d",
                                  (unsigned)e2, half);
@@ -399,7 +459,7 @@ static void draw_half_bg1(int half, const champ_half_pieces* hp, uint32_t* fb,
 }
 
 static void draw_half_objects(int half, uint32_t* fb, const uint32_t pal_rgba[256],
-                              int y_start, int y_end) {
+                              int y_start, int y_end, bool want_front) {
     uint16_t dp = (half == 0) ? 0x0100u : 0x0200u;
     uint16_t oam_low = rd16(dp + 0x6Eu);
     if (half == 0) {
@@ -430,8 +490,18 @@ static void draw_half_objects(int half, uint32_t* fb, const uint32_t pal_rgba[25
         uint16_t prio = (attr >> 4) & 3u;
         bool hflip = (attr & 0x40u) != 0u;
         bool vflip = (attr & 0x80u) != 0u;
-        const uint8_t* pixels = champ_obj_tile_pixels(tile);
-        if (is_large || pixels == NULL || pal > 1u || prio != 0u) {
+
+        bool tiles_ok = false;
+        if (!is_large) {
+            tiles_ok = (champ_obj_tile_pixels(half, tile) != NULL);
+        } else {
+            tiles_ok = ((tile & 0x000Fu) < 0x000Fu)
+                && (champ_obj_tile_pixels(half, tile) != NULL)
+                && (champ_obj_tile_pixels(half, (uint16_t)(tile + 1u)) != NULL)
+                && (champ_obj_tile_pixels(half, (uint16_t)(tile + 16u)) != NULL)
+                && (champ_obj_tile_pixels(half, (uint16_t)(tile + 17u)) != NULL);
+        }
+        if (!tiles_ok || pal > 2u || (prio != 0u && prio != 2u && prio != 3u)) {
             char msg[96];
             snprintf(msg, sizeof(msg),
                      "champ: unexpected OAM sprite %d in half %d (tile %u attr 0x%02X hi %u)",
@@ -439,23 +509,31 @@ static void draw_half_objects(int half, uint32_t* fb, const uint32_t pal_rgba[25
             port_fatal(msg);
         }
 
+        bool is_front = (prio >= 2u);
+        if (is_front != want_front) {
+            continue;
+        }
+
         int x9 = (int)(x_lo | ((uint16_t)(hi & 1u) << 8));
         int ox = (x9 >= 256) ? (x9 - 512) : x9;
         int oy = (int)y_raw;
+        int dim = is_large ? 16 : 8;
 
-        for (int py = 0; py < 8; ++py) {
+        for (int py = 0; py < dim; ++py) {
             int sy = oy + py;
             if (sy < y_start || sy >= y_end) {
                 continue;
             }
-            int ty = vflip ? (7 - py) : py;
-            for (int px = 0; px < 8; ++px) {
+            int fy = vflip ? (dim - 1 - py) : py;
+            for (int px = 0; px < dim; ++px) {
                 int sx = ox + px;
                 if (sx < 0 || sx >= SCREEN_WIDTH) {
                     continue;
                 }
-                int tx = hflip ? (7 - px) : px;
-                uint8_t p = pixels[ty * 8 + tx];
+                int fx = hflip ? (dim - 1 - px) : px;
+                uint16_t sub_tile = (uint16_t)(tile + (uint16_t)((fy >> 3) * 16) + (uint16_t)(fx >> 3));
+                const uint8_t* pixels = champ_obj_tile_pixels(half, sub_tile);
+                uint8_t p = pixels[(fy & 7) * 8 + (fx & 7)];
                 if (p != 0u) {
                     fb[sy * SCREEN_WIDTH + sx] = pal_rgba[128u + pal * 16u + p];
                 }
@@ -523,11 +601,15 @@ void champ_screen_draw(uint32_t* fb) {
         validate_half_maps(half, hp);
 
         uint16_t pal_base = (half == 0) ? 0x0500u : 0x0700u;
-        if (rd16(pal_base) != 0u
-            || rd16(pal_base + 0x0102u) != 0x0E03u
-            || rd16(pal_base + 0x0104u) != 0x0040u
-            || rd16(pal_base + 0x0106u) != 0x109Fu
-            || rd16(pal_base + 0x0108u) != 0x0000u) {
+        uint16_t w102 = rd16(pal_base + 0x0102u);
+        uint16_t w104 = rd16(pal_base + 0x0104u);
+        uint16_t w106 = rd16(pal_base + 0x0106u);
+        uint16_t w108 = rd16(pal_base + 0x0108u);
+        bool pal_ok = (rd16(pal_base) == 0u && w108 == 0x0000u)
+            && ((w102 == 0x0E03u && w104 == 0x0040u && w106 == 0x109Fu)
+                || (w102 == 0x0FFFu && w104 == 0x018Cu && w106 == 0x109Fu)
+                || (w102 == 0x0FFFu && w104 == 0x0042u && w106 == 0x14BFu));
+        if (!pal_ok) {
             char msg[96];
             snprintf(msg, sizeof(msg), "champ: unexpected palette block at $%04X in half %d",
                      (unsigned)pal_base, half);
@@ -539,6 +621,9 @@ void champ_screen_draw(uint32_t* fb) {
             pal_rgba[i] = convert_color(rd16((uint32_t)pal_base + i * 2u));
         }
 
+        uint16_t dp = (half == 0) ? 0x0100u : 0x0200u;
+        bool bg1_enabled = (rd8(dp + 0xBCu) == 0x13u);
+
         /* 1. Backdrop */
         uint32_t backdrop = pal_rgba[0];
         for (int i = y_start * SCREEN_WIDTH; i < y_end * SCREEN_WIDTH; ++i) {
@@ -548,16 +633,21 @@ void champ_screen_draw(uint32_t* fb) {
         /* 2. BG2 priority-0 tiles (per-line vertical offset from $1B00) */
         draw_half_bg2(half, hp, fb, pal_rgba, bg2_vofs, y_start, y_end, false);
 
-        /* 3. BG1 priority-0 tiles (fire band) */
-        draw_half_bg1(half, hp, fb, pal_rgba, y_start, y_end);
+        /* 3. BG1 priority-0 tiles (fire band or control diagram, when BG1 is enabled in TM) */
+        if (bg1_enabled) {
+            draw_half_bg1(half, hp, fb, pal_rgba, y_start, y_end);
+        }
 
-        /* 4. Objects (priority 0, clipped to this half's band) */
-        draw_half_objects(half, fb, pal_rgba, y_start, y_end);
+        /* 4. Priority-0 objects (behind BG2 priority 1, clipped to this half's band) */
+        draw_half_objects(half, fb, pal_rgba, y_start, y_end, false);
 
         /* 5. BG2 priority-1 tiles (per-line vertical offset from $1B00) */
         draw_half_bg2(half, hp, fb, pal_rgba, bg2_vofs, y_start, y_end, true);
 
-        /* 6. Half brightness */
+        /* 6. Priority-2 and priority-3 objects (in front of BG2 priority 1, clipped to band) */
+        draw_half_objects(half, fb, pal_rgba, y_start, y_end, true);
+
+        /* 7. Half brightness */
         apply_half_brightness(fb, y_start, y_end, b);
     }
 }

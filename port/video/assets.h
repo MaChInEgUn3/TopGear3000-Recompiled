@@ -45,6 +45,10 @@ typedef enum {
     ASSET_CHAMP_OBJ_GRAPHICS,   /* $87:86BE, 5120 B (160 4bpp tiles: OBJ 340..499) */
     ASSET_CHAMP_BG_TILES_A,     /* $8F:83CC, 960 B (30 4bpp tiles: BG 0..29) */
     ASSET_CHAMP_BG_OBJ_TILES_B, /* $98:8000, 10208 B (319 4bpp tiles: BG 32..350 and OBJ 0..94) */
+    ASSET_CHAMP_NAME_BG_TILES,  /* $8C:8000, 5536 B (173 4bpp tiles: NAME entry BG 32..204) */
+    ASSET_CHAMP_CTRL_BG_TILES,  /* $9F:8000, 6624 B (207 4bpp tiles: CONTROL BG 32..238) */
+    ASSET_CHAMP_GEARS_BG_TILES, /* $8C:8B54, 5312 B (166 4bpp tiles: SPEED/GEARS BG 32..197) */
+    ASSET_CHAMP_GEARS_OBJ_TILES,/* $87:898E, 1536 B (48 4bpp tiles: SPEED/GEARS OBJ 208..255) */
     ASSET_COUNT
 } asset_id;
 
@@ -106,6 +110,7 @@ bool assets_title_objs_loaded(void);
 #define CHAMP_MAP_BYTES 2048u
 #define CHAMP_FIRE_BAND_BYTES 512u
 #define CHAMP_PANEL_ROWS_BYTES 896u
+#define CHAMP_SUBMENU_PATCH_BYTES 512u
 #define CHAMP_NOISE_TILES_BYTES 512u
 
 typedef struct {
@@ -114,6 +119,8 @@ typedef struct {
     bool has_fire_band;
     bool has_bg2_panel_rows;
     bool has_noise_tiles;
+    bool has_gears_obj_tiles;
+    int bg_b_asset;
     uint32_t noise_gen;
     uint8_t bg1_map[CHAMP_MAP_BYTES];
     uint8_t bg2_map[CHAMP_MAP_BYTES];

@@ -57,6 +57,10 @@ static asset_entry g_assets[ASSET_COUNT] = {
     [ASSET_CHAMP_OBJ_GRAPHICS] = {"CHAMP_OBJ_GRAPHICS", 0x8786BEu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_CHAMP_BG_TILES_A] = {"CHAMP_BG_TILES_A", 0x8F83CCu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_CHAMP_BG_OBJ_TILES_B] = {"CHAMP_BG_OBJ_TILES_B", 0x988000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_CHAMP_NAME_BG_TILES] = {"CHAMP_NAME_BG_TILES", 0x8C8000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_CHAMP_CTRL_BG_TILES] = {"CHAMP_CTRL_BG_TILES", 0x9F8000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_CHAMP_GEARS_BG_TILES] = {"CHAMP_GEARS_BG_TILES", 0x8C8B54u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_CHAMP_GEARS_OBJ_TILES] = {"CHAMP_GEARS_OBJ_TILES", 0x87898Eu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
 };
 
 static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1, -1};
@@ -295,6 +299,9 @@ void assets_note_source(uint32_t rom) {
                 g_champ_streams_mask[half] = 0u;
                 memset(&g_champ_half[half], 0, sizeof(g_champ_half[half]));
             }
+            if (i == 4u) {
+                g_champ_half[half].bg_b_asset = ASSET_CHAMP_BG_OBJ_TILES_B;
+            }
             g_champ_streams_mask[half] |= (uint8_t)(1u << i);
             return;
         }
@@ -303,6 +310,14 @@ void assets_note_source(uint32_t rom) {
        clear championship loaded state so other $B97B screens are not misidentified. */
     memset(g_champ_streams_mask, 0, sizeof(g_champ_streams_mask));
     memset(g_champ_half, 0, sizeof(g_champ_half));
+}
+
+static bool match_champ_wram_asset(uint16_t addr, int id) {
+    size_t sz = g_assets[id].size;
+    if (sz == 0u || (uint32_t)addr + sz > 0x10000u) {
+        return false;
+    }
+    return fnv1a_32(&g_ram[0x10000u + (uint32_t)addr], sz) == g_assets[id].hash;
 }
 
 static bool capture_champ_piece(uint32_t src, uint32_t size) {
@@ -331,6 +346,32 @@ static bool capture_champ_piece(uint32_t src, uint32_t size) {
     if (rel == 0x0800u && size == CHAMP_PANEL_ROWS_BYTES) {
         memcpy(hp->bg2_panel_rows, ptr, CHAMP_PANEL_ROWS_BYTES);
         hp->has_bg2_panel_rows = true;
+        return true;
+    }
+    if (rel == 0x08C4u && size == CHAMP_SUBMENU_PATCH_BYTES) {
+        memcpy(&hp->bg2_map[0x00C4u], ptr, CHAMP_SUBMENU_PATCH_BYTES);
+        memcpy(&hp->bg2_panel_rows[0x00C4u], ptr, CHAMP_SUBMENU_PATCH_BYTES);
+        return true;
+    }
+    if (rel == 0x2000u) {
+        static const int sub_bg_ids[3] = {
+            ASSET_CHAMP_NAME_BG_TILES,
+            ASSET_CHAMP_CTRL_BG_TILES,
+            ASSET_CHAMP_GEARS_BG_TILES,
+        };
+        for (int i = 0; i < 3; ++i) {
+            if (match_champ_wram_asset(addr, sub_bg_ids[i])) {
+                hp->bg_b_asset = sub_bg_ids[i];
+                return true;
+            }
+        }
+    }
+    if (rel == 0x2800u && match_champ_wram_asset(addr, ASSET_CHAMP_BG_OBJ_TILES_B)) {
+        hp->bg_b_asset = ASSET_CHAMP_BG_OBJ_TILES_B;
+        return true;
+    }
+    if (rel == 0x4000u && match_champ_wram_asset(addr, ASSET_CHAMP_GEARS_OBJ_TILES)) {
+        hp->has_gears_obj_tiles = true;
         return true;
     }
     if (rel == 0x0000u && size == CHAMP_NOISE_TILES_BYTES) {

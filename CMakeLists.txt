@@ -277,6 +277,27 @@ set_tests_properties(game_picture_champ_menu PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# The championship submenus reached with explore_menu.txt (offset 150): NAME entry ($80:C6D4,
+# port frame 4648 = bench frame_04801.png, 0 of 57,344 pixels different) and CONTROL ($80:CB4A,
+# port frame 5033 = bench frame_05186.png, 0 of 57,344 pixels different).
+add_test(NAME game_picture_champ_name
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_menu.txt --movie-offset 150 --fast --frames 4650 --shot 4648 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_champ_name PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 4648 picture hash 535429c768b6b085 brightness 15 drawn champ"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+add_test(NAME game_picture_champ_controls
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_menu.txt --movie-offset 150 --fast --frames 5035 --shot 5033 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_champ_controls PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 5033 picture hash fa3442e3f08884b4 brightness 15 drawn champ"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu game_picture_results game_picture_intro_zoom PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77

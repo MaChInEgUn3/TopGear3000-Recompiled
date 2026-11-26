@@ -690,7 +690,26 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
     counts in RAM sum to `112` or `104`); `champ_screen.c` recovers the active frame's entry 0
     (`cnt0 -/+ 4`, `val0 +/- 4`) so the three segments sum to the half's 108 lines.
 - **Tests:** `game_main_movie_to_champ` (moment 0, port frame 3191), `game_picture_champ_menu`
-  (moment 1, port frame 4214).
+  (moment 1, port frame 4214), `game_picture_champ_name` (`explore_menu.txt` offset 150, NAME
+  entry `$80:C6D4`, port frame 4648 against `frame_04801.png`, `0` of `57,344` pixels different;
+  port frame 4348 against `frame_04501.png` and port frame 4649 against `frame_04802.png` also
+  `0` of `57,344` pixels different), `game_picture_champ_controls` (`explore_menu.txt` offset 150,
+  CONTROL submenu `$80:CB4A`, port frame 5033 against `frame_05186.png`, `0` of `57,344` pixels
+  different).
+- **Submenus (`champ_name_entry` `$80:C6D4`, `champ_controls` `$80:CB4A`, `champ_gears` `$80:CEE2`,
+  and `champ_menu_back` `$80:C506`):**
+  - Four additional cartridge blocks are unpacked and converted once at start-up and recognised by
+    content hash when queued from `$7F:(base + $2000)` / `$2800` / `$4000`:
+    `$8C:8000` (`CHAMP_NAME_BG_TILES`, 173 4bpp BG tiles `32..204`),
+    `$9F:8000` (`CHAMP_CTRL_BG_TILES`, 207 4bpp BG tiles `32..238`),
+    `$8C:8B54` (`CHAMP_GEARS_BG_TILES`, 166 4bpp BG tiles `32..197`), and
+    `$87:898E` (`CHAMP_GEARS_OBJ_TILES`, 48 4bpp OBJ tiles `208..255`).
+  - The 512-byte BG2 panel patch from `$7F:(base + $08C4)` updates byte offset `$00C4` (rows
+    `3..10`, cols `2..29`) of the half's BG2 map; in NAME entry and SPEED/GEARS, `TM = 0x12`
+    disables BG1; in CONTROL (`TM = 0x13`), the 512-byte upload from `$7F:(base + $11C0)` sets
+    BG1 rows `3..10` to tiles `172..238` (palette 0).
+  - Submenu objects use 8x8 and 16x16 (`is_large`) sprites in palettes `0..2` with priorities `2`
+    and `3` (drawn in front of BG2 priority-1 shutter tiles).
 - **Open:** during the opening slide the bottom half runs 2 frames behind the top half compared
   with the original (each half alone is exact). The cause is in the order of the two-task
   hand-off (`port/platform/frame.c`), not in the drawing; to be checked against the decomp's
