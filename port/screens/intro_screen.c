@@ -251,17 +251,9 @@ bool intro_screen_active(void) {
 }
 
 void intro_screen_draw(uint32_t* fb) {
-    uint8_t b_raw = rd8(0x019Bu);
-    if ((b_raw & 0x70u) != 0u) {
-        char msg[96];
-        snprintf(msg, sizeof(msg), "intro: unexpected brightness byte 0x%02X", (unsigned)b_raw);
-        port_fatal(msg);
-    }
-    uint8_t b = ((b_raw & 0x80u) != 0u) ? 0u : (b_raw & 0x0Fu);
+    uint8_t b = screen_decode_brightness("intro", rd8(0x019Bu));
     if (b == 0u) {
-        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
-            fb[i] = 0xFF000000u;
-        }
+        screen_apply_brightness(fb, 0u);
         return;
     }
 
@@ -291,14 +283,6 @@ void intro_screen_draw(uint32_t* fb) {
     /* 5. Mode 1 BG2 priority-1 text (lines 184..223) */
     draw_intro_bg2_text(fb, pal_rgba, true);
 
-    /* 5. Brightness */
-    if (b < 15u) {
-        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
-            uint32_t px = fb[i];
-            uint32_t r = (((px >> 16) & 0xFFu) * b * 17u) >> 8;
-            uint32_t g = (((px >> 8) & 0xFFu) * b * 17u) >> 8;
-            uint32_t bl = ((px & 0xFFu) * b * 17u) >> 8;
-            fb[i] = 0xFF000000u | (r << 16) | (g << 8) | bl;
-        }
-    }
+    /* 6. Brightness */
+    screen_apply_brightness(fb, b);
 }

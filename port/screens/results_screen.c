@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "assets.h"
 #include "convert.h"
@@ -30,19 +31,22 @@
 #define RESULTS_TEXT_128_COUNT 39u
 #define RESULTS_TEXT_256_FIRST_TILE 256u
 #define RESULTS_TEXT_256_COUNT 186u
-#define RESULTS_CURSOR_FIRST_TILE 256u
-#define RESULTS_CURSOR_COUNT 6u
 #define RESULTS_CURSOR_WORDS 97u
 #define RESULTS_STARS_FIRST_TILE 320u
 #define RESULTS_STARS_COUNT 15u
 
 #define RESULTS_TEXT_BLANK_ENTRY 0x003Du
 #define RESULTS_TEXT_PAL_MASK ((uint8_t)((1u << 0) | (1u << 1) | (1u << 6) | (1u << 7)))
-#define RESULTS_BG2_MAP_SHIFT 9
+/* results_screen_load calls video_load_screen_long(0x8A9D31) (HOFS 0) then video_set_bg2_vofs(8)
+   directly; no RAM copy of BG2 scroll exists for this screen. */
+#define RESULTS_BG2_HOFS 0
+#define RESULTS_BG2_VOFS 8
+#define RESULTS_BG2_MAP_SHIFT (RESULTS_BG2_VOFS + 1)
 
 #define RESULTS_OAM_LOW_BASE 0x0900u
 #define RESULTS_OAM_HIGH_BASE 0x0B00u
 #define RESULTS_SPRITE_COUNT 128u
+#define RESULTS_MAX_SPRITES_PER_LINE 32u
 #define RESULTS_OBJ_PAL 0u
 #define RESULTS_OBJ_PRIO 0u
 
@@ -58,7 +62,6 @@ static uint32_t g_cursor_gen = 0;
 static uint32_t g_stars_gen = 0;
 static uint8_t g_text128_tiles[RESULTS_TEXT_128_COUNT * 64u];
 static uint8_t g_text256_tiles[RESULTS_TEXT_256_COUNT * 64u];
-static uint8_t g_cursor_tiles[RESULTS_CURSOR_COUNT * 64u];
 static uint8_t g_stars_tiles[RESULTS_STARS_COUNT * 64u];
 
 static void results_build_once(void) {
@@ -83,14 +86,18 @@ static void results_build_once(void) {
     if (t256_raw == NULL || t256_size != RESULTS_TEXT_256_COUNT * 32u) {
         port_fatal("results: unexpected PASSWORD_TEXT_DRAWINGS size");
     }
-    convert_tiles_4bpp(t256_raw, RESULTS_TEXT_256_COUNT, g_text256_tiles);
 
     size_t cur_size = 0;
     const uint8_t* cur_raw = asset_bytes(ASSET_MENU_CURSOR_DRAWINGS, &cur_size);
     if (cur_raw == NULL || cur_size != RESULTS_CURSOR_WORDS * 2u) {
         port_fatal("results: unexpected MENU_CURSOR_DRAWINGS size");
     }
-    convert_tiles_4bpp(cur_raw, RESULTS_CURSOR_COUNT, g_cursor_tiles);
+    /* The 97-word (194-byte) cursor run overwrites the start of the $88:8601 font area,
+       including the first 2 bytes of tile 262. */
+    uint8_t text256_raw[RESULTS_TEXT_256_COUNT * 32u];
+    memcpy(text256_raw, t256_raw, RESULTS_TEXT_256_COUNT * 32u);
+    memcpy(text256_raw, cur_raw, RESULTS_CURSOR_WORDS * 2u);
+    convert_tiles_4bpp(text256_raw, RESULTS_TEXT_256_COUNT, g_text256_tiles);
 
     size_t star_size = 0;
     const uint8_t* star_raw = asset_bytes(ASSET_RESULTS_STARS_DRAWINGS, &star_size);
@@ -123,11 +130,7 @@ static const uint8_t* results_text_tile_pixels(uint16_t tile) {
         && tile < RESULTS_TEXT_128_FIRST_TILE + RESULTS_TEXT_128_COUNT) {
         return &g_text128_tiles[(size_t)(tile - RESULTS_TEXT_128_FIRST_TILE) * 64u];
     }
-    if (tile >= RESULTS_CURSOR_FIRST_TILE
-        && tile < RESULTS_CURSOR_FIRST_TILE + RESULTS_CURSOR_COUNT) {
-        return &g_cursor_tiles[(size_t)(tile - RESULTS_CURSOR_FIRST_TILE) * 64u];
-    }
-    if (tile >= RESULTS_TEXT_256_FIRST_TILE + RESULTS_CURSOR_COUNT
+    if (tile >= RESULTS_TEXT_256_FIRST_TILE
         && tile < RESULTS_TEXT_256_FIRST_TILE + RESULTS_TEXT_256_COUNT) {
         return &g_text256_tiles[(size_t)(tile - RESULTS_TEXT_256_FIRST_TILE) * 64u];
     }
@@ -158,10 +161,8 @@ static void draw_results_bg2(uint32_t* fb, bool want_prio, const uint8_t sub_ban
         unsigned band = (y < (int)RESULTS_COLDATA_FIRST_LINES)
                             ? 0u
                             : (1u + (unsigned)(y - (int)RESULTS_COLDATA_FIRST_LINES) / RESULTS_COLDATA_BAND_LINES);
-        if (band >= RESULTS_COLDATA_TOTAL_BANDS) {
-            band = RESULTS_COLDATA_TOTAL_BANDS - 1u;
-        }
-        uint8_t sub_n = sub_band[band];
+        /* Bands 0..21 cover lines 0..221; lines 222..223 have no change (terminator at $0D2C). */
+        uint8_t sub_n = (band < RESULTS_COLDATA_TOTAL_BANDS) ? sub_band[band] : 0u;
         int my = (y + RESULTS_BG2_MAP_SHIFT) & 255;
         int row = my / 8;
         int py = my & 7;
@@ -180,9 +181,13 @@ static void draw_results_bg2(uint32_t* fb, bool want_prio, const uint8_t sub_ban
             uint16_t pal = (entry >> 10) & 7u;
             bool vflip = (entry & 0x8000u) != 0;
             const uint8_t* pixels = results_text_tile_pixels(tile);
+            if (pixels == NULL) {
+                port_fatal("results: unexpected null text tile pixels");
+            }
             int ty = vflip ? (7 - py) : py;
 
             for (int px = 0; px < 8; ++px) {
+                int sx = (col * 8 + px - RESULTS_BG2_HOFS) & 255;
                 uint8_t p = pixels[ty * 8 + px];
                 if (p != 0u) {
                     uint16_t bgr = palette_get((uint8_t)(pal * 16u + p));
@@ -195,7 +200,7 @@ static void draw_results_bg2(uint32_t* fb, bool want_prio, const uint8_t sub_ban
                         b5 = (b5 > sub_n) ? (b5 - sub_n) : 0u;
                         bgr = (uint16_t)(r5 | (g5 << 5) | (b5 << 10));
                     }
-                    dst_row[col * 8 + px] = convert_color(bgr);
+                    dst_row[sx] = convert_color(bgr);
                 }
             }
         }
@@ -203,11 +208,17 @@ static void draw_results_bg2(uint32_t* fb, bool want_prio, const uint8_t sub_ban
 }
 
 static void draw_results_objects(uint32_t* fb, const uint32_t pal_rgba[256]) {
+    unsigned line_counts[SCREEN_HEIGHT] = {0};
     for (int i = (int)RESULTS_SPRITE_COUNT - 1; i >= 0; --i) {
         uint32_t lo_addr = RESULTS_OAM_LOW_BASE + (uint32_t)i * 4u;
         uint8_t x_lo = rd8(lo_addr);
         uint8_t y_raw = rd8(lo_addr + 1u);
-        if (y_raw >= SCREEN_HEIGHT) {
+        if (y_raw > SCREEN_HEIGHT) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "results: unexpected OAM sprite %d y=%u", i, (unsigned)y_raw);
+            port_fatal(msg);
+        }
+        if (y_raw == SCREEN_HEIGHT) {
             continue;
         }
         uint8_t tile_lo = rd8(lo_addr + 2u);
@@ -240,6 +251,13 @@ static void draw_results_objects(uint32_t* fb, const uint32_t pal_rgba[256]) {
             if (sy < 0 || sy >= SCREEN_HEIGHT) {
                 continue;
             }
+            line_counts[sy]++;
+            if (line_counts[sy] > RESULTS_MAX_SPRITES_PER_LINE) {
+                char msg[96];
+                snprintf(msg, sizeof(msg), "results: more than %u sprites on line %d",
+                         RESULTS_MAX_SPRITES_PER_LINE, sy);
+                port_fatal(msg);
+            }
             for (int px = 0; px < 8; ++px) {
                 int sx = ox + px;
                 if (sx < 0 || sx >= SCREEN_WIDTH) {
@@ -263,22 +281,46 @@ bool results_screen_active(void) {
         && asset_current(ROLE_BG_ARRANGEMENT) == -1;
 }
 
-void results_screen_draw(uint32_t* fb) {
-    uint8_t b_raw = rd8(0x019Bu);
-    if ((b_raw & 0x70u) != 0u) {
-        char msg[96];
-        snprintf(msg, sizeof(msg), "results: unexpected brightness byte 0x%02X", (unsigned)b_raw);
-        port_fatal(msg);
-    }
-    uint8_t b = ((b_raw & 0x80u) != 0u) ? 0u : (b_raw & 0x0Fu);
-    if (b == 0u) {
-        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
-            fb[i] = 0xFF000000u;
+static void validate_results_palette(void) {
+    static const struct {
+        unsigned first;
+        unsigned count;
+    } ranges[] = {
+        {0u, 32u},   /* BG2 palettes 0 and 1 */
+        {96u, 32u},  /* BG2 palettes 6 and 7 */
+        {128u, 16u}, /* OBJ palette 0 */
+    };
+    for (size_t r = 0; r < sizeof(ranges) / sizeof(ranges[0]); ++r) {
+        for (unsigned i = 0; i < ranges[r].count; ++i) {
+            uint8_t idx = (uint8_t)(ranges[r].first + i);
+            palette_source s = palette_source_of(idx);
+            if (s != PAL_SRC_RESULTS_TEXT_0 && s != PAL_SRC_RESULTS_PAL_1
+                && s != PAL_SRC_RESULTS_TEXT_6_7 && s != PAL_SRC_RESULTS_STARS_OBJ) {
+                char msg[96];
+                snprintf(msg, sizeof(msg), "results: colour %u did not come from a results palette block",
+                         (unsigned)idx);
+                port_fatal(msg);
+            }
         }
+    }
+}
+
+void results_screen_draw(uint32_t* fb) {
+    uint8_t b = screen_decode_brightness("results", rd8(0x019Bu));
+    if (b == 0u) {
+        screen_apply_brightness(fb, 0u);
         return;
     }
 
     results_build_once();
+
+    if (palette_get(0u) != 0u) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "results: unexpected backdrop colour 0x%04X",
+                 (unsigned)palette_get(0u));
+        port_fatal(msg);
+    }
+    validate_results_palette();
 
     uint8_t sub_band[RESULTS_COLDATA_TOTAL_BANDS];
     if (rd8(0x0D00u) != RESULTS_COLDATA_FIRST_LINES || rd8(0x0D2Cu) != 0x00u) {
@@ -315,13 +357,5 @@ void results_screen_draw(uint32_t* fb) {
     draw_results_bg2(fb, true, sub_band);
 
     /* 5. Brightness */
-    if (b < 15u) {
-        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
-            uint32_t px = fb[i];
-            uint32_t r = (((px >> 16) & 0xFFu) * b * 17u) >> 8;
-            uint32_t g = (((px >> 8) & 0xFFu) * b * 17u) >> 8;
-            uint32_t bl = ((px & 0xFFu) * b * 17u) >> 8;
-            fb[i] = 0xFF000000u | (r << 16) | (g << 8) | bl;
-        }
-    }
+    screen_apply_brightness(fb, b);
 }

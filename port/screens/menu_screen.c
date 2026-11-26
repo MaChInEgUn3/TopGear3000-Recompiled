@@ -740,18 +740,9 @@ void menu_screen_draw(int which, uint32_t* fb) {
 
     /* Brightness 0 or bit 7 set is black (the game also uses $7F:0000 as scratch while faded out).
        Bits 4..6 are unmeasured and must be zero. */
-    uint8_t b_raw = rd8(0x019Bu);
-    if ((b_raw & 0x70u) != 0u) {
-        char msg[96];
-        snprintf(msg, sizeof(msg), "%s: unexpected brightness byte 0x%02X", menu_screen_name(which),
-                 (unsigned)b_raw);
-        port_fatal(msg);
-    }
-    uint8_t b = ((b_raw & 0x80u) != 0u) ? 0u : (b_raw & 0x0Fu);
+    uint8_t b = screen_decode_brightness(menu_screen_name(which), rd8(0x019Bu));
     if (b == 0u) {
-        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
-            fb[i] = 0xFF000000u;
-        }
+        screen_apply_brightness(fb, 0u);
         return;
     }
 
@@ -762,15 +753,7 @@ void menu_screen_draw(int which, uint32_t* fb) {
 
     if (which == (int)MENU_SCREEN_COUNT) {
         vs_screen_draw(fb, pal_rgba);
-        if (b < 15u) {
-            for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
-                uint32_t px = fb[i];
-                uint32_t r = (((px >> 16) & 0xFFu) * b * 17u) >> 8;
-                uint32_t g = (((px >> 8) & 0xFFu) * b * 17u) >> 8;
-                uint32_t bl = ((px & 0xFFu) * b * 17u) >> 8;
-                fb[i] = 0xFF000000u | (r << 16) | (g << 8) | bl;
-            }
-        }
+        screen_apply_brightness(fb, b);
         return;
     }
 
@@ -903,14 +886,5 @@ void menu_screen_draw(int which, uint32_t* fb) {
     }
 
     /* 5. Brightness (b == 0 handled above) */
-    if (b < 15u) {
-        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
-            uint32_t px = fb[i];
-            /* linear in the game's brightness 0-15: b * 17 runs 0..255 */
-            uint32_t r = (((px >> 16) & 0xFFu) * b * 17u) >> 8;
-            uint32_t g = (((px >> 8) & 0xFFu) * b * 17u) >> 8;
-            uint32_t bl = ((px & 0xFFu) * b * 17u) >> 8;
-            fb[i] = 0xFF000000u | (r << 16) | (g << 8) | bl;
-        }
-    }
+    screen_apply_brightness(fb, b);
 }
