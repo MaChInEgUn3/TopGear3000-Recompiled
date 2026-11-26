@@ -47,6 +47,37 @@ static asset_entry g_assets[ASSET_COUNT] = {
 };
 
 static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1, -1};
+static bool g_intro_pieces_sent[INTRO_PIECE_COUNT];
+
+typedef struct {
+    uint32_t wram_bus;
+    uint32_t size;
+} intro_piece_desc;
+
+static const intro_piece_desc g_intro_pieces[INTRO_PIECE_COUNT] = {
+    [INTRO_PIECE_BG1_A]    = {0x7E2000u, 0x04A0u},
+    [INTRO_PIECE_BG1_B]    = {0x7E24A0u, 0x04A0u},
+    [INTRO_PIECE_SLICE_0]  = {0x7E3040u + 0u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_1]  = {0x7E3040u + 1u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_2]  = {0x7E3040u + 2u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_3]  = {0x7E3040u + 3u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_4]  = {0x7E3040u + 4u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_5]  = {0x7E3040u + 5u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_6]  = {0x7E3040u + 6u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_7]  = {0x7E3040u + 7u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_8]  = {0x7E3040u + 8u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_9]  = {0x7E3040u + 9u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_10] = {0x7E3040u + 10u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_11] = {0x7E3040u + 11u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_12] = {0x7E3040u + 12u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_13] = {0x7E3040u + 13u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_14] = {0x7E3040u + 14u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_SLICE_15] = {0x7E3040u + 15u * 0x0614u, 0x0614u},
+    [INTRO_PIECE_FRAME_0]  = {0x7E9180u, 0x0614u},
+    [INTRO_PIECE_FRAME_1]  = {0x7E9768u, 0x0614u},
+    [INTRO_PIECE_FRAME_2]  = {0x7E9D50u, 0x0614u},
+    [INTRO_PIECE_FRAME_3]  = {0x7EA338u, 0x0614u},
+};
 
 #define MAX_WORD_RUN_WORDS 2048u
 static uint8_t g_word_run_buf[MAX_WORD_RUN_WORDS * 2u];
@@ -200,6 +231,12 @@ void assets_note_upload(uint32_t src, uint32_t size) {
                 g_current[g_assets[i].role] = i;
             }
         }
+    } else {
+        for (int i = 0; i < INTRO_PIECE_COUNT; ++i) {
+            if (g_intro_pieces[i].wram_bus == src && g_intro_pieces[i].size == size) {
+                g_intro_pieces_sent[i] = true;
+            }
+        }
     }
 }
 
@@ -207,6 +244,14 @@ void assets_clear_loaded(void) {
     for (int r = 0; r < ROLE_COUNT; ++r) {
         g_current[r] = -1;
     }
+    memset(g_intro_pieces_sent, 0, sizeof(g_intro_pieces_sent));
+}
+
+bool assets_intro_piece_sent(intro_piece_id id) {
+    if ((int)id < 0 || (int)id >= INTRO_PIECE_COUNT) {
+        return false;
+    }
+    return g_intro_pieces_sent[id];
 }
 
 int asset_current(asset_role r) {

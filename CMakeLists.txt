@@ -195,6 +195,18 @@ set_tests_properties(game_regression_intro_settle PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# The intro screen (static lit title logo, $013E == 30) from the title/intro memory: port
+# frames 2298 and 2299 matched the original's pictures (steps 2700 and 2701, frame_02701.png
+# and frame_02702.png) pixel for pixel. Skipped where the local WRAM file is absent.
+add_test(NAME game_picture_intro_logo
+  COMMAND tg3000 --wram notes/opt/wram_before_title.bin --screen intro --fast --frames 2299 --shot 2298 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_intro_logo PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 2298 picture hash 757d5bd97fecbd24 brightness 15 drawn intro"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu game_picture_results game_picture_intro_zoom PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77

@@ -54,4 +54,32 @@ int asset_current(asset_role r);
 const uint8_t* asset_bytes(int id, size_t* size);
 uint32_t asset_generation(int id);
 
+typedef enum {
+    INTRO_PIECE_BG1_A = 0,   /* $7E:2000, 1184 bytes (BG1 tiles 16..52) */
+    INTRO_PIECE_BG1_B,       /* $7E:24A0, 1184 bytes (BG1 tiles 53..89) */
+    INTRO_PIECE_SLICE_0,     /* $7E:3040 + s * 0x0614, 1556 bytes (s = 0..15) */
+    INTRO_PIECE_SLICE_1,
+    INTRO_PIECE_SLICE_2,
+    INTRO_PIECE_SLICE_3,
+    INTRO_PIECE_SLICE_4,
+    INTRO_PIECE_SLICE_5,
+    INTRO_PIECE_SLICE_6,
+    INTRO_PIECE_SLICE_7,
+    INTRO_PIECE_SLICE_8,
+    INTRO_PIECE_SLICE_9,
+    INTRO_PIECE_SLICE_10,
+    INTRO_PIECE_SLICE_11,
+    INTRO_PIECE_SLICE_12,
+    INTRO_PIECE_SLICE_13,
+    INTRO_PIECE_SLICE_14,
+    INTRO_PIECE_SLICE_15,
+    INTRO_PIECE_FRAME_0,     /* $7E:9180, 1556 bytes */
+    INTRO_PIECE_FRAME_1,     /* $7E:9768, 1556 bytes */
+    INTRO_PIECE_FRAME_2,     /* $7E:9D50, 1556 bytes */
+    INTRO_PIECE_FRAME_3,     /* $7EA338, 1556 bytes */
+    INTRO_PIECE_COUNT
+} intro_piece_id;
+
+bool assets_intro_piece_sent(intro_piece_id id);
+
 #endif

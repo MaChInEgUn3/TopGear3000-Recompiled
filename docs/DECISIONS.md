@@ -465,6 +465,30 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   combined XOR, on that layer). Strict checks as elsewhere.
 - **Test:** `game_regression_intro_settle` locks the port's own output (not exactness).
 
+## The intro's phases 5-32 drawn natively (step 4, 2026-11-25)
+
+- **Identical to the original pixel for pixel at the lit title logo (`$013E` = 30):** port
+  frames 2298 and 2299 match the bench's pictures of steps 2700 and 2701 (`frame_02701.png`
+  and `frame_02702.png`) with 0 of 57,344 pixels different each.
+- **How, under the rule:** `port/screens/intro_screen.c`.
+  - **Logo buffer (`$7E:2000..$7E:C765`, unpacked from `$91:AB17`):** stays intact in game RAM
+    throughout the intro. When `video_upload_vram` sends a piece from `$7E:2000..`,
+    `port/video/assets.c` recognises it by its WRAM source address and size (never by VRAM
+    destination) and marks that named piece sent (`INTRO_PIECE_BG1_A`/`B`, `SLICE_0..15`,
+    `FRAME_0..3`; cleared by the 64 KB clear). `intro_screen.c` maps BG1 (`0..89`) and
+    subscreen BG2 (`0..777`) tile numbers to those pieces by fixed per-tile-range tables,
+    drawing a tile only if its piece has been sent and stopping on any out-of-range tile.
+  - **Colour cycle (`palette_fade_60`):** writes the cycled 16 colours of palette 6
+    (`0x60..0x6F`) into `$0500..$051E` and uploads them to CGRAM `0x60..0x6F`; CGRAM `1..15`
+    remain at `$89:84F2`.
+  - **Per-line effect (listed for the owner's veto): the intro's curved window.** From
+    `title_frame_tail` (`$0140 >= 0x015C`, `$0136 == 0x0800`), the repeat HDMA table at `$1500`
+    (`window_curve_build`) masks BG1 and main-screen OBJ while leaving subscreen BG2 and OBJ
+    unmasked, combined by additive colour math (`CGWSEL = 0x02`, `CGADSUB = 0x25`).
+  - **Stars:** from `title_mode7_setup` (`$013E >= 7`), `stars_draw` sets OBJ priority 2
+    (behind BG1/BG2 priority 1, in front of BG1/BG2 priority 0).
+- **Test:** `game_picture_intro_logo`.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
