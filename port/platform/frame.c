@@ -117,7 +117,7 @@ uint16_t dsp4_port_read16(void) {
 }
 
 void port_fatal(const char* what) {
-    fprintf(stderr, "FATAL: %s\n", what);
+    fprintf(stderr, "FATAL (frame %lu): %s\n", g_frame_count, what);
     if (getenv("TG3000_HEADLESS") == NULL) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Top Gear 3000", what, NULL);
     }
