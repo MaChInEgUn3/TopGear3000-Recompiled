@@ -57,4 +57,7 @@ void intro_screen_draw(uint32_t* fb);
 bool title_screen_active(void);
 void title_screen_draw(uint32_t* fb);
 
+bool champ_screen_active(void);
+void champ_screen_draw(uint32_t* fb);
+
 #endif

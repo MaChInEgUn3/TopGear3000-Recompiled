@@ -264,11 +264,25 @@ static void pump_events_and_input(void) {
     }
 }
 
+bool port_split_active(void) {
+    return g_split_active;
+}
+
+int port_current_task_half(void) {
+    if (g_split_active && SDL_GetCurrentThreadID() != g_task1_thread_id) {
+        return 1;
+    }
+    return 0;
+}
+
 static void present_frame(void) {
     bool active_intro = intro_screen_active();
     bool active_title = !active_intro && title_screen_active();
     bool active_results = !active_intro && !active_title && results_screen_active();
-    int active_menu = (active_intro || active_title || active_results) ? -1 : menu_screen_active();
+    bool active_champ = !active_intro && !active_title && !active_results && champ_screen_active();
+    int active_menu = (active_intro || active_title || active_results || active_champ)
+                          ? -1
+                          : menu_screen_active();
     const char* drawn_name = "none";
     if (active_intro) {
         intro_screen_draw(g_fb);
@@ -279,11 +293,14 @@ static void present_frame(void) {
     } else if (active_results) {
         results_screen_draw(g_fb);
         drawn_name = "results";
+    } else if (active_champ) {
+        champ_screen_draw(g_fb);
+        drawn_name = "champ";
     } else if (active_menu >= 0) {
         menu_screen_draw(active_menu, g_fb);
         drawn_name = menu_screen_name(active_menu);
     }
-    if (active_intro || active_title || active_results || active_menu >= 0) {
+    if (active_intro || active_title || active_results || active_champ || active_menu >= 0) {
         SDL_UpdateTexture(g_texture, NULL, g_fb, SCREEN_WIDTH * (int)sizeof(uint32_t));
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
         SDL_RenderClear(g_renderer);

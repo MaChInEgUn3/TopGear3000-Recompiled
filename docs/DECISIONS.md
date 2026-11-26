@@ -627,6 +627,77 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   needs `$0008 = $FC5F` (measured at frames 3165-3175 and 4322); the checks on lit menu frames
   are unchanged. Test `game_main_movie_to_champ` (championship lit at frame 3200, not drawn yet).
 
+## The championship drawn natively (step 4, 2026-11-26)
+
+- **The first two-task split screen (`$0008` = `$B97B`), reached from `game_main()` with
+  `autopilot_60k.txt` (offset 150):**
+  - **Moment 1 (settled menu, `NAME` / `CONTROL` / `SPEED` / `RACE`):** port frame 4067 matches
+    `frame_04365.png` (`0` of `57,344` pixels different) and port frame 4214 matches
+    `frame_04366.png` (`0` of `57,344` pixels different). Before the `Down` press at movie step
+    4360 (port frame 4212), the console's unthrottled `$80:C2BB` menu loop runs ~3 passes per
+    display frame while the decomp's `champ_menu` runs one pass per frame (`platform_wait_vblank`
+    at the end of each pass), so the 16-step cursor colour cycle (`dp+$1E`) advances at 1x speed
+    in the port until `Down` resets `dp+$1E = 0` on both sides.
+  - **Moment 0 (opening slide, no objects):** the top half (lines `0..107`) matches
+    `frame_03367.png` at port frame 3189 and `frame_03368.png` at port frame 3190 with `0` of
+    `27,648` pixels different each; the bottom half (lines `116..223`, plus the 8-line blanked
+    split gap `108..115`) matches `frame_03367.png` at port frame 3191 and `frame_03368.png` at
+    port frame 3192 with `0` of `29,696` pixels different each. The 2-frame phase difference
+    between the two halves during the opening slide comes from the split hand-off in
+    `platform_wait_vblank`: task 2 gets its first turn after frame 1's `irq_menu_frame_tail`
+    (`upload_slot_drain(0x0200)`), and after `wait_frames(0x0010)` task 2 sets its `$02EC =
+    $C5E0` frame hook after that frame's `task_frame_hook(0x0200)` has already run; once task 2's
+    shutter finishes opening 5 frames later, both halves stay in sync.
+- **How, under the rule (`port/screens/champ_screen.c`, `port/video/assets.c`):**
+  - **Screen recognition:** `$0008 == 0xB97B`, `port_split_active()`, and both halves have noted
+    all five unpacked ROM streams and captured their initial BG1 map, BG2 map, and fire band
+    frame. Any non-championship stream noted via `video_note_source` (or the 64 KB clear) clears
+    the championship state, so the shop and ticker (`$0008 == 0xB97B`) stay `drawn none`.
+  - **Unpacked ROM streams (`video_note_source`, moved from `ignored.c` to `video_events.c`):**
+    `$87:8190` (80 4bpp OBJ font tiles `256..335`), `$90:C320` (3 4bpp OBJ bar tiles `336..338`),
+    `$87:86BE` (160 4bpp OBJ tiles `340..499`), `$8F:83CC` (30 4bpp BG tiles `0..29`), and
+    `$98:8000` (319 4bpp tiles: BG tiles `32..350`, with the last 95 tiles at byte offset 7168
+    also serving OBJ tiles `0..94`) are unpacked and converted once at start-up, and marked
+    loaded per half by which task thread is running (`port_current_task_half()`), ignoring the
+    VRAM word.
+  - **Captured game-built `$7F` pieces per half (by offset from the task's `$7F` base
+    `$0000`/`$8000` and byte size, never read live from `$7F` at draw time):**
+    1. `bg1_map`: 2048 B from `base + $0000` (32x32 map).
+    2. `bg2_map`: 2048 B from `base + $0800` (32x32 map).
+    3. `fire_band`: 512 B from `base + $11C0 + k*$0200` (`k = 0..8`), patching rows `3..10` of
+       the half's BG1 map (tiles `256..350`, palette 2, priority 0).
+    4. `bg2_panel_rows`: 896 B from `base + $0800` (`champ_big_panel`), updating rows `0..13` of
+       the half's BG2 map.
+    5. `noise_tiles`: 512 B from `base + $0000` (`champ_noise_panels`), converted as 16 4bpp
+       BG2 noise tiles `352..367` (palette 3, priority 0).
+  - **Per-half layout, palettes, brightness, and objects:** top half (task 1, `DP = $0100`,
+    lines `0..107`) and bottom half (task 2, `DP = $0200`, lines `116..223`), separated by the
+    8-line blanked IRQ split gap (`lines 108..115`, forced blank during `irq_menu_frame`). Each
+    half validates its shadow register block (`$019C-$01C1` / `$029C-$02C1`: Mode 1, 8x8,
+    `TM = 0x13`, fixed map/tile bases, no windows, no colour math), reads its BG1 vertical
+    scroll (`$019E` top, `$029E - 0x74` bottom), reads its 256 colours from `$81:0500` (top) or
+    `$81:0700` (bottom), scales its band by its own brightness (`$019B` top, `$029B` bottom), and
+    draws its 8x8 priority-0 objects from its own OAM pointer (`$016E` in `{$0900, $0D00}` top,
+    `$026E` in `{$1100, $1500}` bottom), clipped to its band in Mode 1 priority order
+    (`backdrop -> BG2 prio 0 -> BG1 prio 0 -> OBJ prio 0 -> BG2 prio 1`).
+  - **Per-line effect (listed for the owner's veto): the championship BG2 panel shift
+    (`$81:1B00`).** The 22-byte table at `$81:1B00` holds two 3-entry direct 16-bit vertical
+    offset sub-tables (`$1B00..$1B08` for lines `0..107`, `$1B0C..$1B14` for lines `116..223`,
+    separated by the fixed 8-line gap `$1B09..$1B0B = 08 20 00` and terminated by `$1B15 = 00`),
+    stepped by `menu_bar_lines` and `menu_bar_lines_end`. When a bar is opening or closing,
+    `menu_bar_lines` writes entries 1 and 2 with the current frame's height `l`, then steps `l`
+    by `+/-4` before `menu_bar_lines_end` writes entry 0 for the next frame (so the three line
+    counts in RAM sum to `112` or `104`); `champ_screen.c` recovers the active frame's entry 0
+    (`cnt0 -/+ 4`, `val0 +/- 4`) so the three segments sum to the half's 108 lines.
+- **Tests:** `game_main_movie_to_champ` (moment 0, port frame 3191), `game_picture_champ_menu`
+  (moment 1, port frame 4214).
+- **Open:** during the opening slide the bottom half runs 2 frames behind the top half compared
+  with the original (each half alone is exact). The cause is in the order of the two-task
+  hand-off (`port/platform/frame.c`), not in the drawing; to be checked against the decomp's
+  two-task contract. The cursor glow before the first key press also cycles slower than on the
+  console (the console's menu loop runs several passes per frame); only the 4 letters of the
+  lit item differ.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

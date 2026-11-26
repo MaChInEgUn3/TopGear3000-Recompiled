@@ -67,6 +67,7 @@ add_executable(tg3000
   port/screens/results_screen.c
   port/screens/intro_screen.c
   port/screens/title_screen.c
+  port/screens/champ_screen.c
 )
 target_include_directories(tg3000 PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/port"
@@ -256,13 +257,23 @@ set_tests_properties(game_main_to_options PROPERTIES
   SKIP_RETURN_CODE 77
 )
 # The whole game with autopilot_60k.txt (offset 150) reaches the championship screen ($0008 = $B97B,
-# split active, lit at brightness 15 by frame 3200; picture not drawn yet).
+# split active): moment 0 (opening slide, port frame 3191) and moment 1 (settled menu, port frame
+# 4214 = bench frame_04366.png, 0 of 57,344 pixels different).
 add_test(NAME game_main_movie_to_champ
-  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --fast --frames 3205 --shot 3200 -
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --fast --frames 3195 --shot 3191 -
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 set_tests_properties(game_main_movie_to_champ PROPERTIES
-  PASS_REGULAR_EXPRESSION "frame 3200 picture hash [0-9a-f]+ brightness 15 drawn none"
+  PASS_REGULAR_EXPRESSION "frame 3191 picture hash c1d5f300daaddaad brightness 15 drawn champ"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+add_test(NAME game_picture_champ_menu
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --fast --frames 4216 --shot 4214 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_champ_menu PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 4214 picture hash 23aaa266fd1955f7 brightness 15 drawn champ"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

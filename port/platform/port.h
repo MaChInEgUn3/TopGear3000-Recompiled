@@ -33,5 +33,8 @@ void port_set_wram_out(unsigned long frame, const char* path);
 void port_set_fast(bool fast);
 /* Print a summary of the currently loaded sound set (slots, sizes, total PCM samples). */
 void port_sound_print_set_summary(void);
+/* Two-task split state: whether the split is active, and which task half (0=top, 1=bottom) is running. */
+bool port_split_active(void);
+int port_current_task_half(void);
 
 #endif

@@ -52,11 +52,18 @@ static asset_entry g_assets[ASSET_COUNT] = {
     [ASSET_TITLE_OBJ_1] = {"TITLE_OBJ_1", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_OBJ_DRAWINGS, 0, NULL, 0, 0, 0},
     [ASSET_TITLE_OBJ_2] = {"TITLE_OBJ_2", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_OBJ_DRAWINGS, 0, NULL, 0, 0, 0},
     [ASSET_TITLE_OBJ_3] = {"TITLE_OBJ_3", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_OBJ_DRAWINGS, 0, NULL, 0, 0, 0},
+    [ASSET_CHAMP_OBJ_FONT] = {"CHAMP_OBJ_FONT", 0x878190u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_CHAMP_OBJ_BAR] = {"CHAMP_OBJ_BAR", 0x90C320u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_CHAMP_OBJ_GRAPHICS] = {"CHAMP_OBJ_GRAPHICS", 0x8786BEu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_CHAMP_BG_TILES_A] = {"CHAMP_BG_TILES_A", 0x8F83CCu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_CHAMP_BG_OBJ_TILES_B] = {"CHAMP_BG_OBJ_TILES_B", 0x988000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
 };
 
 static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1, -1};
 static bool g_intro_pieces_sent[INTRO_PIECE_COUNT];
 static bool g_title_objs_loaded[4];
+static uint8_t g_champ_streams_mask[CHAMP_HALF_COUNT];
+static champ_half_pieces g_champ_half[CHAMP_HALF_COUNT];
 
 typedef struct {
     uint32_t wram_bus;
@@ -268,14 +275,84 @@ void assets_note_word(uint16_t value) {
     }
 }
 
+void assets_note_source(uint32_t rom) {
+    static const uint32_t champ_roms[5] = {
+        0x878190u, 0x90C320u, 0x8786BEu, 0x8F83CCu, 0x988000u,
+    };
+    int half = port_current_task_half();
+    for (unsigned i = 0; i < 5u; ++i) {
+        if (rom == champ_roms[i]) {
+            if (i == 0u && g_champ_streams_mask[half] == 0x1Fu) {
+                /* Starting a fresh championship load on this half: reset its captured pieces. */
+                g_champ_streams_mask[half] = 0u;
+                memset(&g_champ_half[half], 0, sizeof(g_champ_half[half]));
+            }
+            g_champ_streams_mask[half] |= (uint8_t)(1u << i);
+            return;
+        }
+    }
+    /* A non-championship stream was unpacked (e.g. shop, ticker, or single-task menu):
+       clear championship loaded state so other $B97B screens are not misidentified. */
+    memset(g_champ_streams_mask, 0, sizeof(g_champ_streams_mask));
+    memset(g_champ_half, 0, sizeof(g_champ_half));
+}
+
+static bool capture_champ_piece(uint32_t src, uint32_t size) {
+    if ((src >> 16) != 0x7Fu) {
+        return false;
+    }
+    uint16_t addr = (uint16_t)(src & 0xFFFFu);
+    int half = (addr >= 0x8000u) ? 1 : 0;
+    if (g_champ_streams_mask[half] != 0x1Fu) {
+        return false;
+    }
+    uint16_t rel = (uint16_t)(addr - (half ? 0x8000u : 0x0000u));
+    const uint8_t* ptr = &g_ram[0x10000u + (uint32_t)addr];
+    champ_half_pieces* hp = &g_champ_half[half];
+
+    if (rel == 0x0000u && size == CHAMP_MAP_BYTES) {
+        memcpy(hp->bg1_map, ptr, CHAMP_MAP_BYTES);
+        hp->has_bg1_map = true;
+        return true;
+    }
+    if (rel == 0x0800u && size == CHAMP_MAP_BYTES) {
+        memcpy(hp->bg2_map, ptr, CHAMP_MAP_BYTES);
+        hp->has_bg2_map = true;
+        return true;
+    }
+    if (rel == 0x0800u && size == CHAMP_PANEL_ROWS_BYTES) {
+        memcpy(hp->bg2_panel_rows, ptr, CHAMP_PANEL_ROWS_BYTES);
+        hp->has_bg2_panel_rows = true;
+        return true;
+    }
+    if (rel == 0x0000u && size == CHAMP_NOISE_TILES_BYTES) {
+        memcpy(hp->noise_tiles, ptr, CHAMP_NOISE_TILES_BYTES);
+        hp->has_noise_tiles = true;
+        hp->noise_gen++;
+        return true;
+    }
+    if (size == CHAMP_FIRE_BAND_BYTES && rel >= 0x11C0u && rel <= 0x21C0u
+        && ((rel - 0x11C0u) & 0x01FFu) == 0u) {
+        memcpy(hp->fire_band, ptr, CHAMP_FIRE_BAND_BYTES);
+        hp->has_fire_band = true;
+        return true;
+    }
+    return false;
+}
+
 void assets_note_upload(uint32_t src, uint32_t size) {
+    if (capture_champ_piece(src, size)) {
+        return;
+    }
+
     if (src == 0x7F0000u) {
         if (size == 0 || size > 0x10000u) {
             return;
         }
         uint32_t h = fnv1a_32(&g_ram[0x10000], size);
         for (int i = 0; i < ASSET_COUNT; ++i) {
-            if (g_assets[i].size == size && g_assets[i].hash == h) {
+            if (g_assets[i].role != ROLE_NONE
+                && g_assets[i].size == size && g_assets[i].hash == h) {
                 g_current[g_assets[i].role] = i;
                 if (i >= ASSET_TITLE_OBJ_0 && i <= ASSET_TITLE_OBJ_2) {
                     g_title_objs_loaded[i - ASSET_TITLE_OBJ_0] = true;
@@ -288,7 +365,7 @@ void assets_note_upload(uint32_t src, uint32_t size) {
     uint32_t wram_idx = 0;
     if (!bus_wram(src, &wram_idx)) {
         for (int i = 0; i < ASSET_COUNT; ++i) {
-            if (g_assets[i].rom_bus == src) {
+            if (g_assets[i].role != ROLE_NONE && g_assets[i].rom_bus == src) {
                 g_current[g_assets[i].role] = i;
             }
         }
@@ -313,6 +390,27 @@ void assets_clear_loaded(void) {
     }
     memset(g_intro_pieces_sent, 0, sizeof(g_intro_pieces_sent));
     memset(g_title_objs_loaded, 0, sizeof(g_title_objs_loaded));
+    memset(g_champ_streams_mask, 0, sizeof(g_champ_streams_mask));
+    memset(g_champ_half, 0, sizeof(g_champ_half));
+}
+
+bool assets_champ_loaded(void) {
+    for (int h = 0; h < CHAMP_HALF_COUNT; ++h) {
+        if (g_champ_streams_mask[h] != 0x1Fu
+            || !g_champ_half[h].has_bg1_map
+            || !g_champ_half[h].has_bg2_map
+            || !g_champ_half[h].has_fire_band) {
+            return false;
+        }
+    }
+    return true;
+}
+
+const champ_half_pieces* assets_champ_half(int half) {
+    if (half < 0 || half >= CHAMP_HALF_COUNT) {
+        return NULL;
+    }
+    return &g_champ_half[half];
 }
 
 bool assets_intro_piece_sent(intro_piece_id id) {

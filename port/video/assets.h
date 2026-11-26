@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 typedef enum {
+    ROLE_NONE = -1,
     ROLE_BG_DRAWINGS = 0,
     ROLE_BG_ARRANGEMENT,
     ROLE_TEXT_DRAWINGS_128,
@@ -39,11 +40,19 @@ typedef enum {
     ASSET_TITLE_OBJ_1,
     ASSET_TITLE_OBJ_2,
     ASSET_TITLE_OBJ_3,
+    ASSET_CHAMP_OBJ_FONT,       /* $87:8190, 2560 B (80 4bpp tiles: OBJ 256..335) */
+    ASSET_CHAMP_OBJ_BAR,        /* $90:C320, 96 B (3 4bpp tiles: OBJ 336..338) */
+    ASSET_CHAMP_OBJ_GRAPHICS,   /* $87:86BE, 5120 B (160 4bpp tiles: OBJ 340..499) */
+    ASSET_CHAMP_BG_TILES_A,     /* $8F:83CC, 960 B (30 4bpp tiles: BG 0..29) */
+    ASSET_CHAMP_BG_OBJ_TILES_B, /* $98:8000, 10208 B (319 4bpp tiles: BG 32..350 and OBJ 0..94) */
     ASSET_COUNT
 } asset_id;
 
 /* Decompress and hash all known cartridge blocks after g_rom is set and before the game runs. */
 void assets_init(void);
+
+/* Note the ROM source address of an unpacked upload (from video_note_source). */
+void assets_note_source(uint32_t rom);
 
 /* Note a graphics upload from WRAM $7F:0000 (matched by size+hash) or direct ROM address. */
 void assets_note_upload(uint32_t src, uint32_t size);
@@ -89,5 +98,28 @@ typedef enum {
 
 bool assets_intro_piece_sent(intro_piece_id id);
 bool assets_title_objs_loaded(void);
+
+#define CHAMP_HALF_COUNT 2
+#define CHAMP_MAP_BYTES 2048u
+#define CHAMP_FIRE_BAND_BYTES 512u
+#define CHAMP_PANEL_ROWS_BYTES 896u
+#define CHAMP_NOISE_TILES_BYTES 512u
+
+typedef struct {
+    bool has_bg1_map;
+    bool has_bg2_map;
+    bool has_fire_band;
+    bool has_bg2_panel_rows;
+    bool has_noise_tiles;
+    uint32_t noise_gen;
+    uint8_t bg1_map[CHAMP_MAP_BYTES];
+    uint8_t bg2_map[CHAMP_MAP_BYTES];
+    uint8_t fire_band[CHAMP_FIRE_BAND_BYTES];
+    uint8_t bg2_panel_rows[CHAMP_PANEL_ROWS_BYTES];
+    uint8_t noise_tiles[CHAMP_NOISE_TILES_BYTES];
+} champ_half_pieces;
+
+bool assets_champ_loaded(void);
+const champ_half_pieces* assets_champ_half(int half);
 
 #endif

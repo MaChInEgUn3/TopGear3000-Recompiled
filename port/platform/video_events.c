@@ -36,3 +36,9 @@ void video_set_color(uint8_t index, uint16_t bgr) {
     assets_reset_word_run();
     palette_set(index, bgr);
 }
+
+void video_note_source(uint32_t rom, uint16_t vram_word) {
+    (void)vram_word;
+    assets_reset_word_run();
+    assets_note_source(rom);
+}
