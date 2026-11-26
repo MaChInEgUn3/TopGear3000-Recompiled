@@ -46,7 +46,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
 
 ## Low (enhancements)
 
-- **I (request 3).** Name the ROM source of decompressed uploads (e.g.
+- **I (request 3) — DONE in decomp `d0eaf01` (`video_note_source`), adopted (ignored for now; content recognition kept).** Name the ROM source of decompressed uploads (e.g.
   `video_note_source(rom_bus, vram_word)`, ignored by the bench's comparison).
 - **J (request 6).** Hand over the VS panels' arrangement by name (`vs_graphics_load` writes it
   word by word today; the port recognises the write pattern).
