@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
     long movie_offset_from_value = 0;
     unsigned long wram_out_frame = 0;
     const char* wram_out_path = NULL;
-    const char* screen = "title_card";
+    const char* screen = "game";
     const char* rom_path = NULL;
 
     for (int i = 1; i < argc; ++i) {

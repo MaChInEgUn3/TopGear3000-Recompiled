@@ -508,7 +508,9 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
     char names[256];
     snprintf(names, sizeof(names), "%s", screen);
     for (char* name = strtok(names, ","); name != NULL; name = strtok(NULL, ",")) {
-        if (strcmp(name, "boot") == 0) {
+        if (strcmp(name, "game") == 0) {
+            game_main();  /* the whole game, the original's order (decomp f3f7d5a); never returns */
+        } else if (strcmp(name, "boot") == 0) {
             game_boot();  /* the game's own start-up (decomp b284d72) */
         } else if (strcmp(name, "title_card") == 0) {
             title_card_show();

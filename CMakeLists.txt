@@ -245,6 +245,16 @@ set_tests_properties(game_boot_intro PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# The whole game in the original's order (decomp game_main): boot, title card, intro, options menu.
+add_test(NAME game_main_to_options
+  COMMAND tg3000 --fast --frames 3400 --shot 3300 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_main_to_options PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 3300 picture hash a312a352fc47767d brightness 15 drawn options"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu game_picture_results game_picture_intro_zoom PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77

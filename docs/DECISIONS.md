@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `372d471`; earlier `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `f3f7d5a`; earlier `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -588,6 +588,15 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   `--screen boot` calls it. From zeroed memory, `--screen boot,intro` reaches the intro's zoom
   picture that matched the original pixel for pixel (same fingerprint as from the bench's saved
   memory): test `game_boot_intro`, which needs no saved memory. The top loop comes next.
+
+## The whole game runs from the game's own top loop (2026-11-26)
+
+- Decomp `f3f7d5a`: `game_main()` (boot, title card, sound set 0, intro, then the main menu and
+  the championship loop). It is now the port's default (`--screen game`). With no input the port
+  runs boot, title card, intro and the options menu, all drawn natively (test
+  `game_main_to_options`: frame 3300 is the options menu's picture that matched the original).
+  It stops at the championship screen until decomp request D (the two-task kernel) lands.
+  `--screen` lists stay as test scaffolding.
 
 ## Steps (2026-11-24)
 
