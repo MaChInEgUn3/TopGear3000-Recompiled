@@ -70,6 +70,7 @@ add_executable(tg3000
   port/screens/intro_screen.c
   port/screens/title_screen.c
   port/screens/champ_screen.c
+  port/screens/race_start_screen.c
 )
 target_include_directories(tg3000 PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/port"
@@ -301,6 +302,50 @@ add_test(NAME game_picture_champ_controls
 )
 set_tests_properties(game_picture_champ_controls PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 5033 picture hash fa3442e3f08884b4 brightness 15 drawn champ"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The pre-race screen (race_start_screen) reached with explore_menu.txt (offset 150), drawn
+# before the NMI (one frame later than the other screens). The bar phase ($E175): port frame 6563
+# = bench frame_06716.png; the opening course view ($E28C): port frame 6585 = bench
+# frame_06751.png; the open view with the meter, the planets' shadows, the discs and the viewport
+# scroll: port frame 6598 (input re-aligned at 6571 for the console's longer load) = bench
+# frame_06764.png. 0 of 57,344 pixels different each.
+add_test(NAME game_picture_racestart_bar
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_menu.txt --movie-offset 150 --fast --frames 6564 --shot 6563 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_racestart_bar PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 6563 picture hash 426fab719584a2b9 brightness 15 drawn race_start"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+add_test(NAME game_picture_racestart_opening
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_menu.txt --movie-offset 150 --fast --frames 6586 --shot 6585 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_racestart_opening PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 6585 picture hash 03f03bcb14946a62 brightness 15 drawn race_start"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+add_test(NAME game_picture_racestart_open
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_menu.txt --movie-offset 150 --movie-offset-from 6571 163 --fast --frames 6599 --shot 6598 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_racestart_open PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 6598 picture hash 91186d6108968d80 brightness 15 drawn race_start"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The pre-race screen with the camera moving, the leader lines sliding and their glow
+# (explore_pw.txt, offset 150): port frame 6544 = bench frame_06710.png, 0 pixels different.
+add_test(NAME game_picture_racestart_camera
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_pw.txt --movie-offset 150 --fast --frames 6545 --shot 6544 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_racestart_camera PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 6544 picture hash 72890bfe6ba233c8 brightness 15 drawn race_start"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

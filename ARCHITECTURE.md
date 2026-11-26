@@ -26,7 +26,9 @@
 - `port/screens/` — one drawing function per kind of screen: `menu_screen.c` (the menus' text
   screens: title card, password display, options menu with its two per-line effects, and VS
   screen), `results_screen.c` (the results screen with 3D starfield sprites and `$0D00`
-  per-line subtraction), driven by tables of measured facts per screen.
+  per-line subtraction), `champ_screen.c` (the championship, two tasks), `race_start_screen.c`
+  (the pre-race screen: the bar, the closed shutter, the opening course view with its per-line
+  effects listed in `docs/DECISIONS.md`), driven by tables of measured facts per screen.
 - `docs/proposals/` — accepted design proposals (`video-layer.md`, `sound.md`).
 - `tools/` — helper CMake scripts (`fetch_deps.cmake`).
 - `deps/` — fetched third-party dependencies (`deps/SDL3`, git-ignored).
@@ -41,6 +43,8 @@ main() -> rom_load() [1048576 bytes + SHA-1] -> g_rom -> SDL window + renderer (
   integer scale) -> port_run(screen): zero g_ram, interrupt_vectors_init(), call the game's
   screen function (blocking) -> ... the game calls platform_wait_vblank() at every frame wait:
     0. SDL events (quit/Escape -> longjmp back to port_run; input state)
+       (the pre-race screen alone is drawn here, before the NMI: its frame code's streamed
+       pieces belong to the picture the last NMI started; docs/DECISIONS.md)
     1. the game's frame code (its NMI, in C): JML target at $0000, then nmi_prologue() and the
        target word at $0008 (fixed table; unknown -> port_fatal with the value); its
        sound_send_frame(msg) runs one step of the native sound player

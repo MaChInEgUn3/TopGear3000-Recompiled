@@ -48,3 +48,42 @@ void video_note_vs_panels(uint16_t vram_word, uint32_t rows) {
     assets_reset_word_run();
     assets_note_vs_panels(rows);
 }
+
+void video_upload_oam(uint16_t oam_word, uint32_t src, uint32_t size) {
+    (void)oam_word;
+    assets_note_oam(src, size);
+}
+
+/* A streamed upload comes as three calls (source, size, start); only its WRAM source and size
+   are kept, joined here, and handed to the catalogue at the start. The mode and the target
+   register are ignored, as are the upload destinations. */
+static uint32_t g_stream_src[8];
+static uint32_t g_stream_size[8];
+
+void dma_stream_setup(int slot, uint8_t mode, uint8_t target, uint32_t src) {
+    (void)mode;
+    (void)target;
+    if (slot >= 0 && slot < 8) {
+        g_stream_src[slot] = src;
+    }
+}
+
+void dma_stream_set_source(int slot, uint16_t src) {
+    if (slot >= 0 && slot < 8) {
+        g_stream_src[slot] = (g_stream_src[slot] & 0xFF0000u) | src;
+    }
+}
+
+void dma_stream_size(int slot, uint32_t size) {
+    if (slot >= 0 && slot < 8) {
+        g_stream_size[slot] = size;
+    }
+}
+
+void dma_stream_kick(uint8_t slots) {
+    for (int slot = 0; slot < 8; ++slot) {
+        if ((slots >> slot) & 1u) {
+            assets_note_stream(g_stream_src[slot], g_stream_size[slot]);
+        }
+    }
+}

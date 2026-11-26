@@ -42,11 +42,6 @@ void video_set_window_bg12(uint8_t value) { (void)value; }
 void video_set_window_bg34(uint8_t value) { (void)value; }
 void video_set_window_obj(uint8_t value) { (void)value; }
 void video_set_cgram_address(uint8_t index) { (void)index; }
-void video_upload_oam(uint16_t oam_word, uint32_t src, uint32_t size) {
-    (void)oam_word;
-    (void)src;
-    (void)size;
-}
 void platform_set_rom_speed(uint8_t value) { (void)value; }
 void platform_set_wram_address(uint32_t address) { (void)address; }
 
@@ -66,14 +61,6 @@ void dma_hdma_set_mode(int slot, uint8_t mode, uint8_t target) {
 }
 void dma_hdma_set_bank(int slot, uint8_t bank) { (void)slot; (void)bank; }
 void video_hdma_enable(uint8_t slots) { (void)slots; }
-void dma_stream_setup(int slot, uint8_t mode, uint8_t target, uint32_t src) {
-    (void)slot;
-    (void)mode;
-    (void)target;
-    (void)src;
-}
-void dma_stream_size(int slot, uint32_t size) { (void)slot; (void)size; }
-void dma_stream_kick(uint8_t slots) { (void)slots; }
 void platform_set_irq_v(uint16_t line) { (void)line; }
 void platform_set_irq_h(uint16_t dot) { (void)dot; }
 void platform_set_irq_h_low(uint8_t dot) { (void)dot; }
@@ -83,8 +70,6 @@ void platform_set_irq_v_high(uint8_t line) { (void)line; }
 // Added by the decomp at 49b5583 (VS race work).
 // The Mode 7 vertical offset alone: a screen register, ignored like the others.
 void video_set_m7_vofs(uint16_t value) { (void)value; }
-// A stream slot's source address alone: per-line machinery, ignored like the other dma_* calls.
-void dma_stream_set_source(int slot, uint16_t src) { (void)slot; (void)src; }
 
 // Sound driver start-up (decomp e966da4): in port/platform/sound_sets.c, which reads the
 // driver's balance table out of it for the native player.

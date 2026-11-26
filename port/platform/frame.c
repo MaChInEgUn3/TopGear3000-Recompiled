@@ -170,8 +170,9 @@ static void run_nmi_dispatch(void) {
                     | ((uint32_t)rd8(0x0003) << 16);
 
     if (target == 0x808807u) {
-        nmi_prologue();
         uint16_t sub = rd16(0x0008);
+        race_start_screen_note_nmi(sub);
+        nmi_prologue();
         switch (sub) {
             case 0x8934: nmi_tail(); break;
             case 0xFBD1: nmi_target_80FBD1(); break;
@@ -309,12 +310,18 @@ int port_current_task_half(void) {
     return 0;
 }
 
-static void present_frame(void) {
-    bool active_intro = intro_screen_active();
-    bool active_title = !active_intro && title_screen_active();
-    bool active_results = !active_intro && !active_title && results_screen_active();
-    bool active_champ = !active_intro && !active_title && !active_results && champ_screen_active();
-    int active_menu = (active_intro || active_title || active_results || active_champ)
+static void present_frame(bool before_nmi) {
+    /* The pre-race screen alone is drawn before the NMI (race_start_screen_note_nmi); the
+       others after it. */
+    bool active_racestart = before_nmi || race_start_screen_first_after_nmi();
+    bool active_intro = !active_racestart && intro_screen_active();
+    bool active_title = !active_racestart && !active_intro && title_screen_active();
+    bool active_results = !active_racestart && !active_intro && !active_title
+                          && results_screen_active();
+    bool active_champ = !active_racestart && !active_intro && !active_title && !active_results
+                        && champ_screen_active();
+    int active_menu = (active_intro || active_title || active_results || active_champ
+                       || active_racestart)
                           ? -1
                           : menu_screen_active();
     const char* drawn_name = "none";
@@ -330,11 +337,15 @@ static void present_frame(void) {
     } else if (active_champ) {
         champ_screen_draw(g_fb);
         drawn_name = "champ";
+    } else if (active_racestart) {
+        race_start_screen_draw(g_fb);
+        drawn_name = "race_start";
     } else if (active_menu >= 0) {
         menu_screen_draw(active_menu, g_fb);
         drawn_name = menu_screen_name(active_menu);
     }
-    if (active_intro || active_title || active_results || active_champ || active_menu >= 0) {
+    if (active_intro || active_title || active_results || active_champ || active_racestart
+        || active_menu >= 0) {
         SDL_UpdateTexture(g_texture, NULL, g_fb, SCREEN_WIDTH * (int)sizeof(uint32_t));
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
         SDL_RenderClear(g_renderer);
@@ -515,18 +526,26 @@ void platform_wait_vblank(void) {
             SDL_SignalSemaphore(g_sem_task2);
             SDL_WaitSemaphore(g_sem_task1);
         }
-        present_frame();
+        present_frame(false);
         nmi_prologue();   /* every NMI starts with it, then the $0008 target (here $B97B) */
         nmi_menu_frame();
         nmi_menu_frame_tail();
         nmi_tail();
     } else {
-        /* b) Run the game's frame code */
+        /* b) The pre-race screen: drawn now, before the NMI (its frame code's output belongs to
+              the picture the last NMI started; see race_start_screen_note_nmi) */
+        bool early = race_start_screen_active();
+        if (early) {
+            present_frame(true);
+        }
+        /* c) Run the game's frame code */
         if (nmi_enabled) {
             run_nmi_dispatch();
         }
-        /* c) Draw */
-        present_frame();
+        /* d) Draw */
+        if (!early) {
+            present_frame(false);
+        }
     }
 
     /* d) One frame of sound from the mixer, then pace to 60.0988 fps */

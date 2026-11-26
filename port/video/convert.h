@@ -6,6 +6,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Convert ntiles 2bpp planar tiles (16 bytes each) into 64 colour indices (0..3) per tile. */
+void convert_tiles_2bpp(const uint8_t* data, size_t ntiles, uint8_t* out);
+
 /* Convert ntiles 4bpp planar tiles (32 bytes each) into 64 colour indices (0..15) per tile. */
 void convert_tiles_4bpp(const uint8_t* data, size_t ntiles, uint8_t* out);
 

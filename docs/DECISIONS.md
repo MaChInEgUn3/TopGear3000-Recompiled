@@ -842,6 +842,93 @@ and checked on the decomp's bench).
   bench relative to the game's own timing; to be located. Nobody has listened yet: the owner has
   the menus' recording to compare by ear.
 
+## The pre-race screen drawn natively (step 4, 2026-11-26)
+
+- **Identical to the original pixel for pixel** (`explore_menu.txt`, offset 150; `RACE` chosen
+  in the championship): the bar (`$E175`), port frames 6563 and 6568 against `frame_06716.png`
+  and `frame_06721.png`; the closed shutter (`$D784`/`$8934`), port 6571/6573 against
+  `frame_06734.png`/`frame_06735.png`; the course view opening (`$E28C`), port 6585 and 6586
+  against `frame_06751.png` and `frame_06752.png`. 0 of 57,344 pixels different each. The
+  console's load takes 13 frames longer than the port's, so for the open view the input is
+  re-aligned (`--movie-offset-from 6571 163`); then port frame N matches bench `frame_0(N+166)`:
+  N = 6583, 6590, 6595-6599, 0 pixels each (meter, planets' shadows, discs, scroll, objects);
+  the glow frames 6622 and 6625 against `glow/frame_06788.png`/`06791.png`, 0 pixels (leader
+  lines and their glow on screen, brightness 5 and 3); the other fade frames (6605-6628 against
+  `frame_06771` and `glow/frame_06775..06794`) differ only by 1 level in some channels.
+- **Where the picture is taken: before the NMI (listed for the veto).** On the console this
+  screen's frame code, right after its wait, still lands in the picture the NMI has just
+  started: it streams the planets' shadow frames, writes the meter's 10 words, and rewrites the
+  window tables `$7F:0000`/`$7F:0100` before the beam reaches them. The port draws every other
+  screen right after the NMI, before that code runs. So this screen alone is drawn at the start
+  of the next frame wait, before the next NMI (`port/platform/frame.c`): then the frame code's
+  output is in, and what the NMI itself sent is taken as it sent it (the sprite table, captured
+  at its upload; the glow word `$017C`, read when the NMI target `$E28C` is dispatched). The
+  phase is the NMI target the port last dispatched. The screen's pictures come one frame later
+  than before (the bar's first frame is drawn right after its NMI and shown twice). No game
+  counter is stepped and no game routine is retyped in the drawing.
+- **How, under the rule (`port/screens/race_start_screen.c`, `port/video/assets.c`):**
+  - One drawing function for the screen, three phases. No VRAM-shaped buffer: the shutter map
+    (`$9C:8FC3`) and the course pictures (`$92:80B2`: BG tiles, object tiles, BG3 tiles; the
+    sun's 16 frames too, not used yet) are unpacked and converted at start-up and recognised at
+    upload by WRAM source and content hash; the six course maps (`$7F:AE50`, `$CB10`, `$B550`,
+    `$2000`, `$BD10`, `$C410`) are captured when the game sends them, by WRAM source and size;
+    the blank BG3 tiles (`$7F:D210`) are checked blank. Colours from `$0500`. The upload
+    destinations are ignored.
+  - **Handed over, not computed:** the sprite table as the NMI sends it (`video_upload_oam`,
+    `$81:0900`, `$220` bytes); each planet's shadow frame as the frame code streams it (128
+    bytes from `$7E:8000 + n*$800 + frame*$80`: the source names the planet and the frame); the
+    meter's 10 words as `draw_meter` writes them (`video_write_vram_word`: once the course maps
+    are in, `draw_meter` is the only caller; a run of 10 words is taken only if it reads full
+    tiles, at most one part tile, then empty tiles). The meter capture is by call pattern (like
+    the VS panels before request J); a named note is to be asked of the decomp.
+  - The streamed uploads come as three calls (`dma_stream_setup`/`_size`/`_kick`); the port
+    joins them into one (WRAM source, size) at the kick, ignoring mode, target register and
+    destination (`port/platform/video_events.c`; listed for the veto).
+  - Everything not measured stops with a message (band lists, window table layout, map entries,
+    object attributes, more than 32 objects or 34 tile slices on a line, a see-through shutter
+    pixel while it opens, an open viewport line before the viewport is on, an animated sun:
+    `$0700` not 0, never compared with the original).
+- **With the camera moving** (`explore_pw.txt`, offset 150; the same course): port frame N
+  matches bench `pw/frame_0(N+166).png` for N = 6508, 6511, 6514 ... 6565 (every third frame),
+  0 pixels each: the viewport scroll ($0120 from $2A to $B1), the leader lines sliding and the
+  glow at full brightness.
+- **Per-line effects (for the owner's veto):**
+  - **The merging shutter (bar phase):** each line shows a row of the championship's BG2 map;
+    the row offsets are read from the band list `nmi_target_80E175` writes at `$1B00` for the bar
+    height h (h from its first band, checked against `$0114`/`$0116`; every other byte checked
+    against the routine's layout for that h).
+  - **The closed shutter:** the fixed list `$81:C207` at `$1B00` (checked): lines 0-113 from the
+    shutter map's second half, 114-223 from its first.
+  - **The shutter opening:** `$017A` (v) with the four lists `nmi_target_80E28C` writes in step
+    (`$1B00` row offsets, `$0D00` mode, `$0D28` masked layers, `$0D14` BG2 scroll reset), all
+    checked against the routine's layout for v: lines before v and from 228-v show the shutter,
+    the lines between the course view.
+  - **The leader lines and the glow (lines up to 126):** window table `$7F:0000` (window 1) masks
+    every layer to colour 0 (`$1BE6`); inside window table `$7F:0100` (window 2) the fixed colour
+    the NMI sent (`$017C`/`$017D`) is added to BG1-3 and objects of palettes 4-7. Tables read in
+    the format `window_shape`/`func_80DC5A` write (header, optional vertical line, horizontal
+    line, empty run, 52-line disc block, end), checked.
+  - **The discs' rims (lines 127-179):** the disc blocks of the same two tables; where exactly
+    one of the two discs covers a point, every layer is masked to colour 0 (`$7CC6`).
+  - **The backdrop split:** colour 0 is `$1BE6` up to line 126, `$7CC6` from line 127.
+  - **The viewport scroll:** BG1-3 move by `$0120` on lines 127-179 (0 elsewhere).
+  - **The starlight (lines 127-179):** where the front pixel is BG1 or BG3 (the black and the
+    planets' shadows), the front object pixel at the same point is added.
+  - **The planets' shadows:** BG3 tiles 2.. (16 per planet), their second plane as streamed.
+  - **The meter:** row 6, columns 2-11 of BG2, the 10 words `draw_meter` wrote.
+- **Tests:** `game_picture_racestart_bar` (6563), `game_picture_racestart_opening` (6585),
+  `game_picture_racestart_open` (6598, re-aligned input), `game_picture_racestart_camera`
+  (`explore_pw.txt`, 6544).
+- **Open:**
+  - The animated sun stops the port (`$0700` not 0) until a course with one is compared; its
+    frames would come by the same streamed-upload capture (`$7F:6640 + k*$480`).
+  - The meter's capture is by call pattern until the decomp names it.
+  - Fade frames differ by 1 level in some channels from the original (e.g. port 6605 against
+    `frame_06771.png`: 5,424 pixels, all off by exactly 1). The scaling is the shared
+    `screen_apply_brightness`; measured on this screen only, not changed here.
+  - Objects of palettes 0-3 are drawn without the glow (as the screen's colour set-up says);
+    the glow frames match, but this case was not isolated.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

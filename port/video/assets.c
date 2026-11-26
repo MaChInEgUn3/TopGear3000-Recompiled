@@ -15,7 +15,9 @@ typedef enum {
     ASSET_KIND_MAP_16,
     ASSET_KIND_WORD_RUN,
     ASSET_KIND_CAPTURED_WORD_RUN,
-    ASSET_KIND_TITLE_PACK
+    ASSET_KIND_TITLE_PACK,
+    ASSET_KIND_RACESTART_SHUTTER,
+    ASSET_KIND_RACESTART_PACK
 } asset_kind;
 
 typedef struct {
@@ -61,6 +63,12 @@ static asset_entry g_assets[ASSET_COUNT] = {
     [ASSET_CHAMP_CTRL_BG_TILES] = {"CHAMP_CTRL_BG_TILES", 0x9F8000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_CHAMP_GEARS_BG_TILES] = {"CHAMP_GEARS_BG_TILES", 0x8C8B54u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_CHAMP_GEARS_OBJ_TILES] = {"CHAMP_GEARS_OBJ_TILES", 0x87898Eu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACESTART_SHUTTER_MAP_A] = {"RACESTART_SHUTTER_MAP_A", 0x9C8FC3u, ASSET_KIND_RACESTART_SHUTTER, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACESTART_SHUTTER_MAP_B] = {"RACESTART_SHUTTER_MAP_B", 0x9C8FC3u, ASSET_KIND_RACESTART_SHUTTER, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACESTART_BG_TILES] = {"RACESTART_BG_TILES", 0x9280B2u, ASSET_KIND_RACESTART_PACK, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACESTART_OBJ_TILES] = {"RACESTART_OBJ_TILES", 0x9280B2u, ASSET_KIND_RACESTART_PACK, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACESTART_BG3_TILES] = {"RACESTART_BG3_TILES", 0x9280B2u, ASSET_KIND_RACESTART_PACK, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACESTART_SUN_FRAMES] = {"RACESTART_SUN_FRAMES", 0x9280B2u, ASSET_KIND_RACESTART_PACK, ROLE_NONE, 0, NULL, 0, 0, 0},
 };
 
 static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1, -1};
@@ -68,6 +76,7 @@ static bool g_intro_pieces_sent[INTRO_PIECE_COUNT];
 static bool g_title_objs_loaded[4];
 static uint8_t g_champ_streams_mask[CHAMP_HALF_COUNT];
 static champ_half_pieces g_champ_half[CHAMP_HALF_COUNT];
+static racestart_pieces g_racestart;
 
 typedef struct {
     uint32_t wram_bus;
@@ -116,6 +125,8 @@ void assets_init(void) {
     assets_clear_loaded();
     assets_reset_word_run();
     bool title_pack_ready = false;
+    bool racestart_shutter_ready = false;
+    bool racestart_pack_ready = false;
     for (int i = 0; i < ASSET_COUNT; ++i) {
         free(g_assets[i].data);
         g_assets[i].data = NULL;
@@ -123,6 +134,68 @@ void assets_init(void) {
         g_assets[i].hash = 0;
 
         if (g_assets[i].kind == ASSET_KIND_CAPTURED_WORD_RUN) {
+            continue;
+        }
+
+        if (g_assets[i].kind == ASSET_KIND_RACESTART_SHUTTER) {
+            if (!racestart_shutter_ready) {
+                uint16_t end = 0;
+                if (decompress_near(DP, 0x9Cu, 0x8FC3u, 0x7Fu, 0x0000u, &end) != 0x1000u) {
+                    port_fatal("assets_init: racestart shutter decompression failed");
+                }
+                racestart_shutter_ready = true;
+            }
+            const uint8_t* src_ptr = (i == ASSET_RACESTART_SHUTTER_MAP_A)
+                                         ? &g_ram[0x10000u]
+                                         : &g_ram[0x10800u];
+            size_t len = 0x0800u;
+            uint8_t* buf = (uint8_t*)malloc(len);
+            if (buf == NULL) {
+                port_fatal("assets_init: out of memory");
+            }
+            memcpy(buf, src_ptr, len);
+            g_assets[i].data = buf;
+            g_assets[i].size = len;
+            g_assets[i].hash = fnv1a_32(buf, len);
+            g_assets[i].generation++;
+            continue;
+        }
+
+        if (g_assets[i].kind == ASSET_KIND_RACESTART_PACK) {
+            if (!racestart_pack_ready) {
+                uint16_t end = 0;
+                if (decompress_near(DP, 0x92u, 0x80B2u, 0x7Fu, 0x2700u, &end) != 0x9D10u) {
+                    port_fatal("assets_init: racestart pack decompression failed");
+                }
+                racestart_pack_ready = true;
+            }
+            const uint8_t* src_ptr = NULL;
+            size_t len = 0;
+            if (i == ASSET_RACESTART_BG_TILES) {
+                src_ptr = &g_ram[0x12700u];
+                len = 0x24E0u;
+            } else if (i == ASSET_RACESTART_OBJ_TILES) {
+                src_ptr = &g_ram[0x14BE0u];
+                len = 0x1A40u;
+            } else if (i == ASSET_RACESTART_BG3_TILES) {
+                src_ptr = &g_ram[0x16620u];
+                len = 0x0020u;
+            } else if (i == ASSET_RACESTART_SUN_FRAMES) {
+                src_ptr = &g_ram[0x16640u];
+                len = 0x4800u;
+            }
+            if (len == 0u || src_ptr == NULL) {
+                port_fatal("assets_init: racestart pack sub-block has zero length");
+            }
+            uint8_t* buf = (uint8_t*)malloc(len);
+            if (buf == NULL) {
+                port_fatal("assets_init: out of memory");
+            }
+            memcpy(buf, src_ptr, len);
+            g_assets[i].data = buf;
+            g_assets[i].size = len;
+            g_assets[i].hash = fnv1a_32(buf, len);
+            g_assets[i].generation++;
             continue;
         }
 
@@ -241,6 +314,62 @@ void assets_note_word(uint16_t value) {
             }
         }
     }
+
+    /* The pre-race meter (draw_meter, $80:DA5F): once the pre-race maps are in, draw_meter is
+       the only caller of video_write_vram_word, writing 10 words: full tiles ($0847), at most one
+       part tile ($0841-$0846), then empty tiles ($0848). The last such run of 10 is kept. */
+    if (g_racestart.has_bg2_tl && g_word_run_words >= RACESTART_METER_WORDS) {
+        const uint8_t* tail = &g_word_run_buf[(g_word_run_words - RACESTART_METER_WORDS) * 2u];
+        uint16_t w[RACESTART_METER_WORDS];
+        int stage = 0; /* 0: full tiles, 1: part tile seen, 2: empty tiles */
+        bool is_meter = true;
+        for (unsigned k = 0; k < RACESTART_METER_WORDS && is_meter; ++k) {
+            w[k] = (uint16_t)(tail[k * 2u] | ((uint16_t)tail[k * 2u + 1u] << 8));
+            if (w[k] == 0x0847u) {
+                is_meter = (stage == 0);
+            } else if (w[k] >= 0x0841u && w[k] <= 0x0846u) {
+                is_meter = (stage == 0);
+                stage = 1;
+            } else if (w[k] == 0x0848u) {
+                stage = 2;
+            } else {
+                is_meter = false;
+            }
+        }
+        if (is_meter) {
+            memcpy(g_racestart.meter, w, sizeof(w));
+            g_racestart.has_meter = true;
+        }
+    }
+}
+
+/* Streamed uploads while the pre-race course view is in (race_start_frame_draw, $80:D475):
+   each planet's shadow frame, 128 bytes from $7E:8000 + n*$800 + frame*$80, kept by planet;
+   the sun's frames ($7F:6640 + k*$480, $480 bytes) are not taken (never compared). */
+void assets_note_stream(uint32_t src, uint32_t size) {
+    if (!g_racestart.has_bg3_left || (src >> 16) != 0x7Eu || size != RACESTART_SHADOW_BYTES) {
+        return;
+    }
+    uint32_t addr = src & 0xFFFFu;
+    if (addr < 0x8000u || ((addr - 0x8000u) & 0x7Fu) != 0u) {
+        return;
+    }
+    uint32_t n = (addr - 0x8000u) / 0x0800u;
+    if (n >= RACESTART_MAX_PLANETS) {
+        port_fatal("race_start: a shadow frame streamed for more planets than measured");
+    }
+    memcpy(g_racestart.shadow[n], &g_ram[addr], RACESTART_SHADOW_BYTES);
+    g_racestart.shadows_sent = (uint8_t)(g_racestart.shadows_sent | (1u << n));
+}
+
+/* The sprite table the NMI sends ($81:0900, $220 bytes), kept while the pre-race screen's
+   pieces are in. */
+void assets_note_oam(uint32_t src, uint32_t size) {
+    if (!g_racestart.has_shutter_a || src != 0x810900u || size != RACESTART_OAM_BYTES) {
+        return;
+    }
+    memcpy(g_racestart.oam, &g_ram[0x0900u], RACESTART_OAM_BYTES);
+    g_racestart.has_oam = true;
 }
 
 /* Request J (decomp f22a687): the game names the VS panels' arrangement before writing it. It is
@@ -307,9 +436,90 @@ void assets_note_source(uint32_t rom) {
         }
     }
     /* A non-championship stream was unpacked (e.g. shop, ticker, or single-task menu):
-       clear championship loaded state so other $B97B screens are not misidentified. */
+       clear championship and pre-race loaded state so other screens are not misidentified. */
     memset(g_champ_streams_mask, 0, sizeof(g_champ_streams_mask));
     memset(g_champ_half, 0, sizeof(g_champ_half));
+    memset(&g_racestart, 0, sizeof(g_racestart));
+}
+
+static bool copy_racestart_map_slice(uint16_t addr, uint32_t size, uint16_t base,
+                                     uint8_t dst[RACESTART_MAP_BYTES], bool* done_flag) {
+    if (addr >= base && (uint32_t)addr + size <= (uint32_t)base + RACESTART_MAP_BYTES) {
+        memcpy(&dst[addr - base], &g_ram[0x10000u + (uint32_t)addr], size);
+        if ((uint32_t)addr + size == (uint32_t)base + RACESTART_MAP_BYTES) {
+            *done_flag = true;
+        }
+        return true;
+    }
+    return false;
+}
+
+static bool capture_racestart_piece(uint32_t src, uint32_t size) {
+    if ((src >> 16) != 0x7Fu || size == 0u) {
+        return false;
+    }
+    uint16_t addr = (uint16_t)(src & 0xFFFFu);
+    if ((uint32_t)addr + size > 0x10000u) {
+        return false;
+    }
+    if (addr == 0x0000u && size == 0x0800u
+        && fnv1a_32(&g_ram[0x10000u], 0x0800u) == g_assets[ASSET_RACESTART_SHUTTER_MAP_A].hash) {
+        memset(&g_racestart, 0, sizeof(g_racestart));
+        g_racestart.has_shutter_a = true;
+        return true;
+    }
+    if (addr == 0x0800u && size == 0x0800u
+        && fnv1a_32(&g_ram[0x10800u], 0x0800u) == g_assets[ASSET_RACESTART_SHUTTER_MAP_B].hash) {
+        g_racestart.has_shutter_b = true;
+        return true;
+    }
+    if (!g_racestart.has_shutter_a || !g_racestart.has_shutter_b) {
+        return false;
+    }
+    if (copy_racestart_map_slice(addr, size, 0xAE50u, g_racestart.bg1_left_map, &g_racestart.has_bg1_left)
+        || copy_racestart_map_slice(addr, size, 0xCB10u, g_racestart.bg1_right_map, &g_racestart.has_bg1_right)
+        || copy_racestart_map_slice(addr, size, 0xB550u, g_racestart.bg2_tl_map, &g_racestart.has_bg2_tl)
+        || copy_racestart_map_slice(addr, size, 0x2000u, g_racestart.bg2_tr_map, &g_racestart.has_bg2_tr)
+        || copy_racestart_map_slice(addr, size, 0xBD10u, g_racestart.bg3_left_map, &g_racestart.has_bg3_left)
+        || copy_racestart_map_slice(addr, size, 0xC410u, g_racestart.bg3_right_map, &g_racestart.has_bg3_right)) {
+        return true;
+    }
+    if (addr >= 0xD210u && (uint32_t)addr + size <= 0xD210u + 0x0600u) {
+        /* BG3 tiles 2..97 sent blank (their second plane is streamed per frame): measured. */
+        for (uint32_t k = 0; k < size; ++k) {
+            if (g_ram[0x10000u + (uint32_t)addr + k] != 0u) {
+                port_fatal("race_start: the planets' shadow tiles were not sent blank");
+            }
+        }
+        return true;
+    }
+    if (addr >= 0x1000u && (uint32_t)addr + size <= 0x1000u + 0x0A00u) {
+        if ((uint32_t)addr + size == 0x1000u + 0x0A00u
+            && fnv1a_32(&g_ram[0x11000u], 0x0A00u) == g_assets[ASSET_CHAMP_OBJ_FONT].hash) {
+            g_racestart.has_obj_font = true;
+        }
+        return true;
+    }
+    if (addr >= 0x2700u && (uint32_t)addr + size <= 0x2700u + 0x24E0u) {
+        if ((uint32_t)addr + size == 0x2700u + 0x24E0u
+            && fnv1a_32(&g_ram[0x12700u], 0x24E0u) == g_assets[ASSET_RACESTART_BG_TILES].hash) {
+            g_racestart.has_bg_tiles = true;
+        }
+        return true;
+    }
+    if (addr >= 0x4BE0u && (uint32_t)addr + size <= 0x4BE0u + 0x1A40u) {
+        if ((uint32_t)addr + size == 0x4BE0u + 0x1A40u
+            && fnv1a_32(&g_ram[0x14BE0u], 0x1A40u) == g_assets[ASSET_RACESTART_OBJ_TILES].hash) {
+            g_racestart.has_obj_tiles = true;
+        }
+        return true;
+    }
+    if (addr == 0x6620u && size == 0x0020u
+        && fnv1a_32(&g_ram[0x16620u], 0x0020u) == g_assets[ASSET_RACESTART_BG3_TILES].hash) {
+        g_racestart.has_bg3_tiles = true;
+        return true;
+    }
+    return false;
 }
 
 static bool match_champ_wram_asset(uint16_t addr, int id) {
@@ -390,6 +600,9 @@ static bool capture_champ_piece(uint32_t src, uint32_t size) {
 }
 
 void assets_note_upload(uint32_t src, uint32_t size) {
+    if (capture_racestart_piece(src, size)) {
+        return;
+    }
     if (capture_champ_piece(src, size)) {
         return;
     }
@@ -441,6 +654,30 @@ void assets_clear_loaded(void) {
     memset(g_title_objs_loaded, 0, sizeof(g_title_objs_loaded));
     memset(g_champ_streams_mask, 0, sizeof(g_champ_streams_mask));
     memset(g_champ_half, 0, sizeof(g_champ_half));
+    memset(&g_racestart, 0, sizeof(g_racestart));
+}
+
+bool assets_racestart_shutter_loaded(void) {
+    return g_racestart.has_shutter_a && g_racestart.has_shutter_b;
+}
+
+bool assets_racestart_loaded(void) {
+    return g_racestart.has_shutter_a
+        && g_racestart.has_shutter_b
+        && g_racestart.has_obj_font
+        && g_racestart.has_bg_tiles
+        && g_racestart.has_obj_tiles
+        && g_racestart.has_bg3_tiles
+        && g_racestart.has_bg1_left
+        && g_racestart.has_bg1_right
+        && g_racestart.has_bg2_tl
+        && g_racestart.has_bg2_tr
+        && g_racestart.has_bg3_left
+        && g_racestart.has_bg3_right;
+}
+
+const racestart_pieces* assets_racestart(void) {
+    return &g_racestart;
 }
 
 bool assets_champ_loaded(void) {

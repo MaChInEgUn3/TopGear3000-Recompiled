@@ -2,6 +2,21 @@
 
 #include "convert.h"
 
+void convert_tiles_2bpp(const uint8_t* data, size_t ntiles, uint8_t* out) {
+    for (size_t t = 0; t < ntiles; ++t) {
+        const uint8_t* tile = data + t * 16u;
+        uint8_t* dst = out + t * 64u;
+        for (size_t r = 0; r < 8u; ++r) {
+            uint8_t p0 = tile[2u * r];
+            uint8_t p1 = tile[2u * r + 1u];
+            for (size_t c = 0; c < 8u; ++c) {
+                unsigned shift = (unsigned)(7u - c);
+                dst[r * 8u + c] = (uint8_t)(((p0 >> shift) & 1u) | (((p1 >> shift) & 1u) << 1));
+            }
+        }
+    }
+}
+
 void convert_tiles_4bpp(const uint8_t* data, size_t ntiles, uint8_t* out) {
     for (size_t t = 0; t < ntiles; ++t) {
         const uint8_t* tile = data + t * 32u;

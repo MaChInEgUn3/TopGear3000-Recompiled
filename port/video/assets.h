@@ -49,6 +49,12 @@ typedef enum {
     ASSET_CHAMP_CTRL_BG_TILES,  /* $9F:8000, 6624 B (207 4bpp tiles: CONTROL BG 32..238) */
     ASSET_CHAMP_GEARS_BG_TILES, /* $8C:8B54, 5312 B (166 4bpp tiles: SPEED/GEARS BG 32..197) */
     ASSET_CHAMP_GEARS_OBJ_TILES,/* $87:898E, 1536 B (48 4bpp tiles: SPEED/GEARS OBJ 208..255) */
+    ASSET_RACESTART_SHUTTER_MAP_A, /* $9C:8FC3[0x0000..0x07FF], 2048 B (BG2 shutter map top-left) */
+    ASSET_RACESTART_SHUTTER_MAP_B, /* $9C:8FC3[0x0800..0x0FFF], 2048 B (BG2 shutter map bottom-left) */
+    ASSET_RACESTART_BG_TILES,      /* $92:80B2[0x0000..0x24DF], 9440 B (295 4bpp tiles: BG1/BG2 64..358) */
+    ASSET_RACESTART_OBJ_TILES,     /* $92:80B2[0x24E0..0x3F1F], 6720 B (210 4bpp tiles: OBJ 256..465) */
+    ASSET_RACESTART_BG3_TILES,     /* $92:80B2[0x3F20..0x3F3F], 32 B (2 2bpp tiles: BG3 0..1) */
+    ASSET_RACESTART_SUN_FRAMES,    /* $92:80B2[0x3F40..0x873F], 18432 B (16 frames x 36 4bpp tiles: BG1 476..511) */
     ASSET_COUNT
 } asset_id;
 
@@ -66,6 +72,11 @@ void assets_note_upload(uint32_t src, uint32_t size);
 
 /* Append a word written to VRAM; matches a known "word run" block by length and FNV-1a 32 hash. */
 void assets_note_word(uint16_t value);
+
+/* A streamed upload (dma_stream_setup/size/kick joined: WRAM source and size only) and the
+   sprite-table upload: recognised for the pre-race screen by source and size. */
+void assets_note_stream(uint32_t src, uint32_t size);
+void assets_note_oam(uint32_t src, uint32_t size);
 
 /* Reset the running word-write sequence (called on any other video event). */
 void assets_reset_word_run(void);
@@ -131,5 +142,43 @@ typedef struct {
 
 bool assets_champ_loaded(void);
 const champ_half_pieces* assets_champ_half(int half);
+
+#define RACESTART_MAP_BYTES 0x0700u /* 32x28 words = 1792 bytes */
+#define RACESTART_OAM_BYTES 0x0220u
+#define RACESTART_MAX_PLANETS 6u
+#define RACESTART_SHADOW_BYTES 0x0080u
+#define RACESTART_METER_WORDS 10u
+
+typedef struct {
+    bool has_shutter_a;
+    bool has_shutter_b;
+    bool has_obj_font;
+    bool has_bg_tiles;
+    bool has_obj_tiles;
+    bool has_bg3_tiles;
+    bool has_bg1_left;
+    bool has_bg1_right;
+    bool has_bg2_tl;
+    bool has_bg2_tr;
+    bool has_bg3_left;
+    bool has_bg3_right;
+    uint8_t bg1_left_map[RACESTART_MAP_BYTES];
+    uint8_t bg1_right_map[RACESTART_MAP_BYTES];
+    uint8_t bg2_tl_map[RACESTART_MAP_BYTES];
+    uint8_t bg2_tr_map[RACESTART_MAP_BYTES];
+    uint8_t bg3_left_map[RACESTART_MAP_BYTES];
+    uint8_t bg3_right_map[RACESTART_MAP_BYTES];
+    /* Handed over each frame (not computed): */
+    bool has_oam;               /* the sprite table the NMI sent ($81:0900, $220 bytes) */
+    uint8_t oam[RACESTART_OAM_BYTES];
+    uint8_t shadows_sent;       /* bit n: planet n's shadow frame was streamed */
+    uint8_t shadow[RACESTART_MAX_PLANETS][RACESTART_SHADOW_BYTES]; /* from $7E:8000+n*$800+f*$80 */
+    bool has_meter;             /* the meter's 10 words as draw_meter wrote them */
+    uint16_t meter[RACESTART_METER_WORDS];
+} racestart_pieces;
+
+bool assets_racestart_shutter_loaded(void);
+bool assets_racestart_loaded(void);
+const racestart_pieces* assets_racestart(void);
 
 #endif
