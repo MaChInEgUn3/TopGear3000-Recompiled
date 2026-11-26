@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `f3f7d5a`; earlier `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `63e1df5`; earlier `f3f7d5a`, `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -597,6 +597,28 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   `game_main_to_options`: frame 3300 is the options menu's picture that matched the original).
   It stops at the championship screen until decomp request D (the two-task kernel) lands.
   `--screen` lists stay as test scaffolding.
+
+## Two tasks (decomp request D, step 1) (2026-11-26)
+
+- Decomp `63e1df5`: `platform_task_split(task)` and `platform_task_join()`, plus the split
+  frame handlers (`irq_menu_frame`, `irq_menu_frame_tail`, `nmi_menu_frame`,
+  `nmi_menu_frame_tail`, `nmi_tail`).
+- Implemented in `port/platform/frame.c` using a second SDL thread (`SDL_CreateThread`) and
+  two SDL semaphores (`SDL_Semaphore`) for strict one-thread-at-a-time hand-off. Task 2 starts
+  blocked until task 1's next `platform_wait_vblank`, which runs: SDL events/input,
+  `irq_menu_frame()`, `irq_menu_frame_tail()`, task 2's turn (until its `platform_wait_vblank`
+  or return), draw + present, `nmi_menu_frame()`, `nmi_menu_frame_tail()`, `nmi_tail()`, and
+  pacing. `platform_task_join()` and quit paths signal task 2 to exit cleanly via `longjmp`
+  and join the thread. Nested splits call `port_fatal`.
+- `--screen ticker` runs `ticker_screen()`. Test `game_ticker_runs` verifies it returns
+  cleanly from `notes/tick/wram_before_tick.bin` (at frame 3, game frame counter 7957; picture
+  not drawn yet).
+
+- **Not yet proven (2026-11-26):** from the bench memory saved before the ticker
+  (`notes/tick`, step 15857), `ticker_screen()` returns after 3 frames, where the original shows
+  the ticker for about 560; so `game_ticker_runs` shows the split/join path does not crash, not
+  that the two tasks ran a full screen. To investigate (the saved state, the ticker's exit
+  condition) before drawing the ticker.
 
 ## Steps (2026-11-24)
 

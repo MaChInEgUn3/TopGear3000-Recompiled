@@ -45,6 +45,16 @@ static unsigned long g_wram_out_frame = 0;
 static const char* g_wram_out_path = NULL;
 static bool g_fast = false;
 
+static bool g_split_active = false;
+static bool g_task2_running = false;
+static bool g_task2_abort = false;
+static SDL_Thread* g_task2_thread = NULL;
+static SDL_ThreadID g_task1_thread_id = 0;
+static SDL_Semaphore* g_sem_task1 = NULL;
+static SDL_Semaphore* g_sem_task2 = NULL;
+static void (*g_task2_fn)(uint16_t) = NULL;
+static jmp_buf g_task2_exit_jmp;
+
 typedef struct {
     long step;
     uint16_t mask;
@@ -156,13 +166,78 @@ static void run_nmi_dispatch(void) {
     }
 }
 
-void platform_wait_vblank(void) {
-    /* a) Pump SDL events first, so the game's frame code (which reads the pads) sees this
-       frame's input, not the last one's. */
+static int SDLCALL task2_entry(void* userdata) {
+    (void)userdata;
+    SDL_WaitSemaphore(g_sem_task2);
+    if (!g_task2_abort) {
+        if (setjmp(g_task2_exit_jmp) == 0) {
+            g_task2_fn(0x0200);
+        }
+    }
+    g_task2_running = false;
+    SDL_SignalSemaphore(g_sem_task1);
+    return 0;
+}
+
+static void task_cleanup_split(void) {
+    if (!g_split_active) {
+        return;
+    }
+    if (g_task2_running) {
+        g_task2_abort = true;
+        SDL_SignalSemaphore(g_sem_task2);
+    }
+    SDL_WaitThread(g_task2_thread, NULL);
+    g_task2_thread = NULL;
+    SDL_DestroySemaphore(g_sem_task1);
+    g_sem_task1 = NULL;
+    SDL_DestroySemaphore(g_sem_task2);
+    g_sem_task2 = NULL;
+    g_task2_fn = NULL;
+    g_task2_running = false;
+    g_task2_abort = false;
+    g_split_active = false;
+}
+
+void platform_task_split(void (*task)(uint16_t dp)) {
+    if (g_split_active) {
+        port_fatal("nested platform_task_split is not supported");
+    }
+    if (task == NULL) {
+        port_fatal("platform_task_split called with NULL task");
+    }
+    g_task1_thread_id = SDL_GetCurrentThreadID();
+    g_sem_task1 = SDL_CreateSemaphore(0);
+    g_sem_task2 = SDL_CreateSemaphore(0);
+    if (g_sem_task1 == NULL || g_sem_task2 == NULL) {
+        port_fatal("SDL_CreateSemaphore failed");
+    }
+    g_task2_fn = task;
+    g_task2_abort = false;
+    g_task2_running = true;
+    g_split_active = true;
+    g_task2_thread = SDL_CreateThread(task2_entry, "tg3000-task2", NULL);
+    if (g_task2_thread == NULL) {
+        port_fatal("SDL_CreateThread failed");
+    }
+}
+
+void platform_task_join(void) {
+    if (!g_split_active) {
+        return;
+    }
+    if (SDL_GetCurrentThreadID() != g_task1_thread_id) {
+        port_fatal("platform_task_join called from task 2");
+    }
+    task_cleanup_split();
+}
+
+static void pump_events_and_input(void) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_EVENT_QUIT ||
             (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)) {
+            task_cleanup_split();
             longjmp(g_quit_jmp, 1);
         }
         port_input_event(&event);
@@ -187,13 +262,9 @@ void platform_wait_vblank(void) {
         fclose(wf);
         g_wram_out_path = NULL;
     }
+}
 
-    /* b) Run the game's frame code */
-    if (nmi_enabled) {
-        run_nmi_dispatch();
-    }
-
-    /* c) Draw */
+static void present_frame(void) {
     bool active_intro = intro_screen_active();
     bool active_title = !active_intro && title_screen_active();
     bool active_results = !active_intro && !active_title && results_screen_active();
@@ -351,8 +422,9 @@ void platform_wait_vblank(void) {
     }
 
     SDL_RenderPresent(g_renderer);
+}
 
-    /* d) Pace to 60.0988 fps */
+static void pace_frame(void) {
     if (!g_fast) {
         const uint64_t frame_ns = 16639267ULL;
         uint64_t now = SDL_GetTicksNS();
@@ -368,9 +440,50 @@ void platform_wait_vblank(void) {
             g_next_frame_ns += frame_ns;
         }
     }
+}
+
+void platform_wait_vblank(void) {
+    if (g_split_active && SDL_GetCurrentThreadID() != g_task1_thread_id) {
+        SDL_SignalSemaphore(g_sem_task1);
+        SDL_WaitSemaphore(g_sem_task2);
+        if (g_task2_abort) {
+            longjmp(g_task2_exit_jmp, 1);
+        }
+        return;
+    }
+
+    /* a) Pump SDL events first, so the game's frame code (which reads the pads) sees this
+       frame's input, not the last one's. */
+    pump_events_and_input();
+
+    if (g_split_active) {
+        /* Two-task split active: IRQ -> task 2 turn -> draw+present -> NMI -> pacing. */
+        irq_menu_frame();
+        irq_menu_frame_tail();
+        if (g_task2_running) {
+            SDL_SignalSemaphore(g_sem_task2);
+            SDL_WaitSemaphore(g_sem_task1);
+        }
+        present_frame();
+        nmi_menu_frame();
+        nmi_menu_frame_tail();
+        nmi_tail();
+    } else {
+        /* b) Run the game's frame code */
+        if (nmi_enabled) {
+            run_nmi_dispatch();
+        }
+        /* c) Draw */
+        present_frame();
+    }
+
+    /* d) Pace to 60.0988 fps */
+    pace_frame();
 
     /* e) Frame counter and limit check */
-    g_frame_count++;    if (g_frame_limit > 0 && g_frame_count >= g_frame_limit) {
+    g_frame_count++;
+    if (g_frame_limit > 0 && g_frame_count >= g_frame_limit) {
+        task_cleanup_split();
         longjmp(g_quit_jmp, 1);
     }
 }
@@ -527,6 +640,8 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
             options_screens(0);
         } else if (strcmp(name, "results") == 0) {
             results_screen_run();
+        } else if (strcmp(name, "ticker") == 0) {
+            ticker_screen();
         } else if (strcmp(name, "sound_menu") == 0) {
             sound_load_menu(DP, 1);
             port_sound_print_set_summary();

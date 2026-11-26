@@ -269,3 +269,14 @@ set_tests_properties(sound_set_menu PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# Two-task kernel (decomp request D, step 1): the ticker screen runs from saved game memory
+# (a local file under notes/, never in git) and returns by itself. Skipped where absent.
+add_test(NAME game_ticker_runs
+  COMMAND tg3000 --wram notes/tick/wram_before_tick.bin --screen ticker --fast --frames 600 --expect-return
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_ticker_runs PROPERTIES
+  PASS_REGULAR_EXPRESSION "screen ticker returned at frame "
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
