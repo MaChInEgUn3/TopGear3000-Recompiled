@@ -489,6 +489,43 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
     (behind BG1/BG2 priority 1, in front of BG1/BG2 priority 0).
 - **Test:** `game_picture_intro_logo`.
 
+## The title screen drawn natively (step 4, 2026-11-25)
+
+- **Identical to the original pixel for pixel at the moving moment (`frame_16752.png`):**
+  started from `notes/title/wram_before_title_screen.bin` (`autopilot_60k.txt` step 16662,
+  entry of `title_screen_run(0)` at step 16663), port frame 40 matches `frame_16752.png` with
+  0 of 57,344 pixels different. At the static settled moment (`F = 155..164` vs
+  `frame_16867.png` / `frame_16868.png`), 57,309 of 57,344 pixels match; 35 pixels differ in
+  `x=122..126, y=145..155` (inside `OAM i=8` / Mode 7 overlap).
+- **How, under the rule:** `port/screens/title_screen.c`, `--screen title` ->
+  `title_screen_run(0)`.
+  - **Assets (`port/video/assets.c`):** `$9A:EB44` is unpacked at start-up to extract the
+    Mode 7 tiles (`$7E:8633` 4608 B, `$7E:9833` 1728 B), Mode 7 base map (`$7E:80BA` 90 B),
+    and four OBJ blocks (`$7E:8256`, `$7E:B385`, `$7E:9F07` recognised by size+hash from
+    `$7F:0000`, and `$7E:A071` recognised by WRAM source+hash). Mode 2 BG1 horizon map and
+    tiles (`$7F:6460`, `$7F:6660`, `$7F:6860`) and palettes (`$7E:8114`, `$7E:81E2`,
+    `$7E:8202`, `$7E:8132`, `$7F:6440`) are read from intact game RAM.
+  - **Fixed region layout (from ROM HDMA tables `$8A:88DE`..`$8A:88F9`):** lines 0..167 are
+    Mode 7; lines 168..223 are Mode 2 (BG1 horizon; BG2 empty; Mode 2 per-tile offset unused).
+  - **Mode 7 use (listed for the owner's veto):** lines 0..167 draw the 128x128 Mode 7 map
+    (with `tile_anim_step` patch from `$7E:8000..$7E:809B` when `$0142 != 0`) using matrix
+    `DP+VIEW_MATRIX` (`$0114..$011B`), fixed centre `(128, 64)`, wraparound (`M7SEL=0`), and
+    plain fixed-point math (`floor_div256`).
+  - **Per-line effects (listed for the owner's veto):**
+    1. **Sky gradient (`$7E:2C00` -> `$7E:2800` / `$7E:2A00`):** lines 0..126 read
+       `$7E:2800 + 4*y` and lines 127..223 read `$7E:2A00 + 4*(y-127)` for the per-line
+       backdrop colour (CGRAM 0), with strict checks on the table header and CGADD=0.
+    2. **Mode 7 / Mode 2 scroll tables (`$0D00` M7VOFS/BG1VOFS, `$0D20` M7HOFS/BG1HOFS):**
+       read at fixed addresses with the screen's fixed band counts (`1, 127, 40, 1, 0`) written
+       by `mode7_view`.
+- **Test:** `game_picture_title_screen`.
+
+- **Not yet exact, measured (2026-11-25):** the moving moment matches the bench's step 16750
+  exactly at port frame 40, but the next step (16751) is closest to port frame 42 (106 pixels
+  off): one of the animations runs a frame apart (cause not established). At the settled
+  moment 35 pixels differ, all where object 8 overlaps the Mode 7 picture (an object/Mode 7
+  ordering detail not resolved). `game_picture_title_screen` locks the exact frame 40.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

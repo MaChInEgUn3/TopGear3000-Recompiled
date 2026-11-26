@@ -202,12 +202,16 @@ void platform_wait_vblank(void) {
 
     /* c) Draw */
     bool active_intro = intro_screen_active();
-    bool active_results = !active_intro && results_screen_active();
-    int active_menu = (active_intro || active_results) ? -1 : menu_screen_active();
+    bool active_title = !active_intro && title_screen_active();
+    bool active_results = !active_intro && !active_title && results_screen_active();
+    int active_menu = (active_intro || active_title || active_results) ? -1 : menu_screen_active();
     const char* drawn_name = "none";
     if (active_intro) {
         intro_screen_draw(g_fb);
         drawn_name = "intro";
+    } else if (active_title) {
+        title_screen_draw(g_fb);
+        drawn_name = "title";
     } else if (active_results) {
         results_screen_draw(g_fb);
         drawn_name = "results";
@@ -215,7 +219,7 @@ void platform_wait_vblank(void) {
         menu_screen_draw(active_menu, g_fb);
         drawn_name = menu_screen_name(active_menu);
     }
-    if (active_intro || active_results || active_menu >= 0) {
+    if (active_intro || active_title || active_results || active_menu >= 0) {
         SDL_UpdateTexture(g_texture, NULL, g_fb, SCREEN_WIDTH * (int)sizeof(uint32_t));
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
         SDL_RenderClear(g_renderer);
@@ -516,6 +520,8 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
         } else if (strcmp(name, "intro") == 0) {
             intro_screen();
             results_init();
+        } else if (strcmp(name, "title") == 0) {
+            title_screen_run(0);
         } else if (strcmp(name, "password_show") == 0) {
             password_show();
         } else if (strcmp(name, "vs") == 0) {

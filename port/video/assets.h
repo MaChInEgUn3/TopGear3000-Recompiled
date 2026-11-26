@@ -32,6 +32,13 @@ typedef enum {
     ASSET_INTRO_TEXT_DRAWINGS,
     ASSET_INTRO_M7_DRAWINGS,
     ASSET_INTRO_M7_MAP,
+    ASSET_TITLE_M7_TILES_A,
+    ASSET_TITLE_M7_TILES_B,
+    ASSET_TITLE_M7_MAP,
+    ASSET_TITLE_OBJ_0,
+    ASSET_TITLE_OBJ_1,
+    ASSET_TITLE_OBJ_2,
+    ASSET_TITLE_OBJ_3,
     ASSET_COUNT
 } asset_id;
 
@@ -81,5 +88,6 @@ typedef enum {
 } intro_piece_id;
 
 bool assets_intro_piece_sent(intro_piece_id id);
+bool assets_title_objs_loaded(void);
 
 #endif

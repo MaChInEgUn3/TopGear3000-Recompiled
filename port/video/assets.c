@@ -14,7 +14,8 @@ typedef enum {
     ASSET_KIND_TILES_4BPP,
     ASSET_KIND_MAP_16,
     ASSET_KIND_WORD_RUN,
-    ASSET_KIND_CAPTURED_WORD_RUN
+    ASSET_KIND_CAPTURED_WORD_RUN,
+    ASSET_KIND_TITLE_PACK
 } asset_kind;
 
 typedef struct {
@@ -44,10 +45,18 @@ static asset_entry g_assets[ASSET_COUNT] = {
     [ASSET_INTRO_TEXT_DRAWINGS] = {"INTRO_TEXT_DRAWINGS", 0x8D8000u, ASSET_KIND_TILES_4BPP, ROLE_TEXT_DRAWINGS_128, 0, NULL, 0, 0, 0},
     [ASSET_INTRO_M7_DRAWINGS] = {"INTRO_M7_DRAWINGS", 0x948020u, ASSET_KIND_TILES_8BPP, ROLE_BG_DRAWINGS, 0, NULL, 0, 0, 0},
     [ASSET_INTRO_M7_MAP] = {"INTRO_M7_MAP", 0x90C343u, ASSET_KIND_MAP_16, ROLE_BG_ARRANGEMENT, 0, NULL, 0, 0, 0},
+    [ASSET_TITLE_M7_TILES_A] = {"TITLE_M7_TILES_A", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_BG_DRAWINGS, 0, NULL, 0, 0, 0},
+    [ASSET_TITLE_M7_TILES_B] = {"TITLE_M7_TILES_B", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_BG_DRAWINGS, 0, NULL, 0, 0, 0},
+    [ASSET_TITLE_M7_MAP] = {"TITLE_M7_MAP", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_BG_ARRANGEMENT, 0, NULL, 0, 0, 0},
+    [ASSET_TITLE_OBJ_0] = {"TITLE_OBJ_0", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_OBJ_DRAWINGS, 0, NULL, 0, 0, 0},
+    [ASSET_TITLE_OBJ_1] = {"TITLE_OBJ_1", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_OBJ_DRAWINGS, 0, NULL, 0, 0, 0},
+    [ASSET_TITLE_OBJ_2] = {"TITLE_OBJ_2", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_OBJ_DRAWINGS, 0, NULL, 0, 0, 0},
+    [ASSET_TITLE_OBJ_3] = {"TITLE_OBJ_3", 0x9AEB44u, ASSET_KIND_TITLE_PACK, ROLE_OBJ_DRAWINGS, 0, NULL, 0, 0, 0},
 };
 
 static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1, -1};
 static bool g_intro_pieces_sent[INTRO_PIECE_COUNT];
+static bool g_title_objs_loaded[4];
 
 typedef struct {
     uint32_t wram_bus;
@@ -95,6 +104,7 @@ static uint32_t fnv1a_32(const uint8_t* data, size_t len) {
 void assets_init(void) {
     assets_clear_loaded();
     assets_reset_word_run();
+    bool title_pack_ready = false;
     for (int i = 0; i < ASSET_COUNT; ++i) {
         free(g_assets[i].data);
         g_assets[i].data = NULL;
@@ -102,6 +112,54 @@ void assets_init(void) {
         g_assets[i].hash = 0;
 
         if (g_assets[i].kind == ASSET_KIND_CAPTURED_WORD_RUN) {
+            continue;
+        }
+
+        if (g_assets[i].kind == ASSET_KIND_TITLE_PACK) {
+            if (!title_pack_ready) {
+                uint16_t end = 0;
+                if (decompress(DP, 0x9Au, 0xEB44u, 0x7Eu, 0x8000u, &end) == 0u) {
+                    port_fatal("assets_init: title pack decompression failed");
+                }
+                title_pack_ready = true;
+            }
+            const uint8_t* src_ptr = NULL;
+            size_t len = 0;
+            uint16_t end = 0;
+            if (i == ASSET_TITLE_M7_TILES_A) {
+                src_ptr = &g_ram[0x8633u];
+                len = 0x1200u;
+            } else if (i == ASSET_TITLE_M7_TILES_B) {
+                src_ptr = &g_ram[0x9833u];
+                len = 0x06C0u;
+            } else if (i == ASSET_TITLE_M7_MAP) {
+                src_ptr = &g_ram[0x80BAu];
+                len = 90u;
+            } else if (i == ASSET_TITLE_OBJ_0) {
+                len = decompress_near(DP, 0x7Eu, 0x8256u, 0x7Fu, 0x0000u, &end);
+                src_ptr = &g_ram[0x10000u];
+            } else if (i == ASSET_TITLE_OBJ_1) {
+                len = decompress_near(DP, 0x7Eu, 0xB385u, 0x7Fu, 0x0000u, &end);
+                src_ptr = &g_ram[0x10000u];
+            } else if (i == ASSET_TITLE_OBJ_2) {
+                len = decompress_near(DP, 0x7Eu, 0x9F07u, 0x7Fu, 0x0000u, &end);
+                src_ptr = &g_ram[0x10000u];
+            } else if (i == ASSET_TITLE_OBJ_3) {
+                src_ptr = &g_ram[0xA071u];
+                len = 0x0800u;
+            }
+            if (len == 0u || src_ptr == NULL) {
+                port_fatal("assets_init: title pack sub-block has zero length");
+            }
+            uint8_t* buf = (uint8_t*)malloc(len);
+            if (buf == NULL) {
+                port_fatal("assets_init: out of memory");
+            }
+            memcpy(buf, src_ptr, len);
+            g_assets[i].data = buf;
+            g_assets[i].size = len;
+            g_assets[i].hash = fnv1a_32(buf, len);
+            g_assets[i].generation++;
             continue;
         }
 
@@ -219,6 +277,9 @@ void assets_note_upload(uint32_t src, uint32_t size) {
         for (int i = 0; i < ASSET_COUNT; ++i) {
             if (g_assets[i].size == size && g_assets[i].hash == h) {
                 g_current[g_assets[i].role] = i;
+                if (i >= ASSET_TITLE_OBJ_0 && i <= ASSET_TITLE_OBJ_2) {
+                    g_title_objs_loaded[i - ASSET_TITLE_OBJ_0] = true;
+                }
             }
         }
         return;
@@ -232,6 +293,12 @@ void assets_note_upload(uint32_t src, uint32_t size) {
             }
         }
     } else {
+        if (src == 0x7EA071u && size == 0x0800u) {
+            uint32_t h = fnv1a_32(&g_ram[wram_idx], size);
+            if (h == g_assets[ASSET_TITLE_OBJ_3].hash) {
+                g_title_objs_loaded[3] = true;
+            }
+        }
         for (int i = 0; i < INTRO_PIECE_COUNT; ++i) {
             if (g_intro_pieces[i].wram_bus == src && g_intro_pieces[i].size == size) {
                 g_intro_pieces_sent[i] = true;
@@ -245,6 +312,7 @@ void assets_clear_loaded(void) {
         g_current[r] = -1;
     }
     memset(g_intro_pieces_sent, 0, sizeof(g_intro_pieces_sent));
+    memset(g_title_objs_loaded, 0, sizeof(g_title_objs_loaded));
 }
 
 bool assets_intro_piece_sent(intro_piece_id id) {
@@ -252,6 +320,11 @@ bool assets_intro_piece_sent(intro_piece_id id) {
         return false;
     }
     return g_intro_pieces_sent[id];
+}
+
+bool assets_title_objs_loaded(void) {
+    return g_title_objs_loaded[0] && g_title_objs_loaded[1]
+        && g_title_objs_loaded[2] && g_title_objs_loaded[3];
 }
 
 int asset_current(asset_role r) {

@@ -64,6 +64,7 @@ add_executable(tg3000
   port/screens/menu_screen.c
   port/screens/results_screen.c
   port/screens/intro_screen.c
+  port/screens/title_screen.c
 )
 target_include_directories(tg3000 PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/port"
@@ -204,6 +205,18 @@ add_test(NAME game_picture_intro_logo
 )
 set_tests_properties(game_picture_intro_logo PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 2298 picture hash 757d5bd97fecbd24 brightness 15 drawn intro"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The title screen ($80:FBA5) from the original's own game memory (autopilot_60k.txt step
+# 16662; a local file under notes/, never in git): port frame 40 matched the original's
+# moving picture (step 16750, frame_16752.png) pixel for pixel. Skipped where absent.
+add_test(NAME game_picture_title_screen
+  COMMAND tg3000 --wram notes/title/wram_before_title_screen.bin --screen title --fast --frames 41 --shot 40 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_title_screen PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 40 picture hash 0fc0f3b53eced1c0 brightness 15 drawn title"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
