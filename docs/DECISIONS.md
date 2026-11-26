@@ -559,6 +559,15 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   memory is modelled. The callers of the loader (the scene changes) are still assembly in the
   decomp, so no screen loads a set yet; the native player (step 3) reads these.
 
+## Native sound player, step 1: a set loaded and converted (2026-11-26)
+
+- Test scaffold `--screen sound_menu` calls the game's own `sound_load_menu(DP, 1)` (as the top
+  loop does after the shop) so the menus' set reaches the port at run time: songs (2,512
+  bytes), instruments and settings (1,066 bytes), 9 samples in slots 0-7 and 16, as measured.
+- `port/sound/convert_audio.c`: the one conversion file for sound: each sample's BRR bytes
+  become 16-bit PCM with its loop point when received (two samples do not loop). Test
+  `sound_set_menu`. No sequencer or mixer yet.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

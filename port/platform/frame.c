@@ -16,6 +16,7 @@
 #include "platform.h"
 #include "port.h"
 #include "screens.h"
+#include "sound.h"
 #include "tg3000.h"
 #include "vs.h"
 
@@ -521,6 +522,9 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
             options_screens(0);
         } else if (strcmp(name, "results") == 0) {
             results_screen_run();
+        } else if (strcmp(name, "sound_menu") == 0) {
+            sound_load_menu(DP, 1);
+            port_sound_print_set_summary();
         } else {
             char msg[128];
             snprintf(msg, sizeof(msg), "unknown screen: %s", name);

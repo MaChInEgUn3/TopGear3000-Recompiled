@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "convert_audio.h"
 #include "platform.h"
 #include "port.h"
 #include "tg3000.h"
@@ -21,9 +22,12 @@
 static int is_directory_dest(uint16_t d) { return d == 0x4000u || d == 0x2000u || d == 0x2500u; }
 
 typedef struct {
-    uint8_t* bytes;
-    uint16_t size;
-    uint16_t loop_offset;  // loop point as an offset into the sample (the game gives an address)
+    int16_t* pcm;
+    size_t num_samples;
+    size_t loop_sample;
+    bool loops;
+    uint16_t brr_size;
+    uint16_t loop_offset;  // loop point as a byte offset into the BRR sample
     int present;
 } port_sample;
 
@@ -54,7 +58,7 @@ void sound_upload_end(void) {
 void sound_upload_block(uint16_t spc_dest, uint32_t src, uint16_t size) {
     if (spc_dest == SOUND_DEST_SONGS) {
         // A new set starts with its songs: forget the previous set's samples.
-        for (int i = 0; i < 32; ++i) { free(g_samples[i].bytes); memset(&g_samples[i], 0, sizeof g_samples[i]); }
+        for (int i = 0; i < 32; ++i) { free(g_samples[i].pcm); memset(&g_samples[i], 0, sizeof g_samples[i]); }
         free(g_songs);
         g_songs = copy_bus(src, size);
         g_songs_size = size;
@@ -73,12 +77,45 @@ void sound_upload_block(uint16_t spc_dest, uint32_t src, uint16_t size) {
 
 void sound_upload_sample(uint8_t slot, uint16_t spc_dest, uint32_t src, uint16_t size, uint16_t spc_loop) {
     if (slot >= 32u) port_fatal("sound: sample slot out of the measured range");
-    if (spc_loop < spc_dest || spc_loop >= (uint32_t)spc_dest + size)
-        port_fatal("sound: sample loop point outside the sample");
+    if (spc_loop < spc_dest || spc_loop > (uint32_t)spc_dest + size) {
+        char msg[128];
+        snprintf(msg, sizeof msg,
+                 "sound: sample loop point outside the sample (slot %u dest $%04X size %u loop $%04X)",
+                 (unsigned)slot, (unsigned)spc_dest, (unsigned)size, (unsigned)spc_loop);
+        port_fatal(msg);
+    }
+    uint16_t loop_offset = (uint16_t)(spc_loop - spc_dest);
+    uint8_t* brr = copy_bus(src, size);
+    converted_sample conv;
+    if (!convert_brr_to_pcm(brr, size, loop_offset, &conv)) {
+        free(brr);
+        port_fatal("sound: invalid BRR sample or out of memory");
+    }
+    free(brr);
+
     port_sample* s = &g_samples[slot];
-    free(s->bytes);
-    s->bytes = copy_bus(src, size);  // BRR bytes from the cartridge; converted by the player
-    s->size = size;
-    s->loop_offset = (uint16_t)(spc_loop - spc_dest);
+    free(s->pcm);
+    s->pcm = conv.pcm;
+    s->num_samples = conv.num_samples;
+    s->loop_sample = conv.loop_sample;
+    s->loops = conv.loops;
+    s->brr_size = size;
+    s->loop_offset = loop_offset;
     s->present = 1;
+}
+
+void port_sound_print_set_summary(void) {
+    unsigned count = 0;
+    size_t total_pcm = 0;
+    for (int i = 0; i < 32; ++i) {
+        if (!g_samples[i].present) continue;
+        ++count;
+        total_pcm += g_samples[i].num_samples;
+        printf("  slot %d: brr %u B, loop_off %u B, pcm %zu samples, loop_sample %zu, loops %d\n",
+               i, (unsigned)g_samples[i].brr_size, (unsigned)g_samples[i].loop_offset,
+               g_samples[i].num_samples, g_samples[i].loop_sample, g_samples[i].loops ? 1 : 0);
+    }
+    printf("sound set: songs %u B, instruments %u B, samples %u, total pcm %zu samples\n",
+           (unsigned)g_songs_size, (unsigned)g_instruments_size, count, total_pcm);
+    fflush(stdout);
 }

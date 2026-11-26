@@ -31,5 +31,7 @@ void port_set_movie_offset_from(unsigned long frame, long offset);
 void port_set_wram_out(unsigned long frame, const char* path);
 /* Test only: disable 60.0988 fps frame pacing when fast is true. */
 void port_set_fast(bool fast);
+/* Print a summary of the currently loaded sound set (slots, sizes, total PCM samples). */
+void port_sound_print_set_summary(void);
 
 #endif
