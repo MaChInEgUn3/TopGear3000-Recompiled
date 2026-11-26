@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `b67f44e`; earlier `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `e45e619`; earlier `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -575,7 +575,9 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   Decided under the rule (the owner asked for decisions under "0% emulated", not options): not
   in the port. A byte-level interface with the chip's behaviour is a model of the DSP-4. The
   port needs the race's C to call native command functions directly (as `dsp4_edges`,
-  `dsp4_row`, `dsp4_sprite` already are); `Dsp4Chip` stays a bench tool. Asked of the decomp
+  `dsp4_row`, `dsp4_sprite` already are); `Dsp4Chip` stays a bench tool. The decomp agreed:
+  `e45e619` moved it to `tools/bench/` and plans one native function per streamed command
+  (`$01`, `$09`, `$06`, `$0D`), called directly by the race's C. Asked of the decomp
   (`docs/decomp-requests.md`, A). The port's `dsp4_port_*` keep stopping with a message.
 
 ## Steps (2026-11-24)
