@@ -40,7 +40,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `void platform_unported(const char* what);`), so a player sees what was hit (24 traps today).
 - **G (request 5). A bench report of the sound driver's output per voice** (per tick: key on/off,
   sample, pitch, volume, envelope settings), the reference for the port's native sequencer.
-- **H (request 9). Chip state read back:** `video_read_vram_word` (`vs_hud_draw`) and
+- **H (request 9) — measured in decomp `0cbbece` (values are the game's own); the port still needs the C to keep WRAM shadows instead (a VRAM strip copy or a register shadow in the port would break the rule). Chip state read back:** `video_read_vram_word` (`vs_hud_draw`) and
   `dma_hdma_get_table` (`irq_vs_split`) need state a non-emulating port does not keep. If
   possible, have the C keep its own WRAM copy of what it reads back, or name the value.
 
