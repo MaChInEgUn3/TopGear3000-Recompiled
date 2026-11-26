@@ -433,6 +433,25 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
 
 
 
+## The intro's zoom phase drawn natively, Mode 7 included (step 4, 2026-11-25)
+
+- **Identical to the original pixel for pixel:** the intro's first phase (`$013E` = 0: the
+  Mode 7 picture zooming in, 128 stars, typed text below), port frames 295 and 296 against the
+  bench's pictures of steps 700 and 701 (0 of 57,344 pixels different each). First Mode 7 use,
+  listed for the owner's veto.
+- **How, under the rule:** `port/screens/intro_screen.c`. The Mode 7 picture's drawings
+  (`$94:8020`) and map (`$90:C343`) reach the chip through stream calls the port ignores; the
+  port converts them from the cartridge at start-up (catalogue by ROM address). The map's layout
+  is a measured fact (an 8x10 block at column 11, row 10 of the 128x128 map, the rest empty).
+  The picture is drawn scaled by the game's own zoom variable about the game's centre variables
+  (plain fixed-point, nearest pixel: it matched with no chip rounding copied), on the lines the
+  intro's fixed band layout gives to Mode 7 (0-183); the typed text below from `$7F:0000`.
+  Colours are read from the game's RAM copy at `$0500` (stable during the phase; the first
+  screen whose colours come from game RAM). Stars from the game's sprite table, as on the
+  results screen. No game RAM written, no game routine called, no game maths copied.
+- **Test:** `game_picture_intro_zoom`. The intro's later phases (logo slices, curved window,
+  colour cycle) are not drawn yet.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

@@ -201,17 +201,21 @@ void platform_wait_vblank(void) {
     }
 
     /* c) Draw */
-    bool active_results = results_screen_active();
-    int active_menu = active_results ? -1 : menu_screen_active();
+    bool active_intro = intro_screen_active();
+    bool active_results = !active_intro && results_screen_active();
+    int active_menu = (active_intro || active_results) ? -1 : menu_screen_active();
     const char* drawn_name = "none";
-    if (active_results) {
+    if (active_intro) {
+        intro_screen_draw(g_fb);
+        drawn_name = "intro";
+    } else if (active_results) {
         results_screen_draw(g_fb);
         drawn_name = "results";
     } else if (active_menu >= 0) {
         menu_screen_draw(active_menu, g_fb);
         drawn_name = menu_screen_name(active_menu);
     }
-    if (active_results || active_menu >= 0) {
+    if (active_intro || active_results || active_menu >= 0) {
         SDL_UpdateTexture(g_texture, NULL, g_fb, SCREEN_WIDTH * (int)sizeof(uint32_t));
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
         SDL_RenderClear(g_renderer);

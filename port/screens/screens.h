@@ -16,4 +16,7 @@ const char* menu_screen_name(int which);
 bool results_screen_active(void);
 void results_screen_draw(uint32_t* fb);
 
+bool intro_screen_active(void);
+void intro_screen_draw(uint32_t* fb);
+
 #endif
