@@ -520,11 +520,14 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
        by `mode7_view`.
 - **Test:** `game_picture_title_screen`.
 
-- **Not yet exact, measured (2026-11-25):** the moving moment matches the bench's step 16750
-  exactly at port frame 40, but the next step (16751) is closest to port frame 42 (106 pixels
-  off): one of the animations runs a frame apart (cause not established). At the settled
-  moment 35 pixels differ, all where object 8 overlaps the Mode 7 picture (an object/Mode 7
-  ordering detail not resolved). `game_picture_title_screen` locks the exact frame 40.
+- **Measured (2026-11-25):** the port's game state matches the bench's frame by frame (port
+  frame F = bench step F + 16707: the slide `$0136`, objects, scroll tables). The moving
+  moment's second picture pairs that step's scroll table with the previous step's objects:
+  the bench's picture timing, not a port difference. At the settled moment 35 pixels differ
+  where object 8 (priority 0) overlaps the Mode 7 picture: drawing priority-0 objects behind
+  the picture fixes those lines but breaks lines 160-167 (objects 0-2), so the ordering rule
+  there is not established; left as a known difference. `game_picture_title_screen` locks the
+  exact frame 40.
 
 ## Steps (2026-11-24)
 

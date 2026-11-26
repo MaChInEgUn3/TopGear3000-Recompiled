@@ -203,6 +203,63 @@ bool title_screen_active(void) {
     return rd16(0x0008u) == 0xFBD1u && assets_title_objs_loaded();
 }
 
+static void draw_title_sprites(uint32_t* fb, const uint32_t pal_rgba[256]) {
+    for (int i = (int)TITLE_SPRITE_COUNT - 1; i >= 0; --i) {
+        uint32_t lo_addr = TITLE_OAM_LOW_BASE + (uint32_t)i * 4u;
+        uint8_t x_lo = rd8(lo_addr);
+        uint8_t y_raw = rd8(lo_addr + 1u);
+        if (y_raw >= SCREEN_HEIGHT) {
+            continue;
+        }
+        uint8_t tile_lo = rd8(lo_addr + 2u);
+        uint8_t attr = rd8(lo_addr + 3u);
+        uint8_t hi = (uint8_t)((rd8(TITLE_OAM_HIGH_BASE + ((uint32_t)i >> 2))
+                                >> (((uint32_t)i & 3u) * 2u)) & 3u);
+        bool is_large = (hi & 2u) != 0u;
+        uint16_t tile = (uint16_t)(tile_lo | ((uint16_t)(attr & 1u) << 8));
+        uint16_t pal = (attr >> 1) & 7u;
+        if (pal > 2u) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "title: unexpected OBJ palette %u on sprite %d",
+                     (unsigned)pal, i);
+            port_fatal(msg);
+        }
+        bool hflip = (attr & 0x40u) != 0u;
+        bool vflip = (attr & 0x80u) != 0u;
+        int x9 = (int)(x_lo | ((uint16_t)(hi & 1u) << 8));
+        int ox = (x9 >= 256) ? (x9 - 512) : x9;
+        int oy = (int)y_raw;
+        int sub_dim = is_large ? 2 : 1;
+
+        for (int ty = 0; ty < sub_dim; ++ty) {
+            int src_ty = vflip ? (sub_dim - 1 - ty) : ty;
+            for (int tx = 0; tx < sub_dim; ++tx) {
+                int src_tx = hflip ? (sub_dim - 1 - tx) : tx;
+                uint16_t sub_tile = (uint16_t)(tile + (uint16_t)src_ty * 16u + (uint16_t)src_tx);
+                const uint8_t* pixels = obj_tile_pixels(sub_tile);
+                for (int py = 0; py < 8; ++py) {
+                    int sy = oy + ty * 8 + py;
+                    if (sy < 0 || sy >= SCREEN_HEIGHT) {
+                        continue;
+                    }
+                    int src_py = vflip ? (7 - py) : py;
+                    for (int px = 0; px < 8; ++px) {
+                        int sx = ox + tx * 8 + px;
+                        if (sx < 0 || sx >= SCREEN_WIDTH) {
+                            continue;
+                        }
+                        int src_px = hflip ? (7 - px) : px;
+                        uint8_t p = pixels[src_py * 8 + src_px];
+                        if (p != 0u) {
+                            fb[sy * SCREEN_WIDTH + sx] = pal_rgba[128u + pal * 16u + p];
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void title_screen_draw(uint32_t* fb) {
     uint8_t b = screen_decode_brightness("title", rd8(0x019Bu));
     if (b == 0u) {
@@ -351,60 +408,7 @@ void title_screen_draw(uint32_t* fb) {
     }
 
     /* 5. Sprites from OAM $0900/$0B00 (8x8 or 16x16, reverse order) */
-    for (int i = (int)TITLE_SPRITE_COUNT - 1; i >= 0; --i) {
-        uint32_t lo_addr = TITLE_OAM_LOW_BASE + (uint32_t)i * 4u;
-        uint8_t x_lo = rd8(lo_addr);
-        uint8_t y_raw = rd8(lo_addr + 1u);
-        if (y_raw >= SCREEN_HEIGHT) {
-            continue;
-        }
-        uint8_t tile_lo = rd8(lo_addr + 2u);
-        uint8_t attr = rd8(lo_addr + 3u);
-        uint8_t hi = (uint8_t)((rd8(TITLE_OAM_HIGH_BASE + ((uint32_t)i >> 2))
-                                >> (((uint32_t)i & 3u) * 2u)) & 3u);
-        bool is_large = (hi & 2u) != 0u;
-        uint16_t tile = (uint16_t)(tile_lo | ((uint16_t)(attr & 1u) << 8));
-        uint16_t pal = (attr >> 1) & 7u;
-        if (pal > 2u) {
-            char msg[96];
-            snprintf(msg, sizeof(msg), "title: unexpected OBJ palette %u on sprite %d",
-                     (unsigned)pal, i);
-            port_fatal(msg);
-        }
-        bool hflip = (attr & 0x40u) != 0u;
-        bool vflip = (attr & 0x80u) != 0u;
-        int x9 = (int)(x_lo | ((uint16_t)(hi & 1u) << 8));
-        int ox = (x9 >= 256) ? (x9 - 512) : x9;
-        int oy = (int)y_raw;
-        int sub_dim = is_large ? 2 : 1;
-
-        for (int ty = 0; ty < sub_dim; ++ty) {
-            int src_ty = vflip ? (sub_dim - 1 - ty) : ty;
-            for (int tx = 0; tx < sub_dim; ++tx) {
-                int src_tx = hflip ? (sub_dim - 1 - tx) : tx;
-                uint16_t sub_tile = (uint16_t)(tile + (uint16_t)src_ty * 16u + (uint16_t)src_tx);
-                const uint8_t* pixels = obj_tile_pixels(sub_tile);
-                for (int py = 0; py < 8; ++py) {
-                    int sy = oy + ty * 8 + py;
-                    if (sy < 0 || sy >= SCREEN_HEIGHT) {
-                        continue;
-                    }
-                    int src_py = vflip ? (7 - py) : py;
-                    for (int px = 0; px < 8; ++px) {
-                        int sx = ox + tx * 8 + px;
-                        if (sx < 0 || sx >= SCREEN_WIDTH) {
-                            continue;
-                        }
-                        int src_px = hflip ? (7 - px) : px;
-                        uint8_t p = pixels[src_py * 8 + src_px];
-                        if (p != 0u) {
-                            fb[sy * SCREEN_WIDTH + sx] = pal_rgba[128u + pal * 16u + p];
-                        }
-                    }
-                }
-            }
-        }
-    }
+    draw_title_sprites(fb, pal_rgba);
 
     /* 6. Brightness */
     screen_apply_brightness(fb, b);
