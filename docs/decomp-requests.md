@@ -17,6 +17,11 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   native command functions directly with arguments and results (as for `$0A`/`$11`/`$03`/`$0B`).
   A byte-protocol model of the chip (`Dsp4Chip`, decomp `13e8350`) behind `dsp4_port_*` would be
   a DSP-4 model in the shipped game, which the rule forbids; it stays a bench tool.
+  **Progress (2026-11-26):** `$01` native (`dsp4_road_begin`/`dsp4_road_row`, decomp
+  `b6a29ec`/`daf012f`, exact on every gate movie after a `$0A`); being wired into
+  `road_rows_project`. Still needed before a race runs in the port: `$07`
+  (`road_rows_project2`, `$85:B962`), `$08` (`road_rows_stream`, `$81:861D`), `$09`, `$06`, and
+  `$0D` for VS.
 - **B (request 4) — steps 1-3 (driver start-up, set loader, its race/VS/menu callers) DONE in decomp `e966da4`/`2d72646`/`b67f44e`, adopted; the intro's call $80:89E7 waits on C.** Sound loading in C on three new `platform.h` calls** (design:
   `docs/proposals/sound.md`, Part A): `sound_driver_boot(src)` for the IPL upload `$86:E096`;
   `sound_upload_block(spc_dest, src, size)` once per `[size][dest][data]` block walked by
