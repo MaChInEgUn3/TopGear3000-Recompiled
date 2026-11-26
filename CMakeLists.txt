@@ -58,6 +58,7 @@ add_executable(tg3000
   port/platform/video_events.c
   port/platform/input.c
   port/platform/frame.c
+  port/platform/sound_sets.c
   port/video/convert.c
   port/video/assets.c
   port/video/palette.c

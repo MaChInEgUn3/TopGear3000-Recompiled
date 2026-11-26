@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `e966da4`; earlier `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `2d72646`; earlier `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -545,6 +545,19 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   `sound_boot_start(spc_entry)`, `sound_clear_ports`. All carry the sound CPU's program, which
   the port never runs: they are ignored (in `port/platform/ignored.c`). The scene loader's
   calls (songs, instruments, samples) come next from the decomp.
+
+## Sound request 4, step 2: the scene sets (2026-11-26)
+
+- Decomp `2d72646`: the set loader `sound_load_set` ($86:DDEF) is C on four calls:
+  `sound_upload_begin`/`_end` around each upload; `sound_upload_block(spc_dest, src, size)` (a
+  block unpacked into game RAM; the destination names its role: the songs, the instruments and
+  settings, or last the sample directory); `sound_upload_sample(slot, spc_dest, src, size,
+  spc_loop)` (BRR bytes from the cartridge; the loop as an absolute address).
+- `port/platform/sound_sets.c` keeps the current set by role: songs, instruments, and samples
+  by slot with their loop as an offset; the directory is ignored (redundant); any other
+  destination, a slot past 31, or a loop outside its sample stops. Nothing of the sound CPU's
+  memory is modelled. The callers of the loader (the scene changes) are still assembly in the
+  decomp, so no screen loads a set yet; the native player (step 3) reads these.
 
 ## Steps (2026-11-24)
 
