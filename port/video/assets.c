@@ -2,6 +2,7 @@
 
 #include "assets.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -69,6 +70,16 @@ static asset_entry g_assets[ASSET_COUNT] = {
     [ASSET_RACESTART_OBJ_TILES] = {"RACESTART_OBJ_TILES", 0x9280B2u, ASSET_KIND_RACESTART_PACK, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_RACESTART_BG3_TILES] = {"RACESTART_BG3_TILES", 0x9280B2u, ASSET_KIND_RACESTART_PACK, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_RACESTART_SUN_FRAMES] = {"RACESTART_SUN_FRAMES", 0x9280B2u, ASSET_KIND_RACESTART_PACK, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_BG_TILES_A] = {"SHOP_BG_TILES_A", 0x8D8000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_BG_TILES_B] = {"SHOP_BG_TILES_B", 0x888000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_OBJ_ICONS] = {"SHOP_OBJ_ICONS", 0x8D895Fu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_BG2_MAP] = {"SHOP_BG2_MAP", 0x878000u, ASSET_KIND_MAP_16, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_LIST_PAINT] = {"SHOP_LIST_PAINT", 0x8F8000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_LIST_ENGINE] = {"SHOP_LIST_ENGINE", 0x998000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_LIST_TIRES] = {"SHOP_LIST_TIRES", 0x9D8000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_LIST_GEARBOX] = {"SHOP_LIST_GEARBOX", 0x9C8040u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_LIST_ARMOR] = {"SHOP_LIST_ARMOR", 0x9E8000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_LIST_BOOST] = {"SHOP_LIST_BOOST", 0x9D8F55u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
 };
 
 static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1, -1};
@@ -77,6 +88,55 @@ static bool g_title_objs_loaded[4];
 static uint8_t g_champ_streams_mask[CHAMP_HALF_COUNT];
 static champ_half_pieces g_champ_half[CHAMP_HALF_COUNT];
 static racestart_pieces g_racestart;
+
+/* The shop's four unpacked streams before the split ($8D:8000, $88:8000, $87:8190, $8D:895F,
+   in that order: bits 0..3), and each half's pieces. */
+#define SHOP_STREAMS_ALL 0x0Fu
+static uint8_t g_shop_streams;
+static shop_half_pieces g_shop_half[SHOP_HALF_COUNT];
+
+/* The item pictures measured (notes/probe/SHOP.md; the bench's upload queue in explore_shop,
+   explore_buy, explore_menu and explore_pw, and the port's runs): which slice of which list
+   block, sent from $7F:base+$0900+offset, serves the object drawings from first_tile on. */
+static const shop_picture_slice g_shop_slices[] = {
+    {ASSET_SHOP_LIST_PAINT, 0x0000u, 0x0680u, 256u},
+    {ASSET_SHOP_LIST_ENGINE, 0x0000u, 0x0260u, 286u},
+    {ASSET_SHOP_LIST_ENGINE, 0x0900u, 0x0580u, 376u},
+    {ASSET_SHOP_LIST_ENGINE, 0x0E80u, 0x05C0u, 376u},
+    {ASSET_SHOP_LIST_ENGINE, 0x1440u, 0x05C0u, 376u},
+    {ASSET_SHOP_LIST_ENGINE, 0x1A00u, 0x0640u, 376u},
+    {ASSET_SHOP_LIST_ENGINE, 0x2C00u, 0x0240u, 256u},
+    {ASSET_SHOP_LIST_ENGINE, 0x2E40u, 0x0280u, 256u},
+    {ASSET_SHOP_LIST_TIRES, 0x0000u, 0x0280u, 274u},
+    {ASSET_SHOP_LIST_TIRES, 0x0280u, 0x0480u, 294u},
+    {ASSET_SHOP_LIST_TIRES, 0x0700u, 0x04A0u, 294u},
+    {ASSET_SHOP_LIST_TIRES, 0x0BA0u, 0x03C0u, 294u},
+    {ASSET_SHOP_LIST_TIRES, 0x0F60u, 0x0400u, 294u},
+    {ASSET_SHOP_LIST_TIRES, 0x1B20u, 0x0240u, 256u},
+    {ASSET_SHOP_LIST_TIRES, 0x1D60u, 0x0240u, 256u},
+    {ASSET_SHOP_LIST_TIRES, 0x1FA0u, 0x0240u, 256u},
+    {ASSET_SHOP_LIST_GEARBOX, 0x0000u, 0x0240u, 274u},
+    {ASSET_SHOP_LIST_GEARBOX, 0x0240u, 0x05C0u, 292u},
+    {ASSET_SHOP_LIST_GEARBOX, 0x0800u, 0x05C0u, 292u},
+    {ASSET_SHOP_LIST_GEARBOX, 0x0DC0u, 0x05C0u, 292u},
+    {ASSET_SHOP_LIST_GEARBOX, 0x1380u, 0x05C0u, 292u},
+    {ASSET_SHOP_LIST_GEARBOX, 0x2540u, 0x0240u, 256u},
+    {ASSET_SHOP_LIST_GEARBOX, 0x2780u, 0x0240u, 256u},
+    {ASSET_SHOP_LIST_GEARBOX, 0x29C0u, 0x0240u, 256u},
+    {ASSET_SHOP_LIST_ARMOR, 0x0000u, 0x02C0u, 320u},
+    {ASSET_SHOP_LIST_ARMOR, 0x02C0u, 0x0320u, 342u},
+    {ASSET_SHOP_LIST_ARMOR, 0x05E0u, 0x0360u, 342u},
+    {ASSET_SHOP_LIST_ARMOR, 0x0940u, 0x0320u, 342u},
+    {ASSET_SHOP_LIST_ARMOR, 0x0C60u, 0x0340u, 342u},
+    {ASSET_SHOP_LIST_ARMOR, 0x15A0u, 0x0240u, 256u},
+    {ASSET_SHOP_LIST_ARMOR, 0x1B20u, 0x0240u, 256u},
+    {ASSET_SHOP_LIST_BOOST, 0x0000u, 0x0400u, 276u},
+    {ASSET_SHOP_LIST_BOOST, 0x0400u, 0x0580u, 308u},
+    {ASSET_SHOP_LIST_BOOST, 0x0980u, 0x0580u, 308u},
+    {ASSET_SHOP_LIST_BOOST, 0x0F00u, 0x0580u, 308u},
+    {ASSET_SHOP_LIST_BOOST, 0x2600u, 0x0280u, 256u},
+};
+#define SHOP_SLICE_COUNT ((int)(sizeof(g_shop_slices) / sizeof(g_shop_slices[0])))
 
 typedef struct {
     uint32_t wram_bus;
@@ -287,6 +347,14 @@ void assets_init(void) {
         g_assets[i].generation++;
     }
 
+    for (int k = 0; k < SHOP_SLICE_COUNT; ++k) {
+        const asset_entry* b = &g_assets[g_shop_slices[k].block];
+        if (b->data == NULL || (size_t)g_shop_slices[k].offset + g_shop_slices[k].size > b->size
+            || (g_shop_slices[k].size & 0x1Fu) != 0u) {
+            port_fatal("assets_init: a shop picture slice lies outside its list block");
+        }
+    }
+
     memset(g_ram, 0, sizeof(g_ram));
 }
 
@@ -365,6 +433,20 @@ void assets_note_stream(uint32_t src, uint32_t size) {
 /* The sprite table the NMI sends ($81:0900, $220 bytes), kept while the pre-race screen's
    pieces are in. */
 void assets_note_oam(uint32_t src, uint32_t size) {
+    /* The shop: each half's sprite table as the frame code sends it (task 1's from $81:0900 or
+       $81:0D00, task 2's from $81:1100 or $81:1500). */
+    if (g_shop_streams == SHOP_STREAMS_ALL && size == SHOP_OAM_BYTES) {
+        int half = -1;
+        if (src == 0x810900u || src == 0x810D00u) {
+            half = 0;
+        } else if (src == 0x811100u || src == 0x811500u) {
+            half = 1;
+        }
+        if (half >= 0) {
+            memcpy(g_shop_half[half].oam, &g_ram[src & 0xFFFFu], SHOP_OAM_BYTES);
+            g_shop_half[half].has_oam = true;
+        }
+    }
     if (!g_racestart.has_shutter_a || src != 0x810900u || size != RACESTART_OAM_BYTES) {
         return;
     }
@@ -416,7 +498,44 @@ void assets_note_vs_panels(uint32_t rows) {
     g_current[ROLE_BG_ARRANGEMENT] = ASSET_VS_PANELS_ARRANGEMENT;
 }
 
+/* The shop's streams: $8D:8000 starts it; the other three follow in order; $87:8000 (the BG2
+   map) is then unpacked by each half's task. Anything else ends the shop. Returns true if `rom`
+   is one of them. */
+static bool shop_note_source(uint32_t rom) {
+    static const uint32_t shop_roms[4] = {0x8D8000u, 0x888000u, 0x878190u, 0x8D895Fu};
+    if (rom == shop_roms[0]) {
+        g_shop_streams = 0x01u;
+        memset(g_shop_half, 0, sizeof(g_shop_half));
+        return true;
+    }
+    for (unsigned i = 1; i < 4u; ++i) {
+        if (rom == shop_roms[i]) {
+            if (g_shop_streams == (uint8_t)((1u << i) - 1u)) {
+                g_shop_streams = (uint8_t)(g_shop_streams | (1u << i));
+            } else {
+                g_shop_streams = 0u;
+            }
+            return true;
+        }
+    }
+    if (rom == 0x878000u && g_shop_streams == SHOP_STREAMS_ALL) {
+        g_shop_half[port_current_task_half()].bg2_map_noted = true;
+        return true;
+    }
+    g_shop_streams = 0u;
+    memset(g_shop_half, 0, sizeof(g_shop_half));
+    return false;
+}
+
 void assets_note_source(uint32_t rom) {
+    /* $87:8190 is also the championship's first stream: it goes on to the championship's
+       bookkeeping below; the shop's other streams end the championship's and the pre-race's. */
+    if (shop_note_source(rom) && rom != 0x878190u) {
+        memset(g_champ_streams_mask, 0, sizeof(g_champ_streams_mask));
+        memset(g_champ_half, 0, sizeof(g_champ_half));
+        memset(&g_racestart, 0, sizeof(g_racestart));
+        return;
+    }
     static const uint32_t champ_roms[5] = {
         0x878190u, 0x90C320u, 0x8786BEu, 0x8F83CCu, 0x988000u,
     };
@@ -522,6 +641,99 @@ static bool capture_racestart_piece(uint32_t src, uint32_t size) {
     return false;
 }
 
+/* The shop's pieces, by WRAM source and size (the half by the source's base, $7F:0000 or
+   $7F:8000: both tasks' uploads are sent from task 1's frame code). */
+static bool capture_shop_piece(uint32_t src, uint32_t size) {
+    if (g_shop_streams != SHOP_STREAMS_ALL || (src >> 16) != 0x7Fu) {
+        return false;
+    }
+    uint16_t addr = (uint16_t)(src & 0xFFFFu);
+    if ((uint32_t)addr + size > 0x10000u) {
+        return false;
+    }
+    int half = (addr >= 0x8000u) ? 1 : 0;
+    uint16_t rel = (uint16_t)(addr - (half ? 0x8000u : 0x0000u));
+    const uint8_t* ptr = &g_ram[0x10000u + (uint32_t)addr];
+    shop_half_pieces* hp = &g_shop_half[half];
+    if (rel == 0x0000u && size == g_assets[ASSET_SHOP_BG2_MAP].size && hp->bg2_map_noted
+        && fnv1a_32(ptr, size) == g_assets[ASSET_SHOP_BG2_MAP].hash) {
+        hp->bg2_map_sent = true;
+        return true;
+    }
+    if (rel == 0x0000u && size == SHOP_BG1_MAP_BYTES) {
+        memcpy(hp->bg1_map, ptr, SHOP_BG1_MAP_BYTES);
+        hp->has_bg1_map = true;
+        return true;
+    }
+    if (rel == 0x0700u && size == SHOP_NOISE_TILES_BYTES) {
+        memcpy(hp->noise_tiles, ptr, SHOP_NOISE_TILES_BYTES);
+        hp->has_noise_tiles = true;
+        hp->noise_gen++;
+        return true;
+    }
+    if (rel >= 0x0900u && rel < 0x8000u && port_split_active() && rd16(0x0008u) == 0xB97Bu) {
+        /* An item picture, whole or the part the upload budget let through: the slice that
+           holds these bytes at this offset, in the block they came from. */
+        uint16_t off = (uint16_t)(rel - 0x0900u);
+        for (int k = 0; k < SHOP_SLICE_COUNT; ++k) {
+            const shop_picture_slice* sl = &g_shop_slices[k];
+            const asset_entry* b = &g_assets[sl->block];
+            if (off < sl->offset || (uint32_t)off + size > (uint32_t)sl->offset + sl->size
+                || ((off - sl->offset) & 0x1Fu) != 0u || (size & 0x1Fu) != 0u
+                || memcmp(ptr, &b->data[off], size) != 0) {
+                continue;
+            }
+            uint16_t first = (uint16_t)(sl->first_tile + (off - sl->offset) / 32u);
+            uint16_t end = (uint16_t)(first + size / 32u);
+            /* What it covers of the pieces in place goes; their other parts stay. */
+            shop_picture_piece kept[SHOP_MAX_PIECES * 2];
+            int n = 0;
+            for (int j = 0; j < hp->piece_count; ++j) {
+                shop_picture_piece p = hp->piece[j];
+                uint16_t pe = (uint16_t)(p.first_tile + p.count);
+                if (pe <= first || p.first_tile >= end) {
+                    kept[n++] = p;
+                    continue;
+                }
+                if (p.first_tile < first) {
+                    shop_picture_piece l = p;
+                    l.count = (uint16_t)(first - p.first_tile);
+                    kept[n++] = l;
+                }
+                if (pe > end) {
+                    shop_picture_piece r = p;
+                    r.first_tile = end;
+                    r.count = (uint16_t)(pe - end);
+                    r.slice_tile = (uint16_t)(p.slice_tile + (end - p.first_tile));
+                    kept[n++] = r;
+                }
+            }
+            shop_picture_piece np = {k, first, (uint16_t)(end - first),
+                                     (uint16_t)((off - sl->offset) / 32u)};
+            kept[n++] = np;
+            if (n > SHOP_MAX_PIECES) {
+                port_fatal("shop: more item picture parts at once than measured");
+            }
+            memcpy(hp->piece, kept, (size_t)n * sizeof(kept[0]));
+            hp->piece_count = n;
+            return true;
+        }
+        char msg[128];
+        snprintf(msg, sizeof(msg), "shop: an item picture not measured ($7F:%04X, %u bytes)",
+                 (unsigned)addr, (unsigned)size);
+        port_fatal(msg);
+    }
+    if (port_split_active() && rd16(0x0008u) == 0xB97Bu) {
+        /* Nothing else was measured from $7F while the shop runs (a map or the static's tiles
+           split by the upload budget would land here). */
+        char msg[128];
+        snprintf(msg, sizeof(msg), "shop: an upload not measured ($7F:%04X, %u bytes)",
+                 (unsigned)addr, (unsigned)size);
+        port_fatal(msg);
+    }
+    return false;
+}
+
 static bool match_champ_wram_asset(uint16_t addr, int id) {
     size_t sz = g_assets[id].size;
     if (sz == 0u || (uint32_t)addr + sz > 0x10000u) {
@@ -600,6 +812,9 @@ static bool capture_champ_piece(uint32_t src, uint32_t size) {
 }
 
 void assets_note_upload(uint32_t src, uint32_t size) {
+    if (capture_shop_piece(src, size)) {
+        return;
+    }
     if (capture_racestart_piece(src, size)) {
         return;
     }
@@ -646,6 +861,39 @@ void assets_note_upload(uint32_t src, uint32_t size) {
     }
 }
 
+/* The shop: each half's 256 colours as the frame code sends them ($81:0500 task 1's, $81:0700
+   task 2's, 512 bytes from colour 0). */
+void assets_note_cgram(uint8_t index, uint32_t src, uint32_t size) {
+    if (g_shop_streams != SHOP_STREAMS_ALL || index != 0u || size != SHOP_COLOUR_BYTES) {
+        return;
+    }
+    int half = (src == 0x810500u) ? 0 : (src == 0x810700u) ? 1 : -1;
+    if (half >= 0) {
+        memcpy(g_shop_half[half].colours, &g_ram[src & 0xFFFFu], SHOP_COLOUR_BYTES);
+        g_shop_half[half].has_colours = true;
+    }
+}
+
+bool assets_shop_loaded(void) {
+    const shop_half_pieces* t = &g_shop_half[0];
+    return g_shop_streams == SHOP_STREAMS_ALL && t->bg2_map_sent && t->has_bg1_map && t->has_oam
+        && t->has_colours;
+}
+
+const shop_half_pieces* assets_shop_half(int half) {
+    if (half < 0 || half >= SHOP_HALF_COUNT) {
+        return NULL;
+    }
+    return &g_shop_half[half];
+}
+
+const shop_picture_slice* assets_shop_picture(int row) {
+    if (row < 0 || row >= SHOP_SLICE_COUNT) {
+        return NULL;
+    }
+    return &g_shop_slices[row];
+}
+
 void assets_clear_loaded(void) {
     for (int r = 0; r < ROLE_COUNT; ++r) {
         g_current[r] = -1;
@@ -655,6 +903,8 @@ void assets_clear_loaded(void) {
     memset(g_champ_streams_mask, 0, sizeof(g_champ_streams_mask));
     memset(g_champ_half, 0, sizeof(g_champ_half));
     memset(&g_racestart, 0, sizeof(g_racestart));
+    g_shop_streams = 0u;
+    memset(g_shop_half, 0, sizeof(g_shop_half));
 }
 
 bool assets_racestart_shutter_loaded(void) {

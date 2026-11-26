@@ -70,6 +70,7 @@ add_executable(tg3000
   port/screens/intro_screen.c
   port/screens/title_screen.c
   port/screens/champ_screen.c
+  port/screens/shop_screen.c
   port/screens/race_start_screen.c
 )
 target_include_directories(tg3000 PRIVATE
@@ -346,6 +347,43 @@ add_test(NAME game_picture_racestart_camera
 )
 set_tests_properties(game_picture_racestart_camera PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 6544 picture hash 72890bfe6ba233c8 brightness 15 drawn race_start"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The shop (shop_screen, two tasks, NMI target $B97B) reached with explore_shop.txt (offset 150).
+# Port frame N = bench frame_(N+169).png: the list of upgrade kinds, port 6333 = frame_06502.png;
+# the fade-in at brightness 5, port 5750 = frame_05919.png. With the input re-aligned at 5800 for
+# the console's longer loads: the Engine list's item screen, port 8333 = frame_08502.png; an item
+# sliding out while its text is cleared, port 8274 = frame_08443.png. 0 of 57,344 pixels each.
+add_test(NAME game_picture_shop_list
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_shop.txt --movie-offset 150 --fast --frames 6335 --shot 6333 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_shop_list PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 6333 picture hash 07e5bd796ae4e4b9 brightness 15 drawn shop"
+)
+add_test(NAME game_picture_shop_fade
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_shop.txt --movie-offset 150 --fast --frames 5752 --shot 5750 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_shop_fade PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 5750 picture hash e0051b651e9b64b5 brightness 5 drawn shop"
+)
+add_test(NAME game_picture_shop_item
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_shop.txt --movie-offset 150 --movie-offset-from 5800 166 --fast --frames 8335 --shot 8333 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_shop_item PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 8333 picture hash 9ad5cbc49db376e2 brightness 15 drawn shop"
+)
+add_test(NAME game_picture_shop_slide
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_shop.txt --movie-offset 150 --movie-offset-from 5800 166 --fast --frames 8276 --shot 8274 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_shop_slide PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 8274 picture hash bee0ba722836bffc brightness 15 drawn shop"
+)
+set_tests_properties(game_picture_shop_list game_picture_shop_fade game_picture_shop_item game_picture_shop_slide PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

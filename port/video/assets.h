@@ -55,6 +55,16 @@ typedef enum {
     ASSET_RACESTART_OBJ_TILES,     /* $92:80B2[0x24E0..0x3F1F], 6720 B (210 4bpp tiles: OBJ 256..465) */
     ASSET_RACESTART_BG3_TILES,     /* $92:80B2[0x3F20..0x3F3F], 32 B (2 2bpp tiles: BG3 0..1) */
     ASSET_RACESTART_SUN_FRAMES,    /* $92:80B2[0x3F40..0x873F], 18432 B (16 frames x 36 4bpp tiles: BG1 476..511) */
+    ASSET_SHOP_BG_TILES_A,         /* $8D:8000, 9728 B (304 4bpp tiles: shop BG 1..304) */
+    ASSET_SHOP_BG_TILES_B,         /* $88:8000, 4320 B (135 4bpp tiles: shop BG 305..439) */
+    ASSET_SHOP_OBJ_ICONS,          /* $8D:895F, 2688 B (84 4bpp tiles: shop OBJ 80..163) */
+    ASSET_SHOP_BG2_MAP,            /* $87:8000, 896 B (the shop's BG2 map, 14 rows of 32) */
+    ASSET_SHOP_LIST_PAINT,         /* $8F:8000, 1664 B (list 0's pictures, unpacked to $7F:0900) */
+    ASSET_SHOP_LIST_ENGINE,        /* $99:8000, 15616 B (list 1's) */
+    ASSET_SHOP_LIST_TIRES,         /* $9D:8000, 9248 B (list 2's) */
+    ASSET_SHOP_LIST_GEARBOX,       /* $9C:8040, 12992 B (list 3's) */
+    ASSET_SHOP_LIST_ARMOR,         /* $9E:8000, 10976 B (list 4's) */
+    ASSET_SHOP_LIST_BOOST,         /* $9D:8F55, 13568 B (list 5's) */
     ASSET_COUNT
 } asset_id;
 
@@ -77,6 +87,9 @@ void assets_note_word(uint16_t value);
    sprite-table upload: recognised for the pre-race screen by source and size. */
 void assets_note_stream(uint32_t src, uint32_t size);
 void assets_note_oam(uint32_t src, uint32_t size);
+
+/* The colours the frame code sends (video_upload_cgram): kept for the shop by source and size. */
+void assets_note_cgram(uint8_t index, uint32_t src, uint32_t size);
 
 /* Reset the running word-write sequence (called on any other video event). */
 void assets_reset_word_run(void);
@@ -176,6 +189,54 @@ typedef struct {
     bool has_meter;             /* the meter's 10 words as draw_meter wrote them */
     uint16_t meter[RACESTART_METER_WORDS];
 } racestart_pieces;
+
+/* The shop ($80:8BC5, notes/probe/SHOP.md). Per half (task 1: $7F:0000.., task 2: $7F:8000..):
+   pieces captured when the game sends them, by WRAM source and size. */
+#define SHOP_HALF_COUNT 2
+#define SHOP_BG1_MAP_BYTES 0x03C0u     /* 15 rows of 32 words, from $7F:base */
+#define SHOP_NOISE_TILES_BYTES 0x0200u /* 16 4bpp tiles, from $7F:base+$0700 */
+#define SHOP_OAM_BYTES 0x0220u
+#define SHOP_COLOUR_BYTES 0x0200u
+#define SHOP_MAX_PIECES 16
+
+/* A part of an item picture in place: `count` drawings from tile `first_tile` on, the slice's
+   drawings from `slice_tile` on (row `slice` of the measured slice table). */
+typedef struct {
+    int slice;
+    uint16_t first_tile;
+    uint16_t count;
+    uint16_t slice_tile;
+} shop_picture_piece;
+
+typedef struct {
+    bool bg2_map_noted;     /* $87:8000 unpacked for this half (video_note_source) */
+    bool bg2_map_sent;      /* ...and sent from $7F:base (896 bytes, the block's content) */
+    bool has_bg1_map;
+    bool has_noise_tiles;
+    bool has_oam;
+    bool has_colours;
+    uint32_t noise_gen;
+    int piece_count;
+    shop_picture_piece piece[SHOP_MAX_PIECES]; /* the item pictures' drawings now in place */
+    uint8_t bg1_map[SHOP_BG1_MAP_BYTES];
+    uint8_t noise_tiles[SHOP_NOISE_TILES_BYTES];
+    uint8_t oam[SHOP_OAM_BYTES];           /* the sprite table as the frame code sent it */
+    uint8_t colours[SHOP_COLOUR_BYTES];    /* the 256 colours as the frame code sent them */
+} shop_half_pieces;
+
+/* An item picture: a slice of a list's unpacked block, sent from $7F:base+$0900+offset (whole
+   or in parts, as the upload budget allows), that serves the object drawings from first_tile
+   on (measured, notes/probe/SHOP.md). */
+typedef struct {
+    int block;          /* asset id of the list block */
+    uint16_t offset;    /* in the block */
+    uint16_t size;      /* bytes */
+    uint16_t first_tile;
+} shop_picture_slice;
+
+bool assets_shop_loaded(void);
+const shop_half_pieces* assets_shop_half(int half);
+const shop_picture_slice* assets_shop_picture(int row);
 
 bool assets_racestart_shutter_loaded(void);
 bool assets_racestart_loaded(void);

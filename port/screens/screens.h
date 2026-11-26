@@ -60,6 +60,9 @@ void title_screen_draw(uint32_t* fb);
 bool champ_screen_active(void);
 void champ_screen_draw(uint32_t* fb);
 
+bool shop_screen_active(void);
+void shop_screen_draw(uint32_t* fb);
+
 /* The pre-race screen is drawn at the start of a frame wait, before the NMI (frame.c). */
 void race_start_screen_note_nmi(uint16_t target);
 bool race_start_screen_active(void);

@@ -26,7 +26,8 @@
 - `port/screens/` — one drawing function per kind of screen: `menu_screen.c` (the menus' text
   screens: title card, password display, options menu with its two per-line effects, and VS
   screen), `results_screen.c` (the results screen with 3D starfield sprites and `$0D00`
-  per-line subtraction), `champ_screen.c` (the championship, two tasks), `race_start_screen.c`
+  per-line subtraction), `champ_screen.c` (the championship, two tasks), `shop_screen.c` (the shop, two tasks:
+  the top half, with its fixed windows and the item pictures recognised by their list block), `race_start_screen.c`
   (the pre-race screen: the bar, the closed shutter, the opening course view with its per-line
   effects listed in `docs/DECISIONS.md`), driven by tables of measured facts per screen.
 - `docs/proposals/` — accepted design proposals (`video-layer.md`, `sound.md`).

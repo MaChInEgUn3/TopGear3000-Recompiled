@@ -320,8 +320,10 @@ static void present_frame(bool before_nmi) {
                           && results_screen_active();
     bool active_champ = !active_racestart && !active_intro && !active_title && !active_results
                         && champ_screen_active();
+    bool active_shop = !active_racestart && !active_intro && !active_title && !active_results
+                       && !active_champ && shop_screen_active();
     int active_menu = (active_intro || active_title || active_results || active_champ
-                       || active_racestart)
+                       || active_shop || active_racestart)
                           ? -1
                           : menu_screen_active();
     const char* drawn_name = "none";
@@ -337,6 +339,9 @@ static void present_frame(bool before_nmi) {
     } else if (active_champ) {
         champ_screen_draw(g_fb);
         drawn_name = "champ";
+    } else if (active_shop) {
+        shop_screen_draw(g_fb);
+        drawn_name = "shop";
     } else if (active_racestart) {
         race_start_screen_draw(g_fb);
         drawn_name = "race_start";
@@ -344,8 +349,8 @@ static void present_frame(bool before_nmi) {
         menu_screen_draw(active_menu, g_fb);
         drawn_name = menu_screen_name(active_menu);
     }
-    if (active_intro || active_title || active_results || active_champ || active_racestart
-        || active_menu >= 0) {
+    if (active_intro || active_title || active_results || active_champ || active_shop
+        || active_racestart || active_menu >= 0) {
         SDL_UpdateTexture(g_texture, NULL, g_fb, SCREEN_WIDTH * (int)sizeof(uint32_t));
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
         SDL_RenderClear(g_renderer);

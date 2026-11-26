@@ -29,6 +29,7 @@ void video_write_vram_word(uint16_t vram_word, uint16_t value) {
 
 void video_upload_cgram(uint8_t index, uint32_t src, uint32_t size) {
     assets_reset_word_run();
+    assets_note_cgram(index, src, size);
     palette_load(index, src, size);
 }
 

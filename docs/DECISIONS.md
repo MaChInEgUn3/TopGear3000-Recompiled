@@ -652,7 +652,8 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   - **Screen recognition:** `$0008 == 0xB97B`, `port_split_active()`, and both halves have noted
     all five unpacked ROM streams and captured their initial BG1 map, BG2 map, and fire band
     frame. Any non-championship stream noted via `video_note_source` (or the 64 KB clear) clears
-    the championship state, so the shop and ticker (`$0008 == 0xB97B`) stay `drawn none`.
+    the championship state, so the shop and ticker (`$0008 == 0xB97B`) are not taken for it
+    (the shop is drawn by its own screen since 2026-11-26, below).
   - **Unpacked ROM streams (`video_note_source`, moved from `ignored.c` to `video_events.c`):**
     `$87:8190` (80 4bpp OBJ font tiles `256..335`), `$90:C320` (3 4bpp OBJ bar tiles `336..338`),
     `$87:86BE` (160 4bpp OBJ tiles `340..499`), `$8F:83CC` (30 4bpp BG tiles `0..29`), and
@@ -928,6 +929,77 @@ and checked on the decomp's bench).
     `screen_apply_brightness`; measured on this screen only, not changed here.
   - Objects of palettes 0-3 are drawn without the glow (as the screen's colour set-up says);
     the glow frames match, but this case was not isolated.
+
+## The shop drawn natively (step 4, 2026-11-26)
+
+- **Identical to the original pixel for pixel** (`explore_shop.txt`, offset 150; port frame N =
+  bench `frame_(N+169).png`): the list of upgrade kinds, port 6332-6334 against
+  `frame_06501..06503.png`; the fade-in at brightness 3 and 5, port 5748 and 5750 against
+  `frame_05917.png` and `frame_05919.png`. The console loads the item screens more slowly, so for
+  them the input is re-aligned (`--movie-offset-from 5800 166`): the Engine list's item screen
+  (picture, price, level marks, typed text), port 8331/8333/8335/8341 against
+  `frame_08500/08502/08504/08510.png`; an item sliding out while its text is cleared, port
+  8270-8278 (even frames) against `frame_08439..08447.png`. 0 of 57,344 pixels different each,
+  both halves (the bottom half is dark in one-player games). Measurements:
+  `notes/probe/SHOP.md`.
+- **How, under the rule (`port/screens/shop_screen.c`, `port/video/assets.c`):**
+  - One drawing function, the top half only: task 2 takes the early leave in one-player games
+    and its half stays dark (`$029B` = 0 for the whole run); a lit bottom half stops the port.
+  - The top half's shadow block is one fixed, measured block while lit; it is checked byte for
+    byte and the screen draws what it sets as constants: Mode 1, BG1 scrolled (4, 5), BG2
+    (0, -1), no colour maths, and two fixed windows for the whole half: BG1 hidden at x 0..15 and
+    77..85, objects at x 0..15. No per-line table: no HDMA channel is on in the shop (bench
+    report over the whole movie).
+  - Cartridge blocks, unpacked and converted once at start-up: `$8D:8000` (BG 1..304),
+    `$88:8000` (BG 305..439), `$87:8190` (objects 0..79), `$8D:895F` (objects 80..163), the BG2
+    map `$87:8000`, and the six lists' picture blocks (`$8F:8000`, `$99:8000`, `$9D:8000`,
+    `$9C:8040`, `$9E:8000`, `$9D:8F55`). The shop is recognised by its four streams in order
+    (`video_note_source`) and `$87:8000` noted per half; any other stream ends it. The VRAM
+    destinations are ignored.
+  - Captured when the game sends them, by WRAM source and size: the BG1 panel map
+    (`$7F:0000`, 960 bytes), the static's 16 tiles (`$7F:0700`, 512 bytes, BG 442..457), the
+    sprite table (`$81:0900`/`$0D00`, `$220` bytes) and the 256 colours (`$81:0500`, 512 bytes).
+    The colours and the sprite table are taken at their upload, not read from RAM at draw time:
+    the panel's frame hook rewrites the icon's colours in `$0500` right after they are sent.
+  - Item pictures: the game unpacks the list's block to `$7F:0900` with no platform call, then
+    sends slices of it, sometimes split by the frame's upload budget. An upload from
+    `$7F:0900+offset` is recognised by its bytes against the block at that offset, inside one of
+    36 measured pictures (block, offset, size, first object drawing; read from the bench's
+    upload queue in `explore_shop`, `explore_buy`, `explore_menu`, `explore_pw`, the first
+    drawing derived from the measured upload destination); its drawings come from the converted
+    block, never from the sent bytes. A later picture replaces the drawings it covers (the parts
+    in place are kept by object-drawing range, trimmed or split). Anything else from there stops
+    the port (lists 6-10, `$97:8000`, were never reached), and so does any other upload from
+    `$7F` while the shop runs (a map or the static's tiles split by the upload budget would).
+  - Objects 8x8 and 16x16 from the captured table, the lowest number in front, layers back to
+    front: backdrop, objects 0, objects 1, BG2 low, BG1 low, objects 2, BG2 high, BG1 high,
+    objects 3. Map entries, object attributes, more than 32 objects or 34 slices on a line:
+    checked against what was measured, anything else stops.
+  - Drawn at the existing two-task draw point (before the NMI): every piece is as the last NMI
+    sent it; the brightness `$019B` changes only inside the NMI. No game RAM written, no game
+    routine called, no game formula retyped.
+- **Per-line effects:** none.
+- **For the owner's veto:** (1) the item pictures' parts kept by object-drawing range, trimmed
+  and split as new parts arrive: the closest this screen comes to a video-memory-shaped
+  structure (it holds only named pictures of named blocks); (2) the first drawing of each
+  picture, derived from the upload destinations measured on the bench (the port ignores them at
+  run time); (3) the colours and the sprite table taken at their upload, where the championship
+  reads them from RAM at draw time.
+- **Coverage:** the port's own runs (explore_shop with both alignments, explore_menu,
+  explore_pw, race1, autopilot_60k) draw the Paintshop picture and six of the Engine list's
+  seven; Engine `+$2E40` and the Tires, Gearbox, Armor and Boost rows come from the bench's
+  upload queue only and were never drawn or compared by the port.
+- **Tests:** `game_picture_shop_list` (6333), `game_picture_shop_fade` (5750),
+  `game_picture_shop_item` (8333, re-aligned), `game_picture_shop_slide` (8274, re-aligned).
+- **Open:**
+  - The panel's static differs from the original (port 8346 against `frame_08515.png`: 2,937
+    pixels, all inside the static's square): the random state differs after the console's extra
+    load frames; the drawing of the static's tiles and map is the same code path.
+  - Fade frames differ by 1 level in some channels (the shared `screen_apply_brightness`, as on
+    the pre-race screen); the first lit frame (brightness 1, port 5746) is drawn black by the
+    port (the panel's map is not sent yet) and differs from the original's (21,602 pixels; not
+    analysed).
+  - Lists 6-10, player 2's half and the two-player shop were never measured: they stop the port.
 
 ## Steps (2026-11-24)
 
