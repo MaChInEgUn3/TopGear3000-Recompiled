@@ -14,7 +14,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `dsp4_answers_store`, VS), `$09` (`object_sprites_stream`, `sprite_put_rows_*`,
   `car_sprite_head`, `sprite_part_put`), `$06` (`oam_high_load`). The port's `dsp4_port_*` stop
   with a message, so no race runs without them.
-- **B (request 4). Sound loading in C on three new `platform.h` calls** (design:
+- **B (request 4) — step 1 (driver start-up) DONE in decomp `e966da4`, adopted; the scene loader next.** Sound loading in C on three new `platform.h` calls** (design:
   `docs/proposals/sound.md`, Part A): `sound_driver_boot(src)` for the IPL upload `$86:E096`;
   `sound_upload_block(spc_dest, src, size)` once per `[size][dest][data]` block walked by
   `$86:E0F0`; `sound_upload_sample(slot, spc_dest, src, size, loop)` once per sample sent by

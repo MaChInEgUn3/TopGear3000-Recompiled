@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `92d4d5a`; earlier `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `e966da4`; earlier `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -536,6 +536,15 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
 - Decomp `92d4d5a`: `nmi_target_80FC14()` (request 8) replaces the port's hand-translated bridge;
   `platform_unported(const char* what)` (request 2) is called by `tg3000_unported` before its
   trap, and the port stops with "the game reached code not converted to C yet: <what>".
+
+## Sound request 4, step 1: the driver's start-up (2026-11-26)
+
+- Decomp `e966da4`: the driver's start-up upload is C (`sound_boot`, `sound_boot_upload`) on
+  four platform calls, different in shape from the proposal's single `sound_driver_boot`:
+  `sound_boot_begin`, `sound_boot_block(spc_dest, src, size)` (one per driver block),
+  `sound_boot_start(spc_entry)`, `sound_clear_ports`. All carry the sound CPU's program, which
+  the port never runs: they are ignored (in `port/platform/ignored.c`). The scene loader's
+  calls (songs, instruments, samples) come next from the decomp.
 
 ## Steps (2026-11-24)
 
