@@ -31,9 +31,9 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   callbacks `JSR ($01EC)`/`($02EC)`. Championship, shop and ticker cannot run. A C-level way
   to run task 1's frame then task 2's frame (the tasks share no WRAM, per the decomp's notes),
   or guidance on how the decomp wants it composed.
-- **E (request 8). NMI target `$80:FC14` (results screen) as `nmi_target_80FC14()`:** the port
+- **E (request 8) — DONE in decomp `92d4d5a`, adopted by the port. NMI target `$80:FC14` (results screen) as `nmi_target_80FC14()`:** the port
   carries a marked three-line hand translation, unverified, until then.
-- **F (request 2). `tg3000_unported` should call a platform hook first** (e.g.
+- **F (request 2) — DONE in decomp `92d4d5a`, adopted by the port. `tg3000_unported` should call a platform hook first** (e.g.
   `void platform_unported(const char* what);`), so a player sees what was hit (24 traps today).
 - **G (request 5). A bench report of the sound driver's output per voice** (per tick: key on/off,
   sample, pitch, volume, envelope settings), the reference for the port's native sequencer.

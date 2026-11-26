@@ -130,16 +130,7 @@ static void run_nmi_dispatch(void) {
         switch (sub) {
             case 0x8934: nmi_tail(); break;
             case 0xFBD1: nmi_target_80FBD1(); break;
-            case 0xFC14:
-                /* TEMPORARY BRIDGE (decomp request 8): the results screen's frame code $80:FC14
-                   is still assembly in the decomp. These three lines translate it by hand
-                   (set bit 1 of $0026, func_8A987F, the common tail), unverified by the
-                   decomp's differential test. Game logic belongs in the decomp: replace with
-                   its C function as soon as it exists. */
-                wr16(0x0026, (uint16_t)(rd16(0x0026) | 0x0002));
-                func_8A987F();
-                nmi_tail();
-                break;
+            case 0xFC14: nmi_target_80FC14(); break;
             case 0xFC5F: nmi_target_80FC5F(); break;
             case 0xE28C: nmi_target_80E28C(); break;
             case 0xE175: nmi_target_80E175(); break;
@@ -559,4 +550,12 @@ uint16_t dma_hdma_get_table(int slot) {
     (void)slot;
     port_fatal("the game reads a per-line table address back (VS race): not supported");
     return 0;
+}
+
+/* The decomp reached code it has not ported yet (tg3000_unported, decomp request 2): stop with
+   its name instead of a bare crash. */
+void platform_unported(const char* what) {
+    char msg[160];
+    snprintf(msg, sizeof(msg), "the game reached code not converted to C yet: %s", what);
+    port_fatal(msg);
 }
