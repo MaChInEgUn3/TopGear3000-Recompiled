@@ -12,8 +12,9 @@
 // pending note starts, then the song's ticks by a tempo accumulator. A note read in a tick cuts
 // its voice at once and starts on the next step.
 //
-// Only what the game's songs and menu effects use is understood; anything else stops the port
-// with a message (port_fatal).
+// Only what the game's songs, effects, engine sound and echo use (measured on the decomp's bench:
+// the menus and the race sets) is understood; anything else stops the port with a message
+// (port_fatal).
 #include "sequencer.h"
 
 #include <stdarg.h>
@@ -36,6 +37,9 @@
 #define BLOCK_INSTRUMENT_TAIL 0x100   /* bytes 4-7 of instrument i at 4i */
 #define BLOCK_PITCH_OFFSETS 0x200     /* per-step pitch offset sequences (arpeggio/vibrato) */
 #define BLOCK_PITCH_SWEEPS 0x300      /* pitch sweeps: (steps, delta) pairs */
+#define BLOCK_ECHO_VOLUME 0x400       /* the echo's volume before the music and master volumes */
+#define BLOCK_ECHO_FEEDBACK 0x401     /* the echo's feedback (signed, chip scale) */
+#define BLOCK_ECHO_DELAY 0x402        /* the echo's delay, in the chip's delay units */
 #define BLOCK_ALWAYS_TICK 0x405       /* a flag: tick every step regardless of tempo (unused) */
 #define BLOCK_VOLUME_STEPS 0x406      /* the 32 volume steps of the volume commands */
 #define BLOCK_MIN_SIZE (BLOCK_VOLUME_STEPS + VOLUME_STEPS)
@@ -94,6 +98,8 @@ typedef struct {
     bool effect;             /* an effect plays on it */
     bool start_pending;      /* starts at the end of this step */
     bool started;            /* has played a note since the set loaded */
+    bool echo;               /* its note feeds the echo (its instrument's echo bit) */
+    uint16_t engine;         /* the engine's pitch offset, added after the pitch table (races) */
     /* the pitch offset sequence: position, end, loop point (byte indices in its page) */
     uint8_t ofs_at, ofs_end, ofs_loop;
     /* the pitch sweep: position (SWEEP_OFF: none), steps left in the current pair, end, loop */
@@ -112,6 +118,9 @@ static struct {
     uint8_t offsets[TABLE_PAGE];
     uint8_t sweeps[TABLE_PAGE];
     uint8_t volume_steps[VOLUME_STEPS];
+    uint8_t echo_volume, echo_delay;
+    int8_t echo_feedback;
+    float echo_delay_s;      /* converted at load */
     bool always_tick;
     bool have_balance;
     uint8_t balance_left, balance_right;  /* the driver's centre: pan table entries 8 and 7 */
@@ -129,6 +138,8 @@ static int g_request = -1;       /* the song asked for, or -1 */
 static uint8_t g_music_volume;   /* the message's music volume, doubled (8 bits) */
 static uint8_t g_effect_volume;  /* the message's effect volume, doubled (8 bits) */
 static long g_song_step = -1;    /* steps since the song started (events and tests) */
+static bool g_echo_told;         /* the mixer has this set's echo settings */
+static int g_echo_out_volume;    /* the echo volume last told, on the chip's scale */
 
 /* ---- events (tests) ------------------------------------------------------------------------ */
 
@@ -191,6 +202,7 @@ void sequencer_new_set(void) {
     g_tempo_acc = 0;
     g_request = -1;
     g_song_step = -1;
+    g_echo_told = false;
     g_set.songs = NULL;
     g_set.songs_size = 0;
     g_set.have_instruments = false;
@@ -221,6 +233,16 @@ void sequencer_instruments_loaded(const uint8_t* block, size_t size) {
     memcpy(g_set.sweeps, block + BLOCK_PITCH_SWEEPS, TABLE_PAGE);
     memcpy(g_set.volume_steps, block + BLOCK_VOLUME_STEPS, VOLUME_STEPS);
     g_set.always_tick = block[BLOCK_ALWAYS_TICK] != 0;
+    g_set.echo_volume = block[BLOCK_ECHO_VOLUME];
+    g_set.echo_feedback = (int8_t)block[BLOCK_ECHO_FEEDBACK];
+    g_set.echo_delay = block[BLOCK_ECHO_DELAY];
+    /* Measured in every set: an echo volume that stays positive once scaled (at most $7F) and
+       a delay the conversion knows. */
+    if (g_set.echo_volume > 0x7Fu) fatal_at("the set's echo volume is beyond the measured range", g_set.echo_volume);
+    if (!convert_echo_delay_s(g_set.echo_delay, &g_set.echo_delay_s)) {
+        fatal_at("the set's echo delay is beyond the chip's range", g_set.echo_delay);
+    }
+    g_echo_told = false;
     g_set.have_instruments = true;
 }
 
@@ -267,10 +289,10 @@ static void voice_note(int n, unsigned inst_index, uint16_t pitch, uint8_t volum
     if (inst_index >= INSTRUMENTS) return;  /* the driver ignores such an instrument */
     const instrument* in = &g_set.inst[inst_index];
     if (in->noise) fatal_at("an instrument plays noise, which the native player does not have", inst_index);
-    if (in->echo) fatal_at("an instrument uses echo, which the native player does not have yet", inst_index);
     if (!in->adsr) fatal_at("an instrument uses the chip's direct gain, not an envelope", inst_index);
     voice* v = &g_v[n];
     v->instrument = (uint8_t)inst_index;
+    v->echo = in->echo;
     v->pitch = pitch;
     v->tune = in->tune;
     v->hold = in->hold_steps;
@@ -295,7 +317,7 @@ static void voice_note(int n, unsigned inst_index, uint16_t pitch, uint8_t volum
 /* Each step, every voice: tell the mixer what changed, then count the hold down. */
 static void voice_output(int n) {
     voice* v = &g_v[n];
-    double hz = convert_pitch_hz(voice_pitch_value(v), 0);
+    double hz = convert_pitch_hz(voice_pitch_value(v), v->engine);
     int l, r;
     voice_volume(v, &l, &r);
     bool let_go = !v->held;
@@ -360,10 +382,10 @@ static void voice_start(int n) {
     const converted_sample* s = sound_set_sample(in->sample);
     if (s == NULL) fatal_at("an instrument names a sample slot the set did not send", in->sample);
     mixer_start(n, s, v->out_hz, convert_voice_gain(v->out_left), convert_voice_gain(v->out_right),
-                &in->envelope, v->out_let_go);
-    event_line("v%d on inst=%u sample=%u hz=%.4f l=%.6f r=%.6f", n, (unsigned)v->instrument,
+                &in->envelope, v->out_let_go, v->echo);
+    event_line("v%d on inst=%u sample=%u hz=%.4f l=%.6f r=%.6f%s", n, (unsigned)v->instrument,
                (unsigned)in->sample, v->out_hz, convert_voice_gain(v->out_left),
-               convert_voice_gain(v->out_right));
+               convert_voice_gain(v->out_right), v->echo ? " echo" : "");
 }
 
 /* ---- songs --------------------------------------------------------------------------------- */
@@ -408,10 +430,12 @@ static void song_start(int number) {
             v->sweep_at = SWEEP_OFF;
             v->sweep_left = v->sweep_end = v->sweep_loop = 0;
             v->start_pending = false;
+            v->engine = 0;
         }
     }
     g_tempo_acc = 0;
     g_song_step = 0;
+    g_echo_told = false;  /* the echo settings are told again from the song's first step */
     for (int n = 0; n < VOICES; ++n) voice_cut(n);
     event_line("song %d channels=%u tempo=%u", number, count, (unsigned)g_tempo);
 }
@@ -507,6 +531,27 @@ static void effect_start(uint8_t id, uint8_t volume, uint8_t mask) {
     voice_note(best, inst_index, (uint16_t)(EFFECT_NOTE * 16u), (uint8_t)((volume * g_effect_volume) >> 8), true);
 }
 
+/* ---- the echo ------------------------------------------------------------------------------ */
+
+/* Each step, after the voices: the set's echo settings, its volume scaled by the music and
+   master volumes (both doubled, as received) the way the driver scales it, told to the mixer
+   when they change. The mixer's echo is its own delay line (mixer.c). */
+static void echo_output(uint8_t master) {
+    unsigned v = ((unsigned)g_set.echo_volume * g_music_volume + 0x80u) >> 8;
+    v = (v * master + 0x80u) >> 8;
+    if (g_echo_told && (int)v == g_echo_out_volume) return;
+    g_echo_told = true;
+    g_echo_out_volume = (int)v;
+    float delay_s = g_set.echo_delay_s;
+    float feedback = convert_voice_gain(g_set.echo_feedback);
+    mixer_set_echo(delay_s, feedback, convert_voice_gain((int)v));
+    /* (sets without an echo delay, the intro's and the menus', have no echo voice either) */
+    if (g_set.echo_delay != 0u) {
+        event_line("echo delay_ms=%.1f feedback=%.6f vol=%.6f", (double)delay_s * 1000.0, (double)feedback,
+                   (double)convert_voice_gain((int)v));
+    }
+}
+
 /* ---- one step ------------------------------------------------------------------------------ */
 
 /* The message (decomp src/sound.c, sound_send_message): group 0 master, music volume, music
@@ -514,12 +559,14 @@ static void effect_start(uint8_t id, uint8_t volume, uint8_t mask) {
    groups 2 and 3 the two effect requests (volume, note, voices, id). */
 enum {
     MSG_MASTER = 0, MSG_MUSIC_VOLUME = 1, MSG_MUSIC = 2, MSG_FLAGS = 3,
-    MSG_EFFECT_VOLUME = 5,
+    MSG_ENGINE_PITCH_LO = 4, MSG_EFFECT_VOLUME = 5, MSG_ENGINE_VOICE = 6, MSG_ENGINE_PITCH_HI = 7,
     MSG_A_VOLUME = 8, MSG_A_NOTE = 9, MSG_A_VOICES = 10, MSG_A_ID = 11,
     MSG_B_ID = 15,
 };
 #define FLAG_PAL 0x02u
 #define FLAG_ENGINE 0x20u
+#define ENGINE_VOICE_MASK 0x07u      /* the engine byte: its voice in the low 3 bits, */
+#define ENGINE_VOLUME_MASK 0xF8u     /* its volume in the rest */
 #define REQUEST_KEEP 0x80u
 #define EFFECT_ID_MASK 0x7Fu
 #define EFFECT_NOTE_GIVEN 0x40u
@@ -532,8 +579,8 @@ void sequencer_message(const uint8_t msg[16]) {
     /* 1. The message. */
     uint8_t flags = msg[MSG_FLAGS];
     if (flags & FLAG_PAL) port_fatal("sound: 50 Hz timing is not native yet");
-    if (flags & FLAG_ENGINE) port_fatal("sound: the engine sound is not native yet");
-    mixer_set_master(convert_voice_gain((uint8_t)(msg[MSG_MASTER] * 2u) >> 1));
+    uint8_t master = (uint8_t)(msg[MSG_MASTER] * 2u);
+    mixer_set_master(convert_voice_gain(master >> 1));
     g_music_volume = (uint8_t)(msg[MSG_MUSIC_VOLUME] * 2u);
     g_effect_volume = (uint8_t)(msg[MSG_EFFECT_VOLUME] * 2u);
     if (!(msg[MSG_MUSIC] & REQUEST_KEEP)) g_request = msg[MSG_MUSIC];
@@ -543,6 +590,13 @@ void sequencer_message(const uint8_t msg[16]) {
         effect_start(id_a, msg[MSG_A_VOLUME], msg[MSG_A_VOICES]);
     }
     if ((msg[MSG_B_ID] & EFFECT_ID_MASK) != 0u) fatal_at("the second effect request is used", msg[MSG_B_ID]);
+    /* The engine (races): its voice plays at the engine's volume, its pitch moved by the
+       engine's offset, every step the game asks for it. */
+    if (flags & FLAG_ENGINE) {
+        voice* e = &g_v[msg[MSG_ENGINE_VOICE] & ENGINE_VOICE_MASK];
+        e->volume = msg[MSG_ENGINE_VOICE] & ENGINE_VOLUME_MASK;
+        e->engine = (uint16_t)(msg[MSG_ENGINE_PITCH_LO] | (msg[MSG_ENGINE_PITCH_HI] & 0x7Fu) << 8);
+    }
 
     /* 2. A song start. */
     if (g_request >= 0) {
@@ -551,8 +605,9 @@ void sequencer_message(const uint8_t msg[16]) {
         song_start(n);
     }
 
-    /* 3. Each voice's output. 5. The pitch tables. 6. The pending starts. */
+    /* 3. Each voice's output. 4. The echo. 5. The pitch tables. 6. The pending starts. */
     for (int n = 0; n < VOICES; ++n) voice_output(n);
+    echo_output(master);
     for (int n = VOICES - 1; n >= 0; --n) voice_pitch_tables(&g_v[n]);
     for (int n = 0; n < VOICES; ++n) {
         if (g_v[n].start_pending) voice_start(n);

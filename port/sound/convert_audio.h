@@ -40,6 +40,10 @@ double convert_pitch_hz(uint16_t pitch_value, uint16_t engine_offset);
 /* A voice or master volume on the chip's scale (127 = full) -> a gain (about 0..1). */
 float convert_voice_gain(int chip_volume);
 
+/* The echo's delay in the chip's units (the set's settings block) -> seconds. False beyond the
+   chip's range. */
+bool convert_echo_delay_s(unsigned chip_delay, float* out);
+
 /* The gain that brings converted PCM (convert_brr_to_pcm) to a full scale of 1.0. */
 float convert_pcm_gain(void);
 

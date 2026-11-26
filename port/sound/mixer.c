@@ -6,6 +6,9 @@
 // - envelope: a linear rise over the attack time, then smooth exponential falls with the
 //   instrument's time constants (to the sustain level, then, once let go, towards silence),
 //   and a linear fade when a voice is cut;
+// - echo: one stereo delay line fed by the voices whose notes ask for it, with the game's
+//   delay, feedback and volume converted to seconds and gains; no filter (the driver sets the
+//   chip's filter to pass the sound through unchanged); its own, not the chip's;
 // - output: 48 kHz stereo float, one game frame at a time, pushed to an SDL3 audio stream
 //   from the main thread (no audio callback touches the game's data) and/or to a WAV file.
 #include "mixer.h"
@@ -23,6 +26,7 @@
 #define MAX_FRAME_SAMPLES 1024
 #define SILENT_LEVEL (1.0f / 2048.0f)     /* an envelope below this has ended */
 #define DEVICE_QUEUE_LIMIT_FRAMES 6       /* drop a frame of audio rather than lag behind */
+#define ECHO_MAX_SAMPLES 12288            /* past the longest delay the game can ask (240 ms) */
 
 typedef enum { ENV_OFF, ENV_ATTACK, ENV_DECAY, ENV_SUSTAIN, ENV_CUT } env_phase;
 
@@ -34,6 +38,7 @@ typedef struct {
     sound_envelope env;
     env_phase phase;
     bool let_go;
+    bool echo;
     float level;
     float attack_add;   /* per output sample */
     float decay_keep;   /* per output sample */
@@ -48,6 +53,13 @@ static FILE* g_wav;
 static uint32_t g_wav_frames;
 static double g_frame_carry;
 
+/* The echo's delay line (stereo, interleaved), its length in output samples and gains. */
+static float g_echo_line[2 * ECHO_MAX_SAMPLES];
+static int g_echo_len = 1;
+static int g_echo_at;
+static float g_echo_feedback;
+static float g_echo_volume;
+
 static float per_sample_keep(float tau_s) {
     if (tau_s <= 0.0f) return 1.0f;
     return (float)exp(-1.0 / ((double)tau_s * OUT_RATE));
@@ -56,10 +68,11 @@ static float per_sample_keep(float tau_s) {
 static bool voice_ok(int v) { return v >= 0 && v < MIXER_VOICES; }
 
 void mixer_start(int voice, const converted_sample* sample, double hz, float left, float right,
-                 const sound_envelope* env, bool let_go) {
+                 const sound_envelope* env, bool let_go, bool echo) {
     if (!voice_ok(voice) || sample == NULL || env == NULL || sample->num_samples == 0) return;
     mix_voice* m = &g_voice[voice];
     m->sample = sample;
+    m->echo = echo;
     m->pos = 0.0;
     m->step = hz / OUT_RATE;
     m->left = left;
@@ -94,9 +107,24 @@ void mixer_cut(int voice) {
 
 void mixer_stop_all(void) {
     memset(g_voice, 0, sizeof g_voice);
+    memset(g_echo_line, 0, sizeof g_echo_line);
+    g_echo_at = 0;
 }
 
 void mixer_set_master(float gain) { g_master = gain; }
+
+void mixer_set_echo(float delay_s, float feedback, float volume) {
+    int len = (int)lrint((double)delay_s * OUT_RATE);
+    if (len < 1) len = 1;
+    if (len > ECHO_MAX_SAMPLES) len = ECHO_MAX_SAMPLES;
+    if (len != g_echo_len) {
+        memset(g_echo_line, 0, sizeof g_echo_line);
+        g_echo_at = 0;
+        g_echo_len = len;
+    }
+    g_echo_feedback = feedback;
+    g_echo_volume = volume;
+}
 
 /* The sample at index i, past the end wrapped into the loop (or silence without one). */
 static float sample_at(const converted_sample* s, long i) {
@@ -147,7 +175,9 @@ static float envelope_next(mix_voice* m) {
 }
 
 static void render(float* out, int frames) {
+    static float send[2 * MAX_FRAME_SAMPLES];
     memset(out, 0, sizeof(float) * 2u * (size_t)frames);
+    memset(send, 0, sizeof(float) * 2u * (size_t)frames);
     for (int v = 0; v < MIXER_VOICES; ++v) {
         mix_voice* m = &g_voice[v];
         if (m->phase == ENV_OFF || m->sample == NULL) continue;
@@ -160,8 +190,13 @@ static void render(float* out, int frames) {
             float y = p1 + 0.5f * t * (p2 - p0 + t * (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3 +
                                                        t * (3.0f * (p1 - p2) + p3 - p0)));
             float e = envelope_next(m);
-            out[2 * i] += y * e * m->left;
-            out[2 * i + 1] += y * e * m->right;
+            float l = y * e * m->left, r = y * e * m->right;
+            out[2 * i] += l;
+            out[2 * i + 1] += r;
+            if (m->echo) {
+                send[2 * i] += l;
+                send[2 * i + 1] += r;
+            }
             if (m->phase == ENV_OFF) break;
             m->pos += m->step;
             if (m->pos >= (double)s->num_samples) {
@@ -175,7 +210,17 @@ static void render(float* out, int frames) {
             }
         }
     }
-    const float gain = g_master * convert_pcm_gain();
+    /* The echo: what the line gives back now was sent `g_echo_len` samples ago. */
+    for (int i = 0; i < frames; ++i) {
+        float* at = &g_echo_line[2 * g_echo_at];
+        for (int c = 0; c < 2; ++c) {
+            float wet = at[c];
+            at[c] = send[2 * i + c] + wet * g_echo_feedback;
+            out[2 * i + c] = out[2 * i + c] * g_master + wet * g_echo_volume;
+        }
+        if (++g_echo_at >= g_echo_len) g_echo_at = 0;
+    }
+    const float gain = convert_pcm_gain();
     for (int i = 0; i < 2 * frames; ++i) {
         float x = out[i] * gain;
         out[i] = x > 1.0f ? 1.0f : (x < -1.0f ? -1.0f : x);

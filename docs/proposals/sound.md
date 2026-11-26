@@ -62,12 +62,15 @@ set loader) and its helpers to C on top of these calls. The race set-up waits fo
    song format with named state (channels, instruments, durations, tempo), not a translation of
    the driver's program over an array of its memory. It understands only this game's format.
 3. **The message** is turned into actions in C: volumes, music on/off, the two effect requests,
-   the engine sound. *(Built: volumes, music, the first effect request. The second request and
-   the engine sound stop with a message until a set uses them.)*
+   the engine sound. *(Built: volumes, music, the first effect request, the engine sound (its
+   voice's volume and pitch offset each step, races). The second request stops with a message:
+   no code of the game fills it.)*
 4. **The mixer** has its own interface (start a sound, let it go, cut it, set pitch and volume)
    and only what this game uses: no noise, no modulation, one short echo. Eight voices addressed
-   by chip registers would be the chip, and is not done. *(Built without echo, which sets 0-1
-   do not need: `port/sound/mixer.c`.)*
+   by chip registers would be the chip, and is not done. *(Built: `port/sound/mixer.c`. The
+   echo is one stereo delay line of our own, fed by the notes whose instrument asks for it, with
+   the set's delay, feedback and volume converted to seconds and gains; no filter, because the
+   driver leaves the chip's echo filter passing the sound through unchanged.)*
 5. **Driver tables the player needs** (balance, volume steps) are read from the cartridge at
    start-up, never copied into the source. *(The pitch octave is computed instead: it equals
    `round(16384*2^(r/192))`, measured.)*

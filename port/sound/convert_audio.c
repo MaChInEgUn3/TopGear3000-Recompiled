@@ -169,6 +169,18 @@ float convert_voice_gain(int chip_volume) {
     return (float)chip_volume / 128.0f;
 }
 
+/* The echo delay counts 2 KB of the chip's echo memory a unit: 512 stereo frames at 32 kHz,
+   16 ms. A delay of 0 still keeps one frame. */
+#define ECHO_FRAMES_PER_UNIT 512.0
+#define ECHO_DELAY_MAX 15u                /* the chip's delay has 4 bits */
+
+bool convert_echo_delay_s(unsigned chip_delay, float* out) {
+    if (out == NULL || chip_delay > ECHO_DELAY_MAX) return false;
+    double frames = (chip_delay == 0u) ? 1.0 : ECHO_FRAMES_PER_UNIT * chip_delay;
+    *out = (float)(frames / CHIP_SAMPLE_RATE_HZ);
+    return true;
+}
+
 /* The decoded BRR samples above are 15-bit (full scale 16384, half the 16-bit range). */
 float convert_pcm_gain(void) {
     return 1.0f / 16384.0f;

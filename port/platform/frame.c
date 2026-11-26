@@ -98,7 +98,58 @@ bool sound_is_ready(void) {
     return true;
 }
 
+/* Test only (--sound-replay FILE): the messages the original game sent to its sound driver,
+   recorded on the decomp's bench (one per line: a frame number, then the 16 bytes in hex). From
+   the port's first message that asks for song 1, each message is replaced by the next recorded
+   one (the file starts with the original's song request), so that the native player hears what
+   the original's driver heard: in a race, the engine and the race's effects (the port cannot
+   run a race yet). */
+static uint8_t (*g_replay)[16];
+static size_t g_replay_len;
+static size_t g_replay_at;
+static bool g_replay_on;
+
+bool port_set_sound_replay(const char* path) {
+    FILE* f = fopen(path, "r");
+    if (f == NULL) return false;
+    char line[256];
+    size_t cap = 0;
+    while (fgets(line, sizeof line, f) != NULL) {
+        if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
+        unsigned b[16];
+        unsigned long frame;
+        if (sscanf(line, "%lu %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x", &frame, &b[0], &b[1], &b[2],
+                   &b[3], &b[4], &b[5], &b[6], &b[7], &b[8], &b[9], &b[10], &b[11], &b[12], &b[13], &b[14],
+                   &b[15]) != 17) {
+            fclose(f);
+            port_fatal("--sound-replay: a line is not a frame and 16 bytes");
+        }
+        if (g_replay_len == cap) {
+            cap = cap ? cap * 2 : 4096;
+            uint8_t (*next)[16] = realloc(g_replay, cap * sizeof *g_replay);
+            if (next == NULL) port_fatal("--sound-replay: out of memory");
+            g_replay = next;
+        }
+        for (int i = 0; i < 16; ++i) g_replay[g_replay_len][i] = (uint8_t)b[i];
+        ++g_replay_len;
+    }
+    fclose(f);
+    if (g_replay_len == 0 || g_replay[0][2] != 1) port_fatal("--sound-replay: the file must start with a request for song 1");
+    return true;
+}
+
 void sound_send_frame(const uint8_t msg[16]) {
+    if (g_replay != NULL) {
+        if (!g_replay_on && msg[2] == 1) g_replay_on = true;
+        if (g_replay_on) {
+            if (g_replay_at >= g_replay_len) return;  /* the recording has ended */
+            msg = g_replay[g_replay_at++];
+            if (g_replay_at == g_replay_len) {
+                printf("sound replay: %zu messages played\n", g_replay_len);
+                fflush(stdout);
+            }
+        }
+    }
     memcpy(g_sound_last_msg, msg, sizeof(g_sound_last_msg));
     g_sound_last_frame = g_frame_count;
     (void)g_sound_last_frame;
@@ -732,6 +783,18 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
             sound_boot(DP);
             sound_load_menu(DP, 1);
             wr16(0x03E0, 0x0001);
+            port_sound_print_set_summary();
+        } else if (strncmp(name, "sound_set", 9) == 0 && name[9] >= '0' && name[9] <= '7' && name[10] == '\0') {
+            /* Test scaffold: set N (the race sets 3-6 cannot be reached in the port yet) loaded by
+               the game's own loader after the driver's start-up, its song asked for, the music,
+               effect and master volumes full (as the race and VS loaders leave them, and as the
+               race sends them). With --sound-replay, the original's recorded messages follow. */
+            sound_boot(DP);
+            sound_load_set(DP, (uint16_t)(name[9] - '0'));
+            wr8(0x045D, 0x7F);
+            wr8(0x045E, 0x7F);
+            wr8(0x045C, 0x7F);
+            wr8(0x045F, 0x01);
             port_sound_print_set_summary();
         } else {
             char msg[128];

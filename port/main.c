@@ -92,7 +92,7 @@ static void print_usage(const char* prog) {
             "[--movie FILE] [--movie-offset N] [--movie-offset-from FRAME N] [--expect-return] "
             "[--fast] [--shot F PATH] "
             "[--wram FILE] [--wram-out F PATH] [--sound-events FILE] [--sound-wav FILE] "
-            "[--sound-effect FRAME ID] [path/to/TG3000.sfc]\n",
+            "[--sound-effect FRAME ID] [--sound-replay FILE] [path/to/TG3000.sfc]\n",
             prog);
 }
 
@@ -118,6 +118,7 @@ int main(int argc, char* argv[]) {
     const char* rom_path = NULL;
     const char* sound_events_path = NULL;
     const char* sound_wav_path = NULL;
+    const char* sound_replay_path = NULL;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--selftest") == 0) {
@@ -152,6 +153,8 @@ int main(int argc, char* argv[]) {
             sound_events_path = argv[++i];
         } else if (strcmp(argv[i], "--sound-wav") == 0 && i + 1 < argc) {
             sound_wav_path = argv[++i];
+        } else if (strcmp(argv[i], "--sound-replay") == 0 && i + 1 < argc) {
+            sound_replay_path = argv[++i];
         } else if (strcmp(argv[i], "--sound-effect") == 0 && i + 2 < argc) {
             unsigned long effect_frame = strtoul(argv[++i], NULL, 10);
             port_add_test_effect(effect_frame, (uint8_t)strtoul(argv[++i], NULL, 0));
@@ -216,6 +219,12 @@ int main(int argc, char* argv[]) {
             return 77;
         }
         fclose(wf);
+    }
+    /* The same for a replay of the original's sound messages (recorded on the bench, local). */
+    if (sound_replay_path != NULL && !port_set_sound_replay(sound_replay_path)) {
+        fprintf(stderr, "SKIP: recorded sound messages not found (%s)\n", sound_replay_path);
+        rom_free(rom_data);
+        return 77;
     }
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {

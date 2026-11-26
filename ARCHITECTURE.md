@@ -19,8 +19,8 @@
   1)"): `convert_audio.c` (every sound conversion, at load: BRR -> PCM, envelope codes ->
   seconds/levels, pitch values -> Hz, volume scale -> gains), `sequencer.c` (the game's songs
   and effects with named state, one step per game message, calls the mixer), `mixer.c` (our
-  own voices, interpolation and envelope curves; SDL3 audio stream and/or WAV, one game frame
-  at a time from the main thread).
+  own voices, interpolation, envelope curves and echo delay line; SDL3 audio stream and/or WAV,
+  one game frame at a time from the main thread).
 - `port/video/` — `convert.c` (every format conversion), `assets.c` (named cartridge blocks,
   recognised when the game uploads them), `palette.c` (the screen's colours as the game sets them).
 - `port/screens/` — one drawing function per kind of screen: `menu_screen.c` (the menus' text
@@ -74,7 +74,11 @@ CLI modes:
 - `--sound-events FILE` (tests): write the sound player's calls to the mixer (frame, step,
   voice, event, sample, Hz, volumes) and print their fingerprint at exit; `--sound-wav FILE`:
   write the mixer's output as a WAV (git-ignored paths only); `--sound-effect FRAME ID`: ask
-  the menus' effect ID at FRAME, as the menu code does.
+  the menus' effect ID at FRAME, as the menu code does; `--sound-replay FILE`: from the port's
+  first request for song 1, replace each sound message with the next one the original sent
+  (recorded on the decomp's bench, a local file; exit 77 when absent). Test scaffolds:
+  `--screen sound_menu` (set 1 after a race) and `--screen sound_setN` (set N, N = 0..7, by the
+  game's loader, its song asked for, volumes full).
 
 ## Boundary
 The decomp's `src/platform.h` is chip-shaped on purpose (its bench compares with the

@@ -15,9 +15,10 @@
 #define MIXER_VOICES 8
 
 /* Start a note on `voice`: `sample` from its start, at `hz`, gains 0..1, `env` from silence.
-   `let_go` starts it already let go (its envelope falls at the sustain rate after the decay). */
+   `let_go` starts it already let go (its envelope falls at the sustain rate after the decay).
+   `echo`: the note also feeds the echo. */
 void mixer_start(int voice, const converted_sample* sample, double hz, float left, float right,
-                 const sound_envelope* env, bool let_go);
+                 const sound_envelope* env, bool let_go, bool echo);
 void mixer_set_pitch(int voice, double hz);
 void mixer_set_volume(int voice, float left, float right);
 /* Let the note go: once its decay reaches the sustain level, it falls at the sustain rate. */
@@ -27,6 +28,10 @@ void mixer_cut(int voice);
 /* Silence every voice at once and forget their samples (a new set is about to replace them). */
 void mixer_stop_all(void);
 void mixer_set_master(float gain);
+/* The echo: the voices that feed it, delayed by `delay_s`, come back at `volume` (not scaled
+   by the master gain); `feedback` of the delayed sound goes round again. A new delay starts
+   from silence. */
+void mixer_set_echo(float delay_s, float feedback, float volume);
 
 /* Output. The device is opened only when asked (not in headless runs); a WAV file may be written
    at the same time. Each call to mixer_output_frame renders one game frame of audio. */

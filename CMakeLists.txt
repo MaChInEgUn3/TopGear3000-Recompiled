@@ -449,6 +449,54 @@ set_tests_properties(sound_set0_events_game_main PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# The race sets (docs/DECISIONS.md, "The native sound player: the race sets"): the test scaffold
+# `sound_setN` loads set N with the game's own loader and plays its song alone for 9,100 frames
+# (more than one loop of each song). Sets 3-6: the music voices (0-3) matched the bench's voice
+# report event for event over autopilot_60k.txt's races (the songs' voices are never taken by an
+# effect); sets 2 and 7 are not reached by any bench movie (fingerprint only, not compared).
+foreach(pair "2;6305 ba5c18e2c8600139" "3;4458 43da7196191417da" "4;4594 31fb59949c8fc1c5"
+             "5;5499 4f2171afccf00310" "6;4300 c4d8d2038e085ea6" "7;11 08c7e5c40f909d5f")
+  list(GET pair 0 set)
+  list(GET pair 1 expect)
+  string(REPLACE " " ", fingerprint " expect "${expect}")
+  add_test(NAME sound_set${set}_song_events
+    COMMAND tg3000 --screen boot,sound_set${set} --fast --frames 9100
+      --sound-events "${CMAKE_CURRENT_BINARY_DIR}/sound_set${set}_song_events.txt"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  set_tests_properties(sound_set${set}_song_events PROPERTIES
+    PASS_REGULAR_EXPRESSION "sound events: ${expect}"
+    FAIL_REGULAR_EXPRESSION "FATAL"
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+    SKIP_RETURN_CODE 77
+  )
+endforeach()
+# A whole race's sound as the original's driver heard it: the scaffold loads the race's set, then
+# the messages the original sent from its song request to the race's end (recorded on the
+# decomp's bench, autopilot_60k.txt; a local file under notes/, skipped where absent) replace the
+# port's own. Music, engine, race effects and echo: every key-on, cut, let-go, pitch and volume
+# change and echo setting identical to the bench's voice report (set 3: 7,440 of 7,440 events;
+# set 4: 10,986; set 5: 11,047; set 6: 11,262).
+foreach(race "3;8094;7740;7861 3af30fc4a9a95e42" "4;17574;10990;11562 3cf9b22e9c9110f1"
+             "5;30292;9702;11610 b4927be987bda54a" "6;41951;10621;12154 ed464e59376f245d")
+  list(GET race 0 set)
+  list(GET race 1 from)
+  list(GET race 2 frames)
+  list(GET race 3 expect)
+  string(REPLACE " " ", fingerprint " expect "${expect}")
+  add_test(NAME sound_race_set${set}_replay
+    COMMAND tg3000 --screen boot,sound_set${set} --fast --frames ${frames}
+      --sound-replay notes/sound/seq_tools/replay/race_set${set}_${from}.txt
+      --sound-events "${CMAKE_CURRENT_BINARY_DIR}/sound_race_set${set}_replay.txt"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  set_tests_properties(sound_race_set${set}_replay PROPERTIES
+    PASS_REGULAR_EXPRESSION "sound events: ${expect}"
+    FAIL_REGULAR_EXPRESSION "FATAL"
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+    SKIP_RETURN_CODE 77
+  )
+endforeach()
 # Two-task kernel (decomp request D, step 1): the ticker screen runs from saved game memory
 # (a local file under notes/, never in git) and returns by itself. Skipped where absent.
 add_test(NAME game_ticker_runs

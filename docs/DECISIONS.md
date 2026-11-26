@@ -762,9 +762,11 @@ and checked on the decomp's bench).
 - **What stops with a message (`port_fatal`):** only things no song or menu effect of the
   game uses:
   - any song command other than notes, rest, drum, instrument, volume, `$E8` and `$FF`;
-  - an instrument with echo, noise, or the chip's direct gain, when it is keyed;
+  - an instrument with noise or the chip's direct gain, when it is keyed;
   - an effect request carrying its own note, and the second effect request;
-  - the engine sound, 50 Hz timing, and the "tick every step" setting.
+  - 50 Hz timing, and the "tick every step" setting.
+  - (Echo and the engine sound stopped here too until the race sets: see "The native sound
+    player: the race sets".)
 
   Without a loaded set or a started driver (tests that start from saved memory), nothing plays.
 - **Read from the cartridge, never copied into source:**
@@ -789,7 +791,8 @@ and checked on the decomp's bench).
   - 4-point cubic Hermite (Catmull-Rom) interpolation, not the chip's Gaussian filter;
   - smooth exponential envelope curves through the converted times (the chip steps in
     integers): the timing is the original's, the curve is ours;
-  - no echo (sets 0-1 have none audible);
+  - no echo for sets 0-1 (none of their instruments asks for it; the echo came with the race
+    sets);
   - 48 kHz stereo float, rendered one game frame at a time from the main thread at the frame
     boundary. It is pushed to an SDL3 audio stream (`SDL_OpenAudioDeviceStream`), which starts
     with 3 frames of silence queued against jitter; frames are dropped when more than 6 are
@@ -830,10 +833,11 @@ and checked on the decomp's bench).
     The mixer's curves, interpolation and output level are tuned by ear from there.
   - The output level rests on the converted samples' scale (15-bit, brought to full scale),
     not on a measurement; 12 of about 3 million samples clip in the 31 s menu WAV.
-  - The set-0 shift of about 35 frames between the song and the game's frames.
+  - The set-0 shift of about 35 frames between the song and the game's frames: located (see
+    "The native sound player: the race sets", set 0).
   - Live playback through the audio device runs (checked with SDL's dummy audio driver); its
     smoothness on real hardware (queue underruns with frame jitter) is not measured.
-  - Echo, noise and the engine sound wait for the race sets.
+  - Echo and the engine sound: done with the race sets. Noise: no set uses it.
 - **Decided (2026-11-26, under the rule): the format constants in the player.** `sequencer.c`
   names a few numbers of the song format (the command ranges, the instrument block's layout, the
   NTSC tempo divisor 197, the drum pitch, the effect note) and `sound_sets.c` the place of the
@@ -842,8 +846,118 @@ and checked on the decomp's bench).
   (the pitch table is computed, the volume steps and balance are read from the set and the
   start-up upload). Allowed; any new one goes into the same named lists.
 - **Open:** in the whole game, the intro's song (set 0) starts about 35 steps later than on the
-  bench relative to the game's own timing; to be located. Nobody has listened yet: the owner has
-  the menus' recording to compare by ear.
+  bench relative to the game's own timing; located since (the next section). Nobody has listened
+  yet: the owner has the menus' recording to compare by ear.
+
+## The native sound player: the race sets (step 3, 2026-11-26)
+
+- **Set 0's 35 steps: the original's intro load, not the sound.** Measured on the bench
+  (`autopilot_60k.txt`, marks on routine entries, below):
+  - The set-0 loader (`$86:DDEF`) runs from bench frame 300 to 367: 13 uploads (the songs, the
+    instruments, 10 samples, the directory), one message each. In the port each upload costs one frame (the loader waits for one), so the port's load
+    is shorter; that is before the song and inside the 150-frame anchor.
+  - The song request (`top_volumes`, `$80:89EB`) and `intro_screen` (`$80:EE56`) come at 368.
+    The intro's load (five decompressions, the mode 7 map, the clears) reaches its first wait
+    (`$80:F115`) at 403: 35 frames of the console's CPU time.
+  - During those 35 frames the console's NMI keeps sending one message a frame (logged:
+    368-403). So the original's song is already 35 steps in when the intro starts fading in. In
+    the port the load takes no frame, and the song starts with the intro's first wait, at port
+    frame 253 (= 403 - 150).
+  - Not the ready handshake (the port answers "ready" at once, and the bench sent a message every
+    frame here), and not the message order (on both sides the song request goes out with the
+    first message after the load).
+  - **Not fixed in the port.** Matching it would need the port to know how long the console's
+    CPU took for the intro's load (a model of the 65816's speed), or to skip the song's first
+    0.6 s.
+  - **Decided (2026-11-26, under the rule):** not imitated. Making the port wait the console's
+    35 load frames would copy the 65816's speed, a piece of CPU model; the port loads instantly
+    everywhere else too. Accepted as a known difference.
+  - So, from the intro on, the port's song runs 35 steps (0.58 s) behind the original's
+    relative to the pictures. The effects the game asks for land on the right frames, and every
+    new set restarts its song, so the shift does not carry past the set.
+- **The original's messages, measured:** the local bench clone (`notes/sound/seq_tools/bench`,
+  not the decomp) logs every port write by the game's message sender (`$86:DFFB`) and marks
+  chosen routine entries (`BENCH_MSG_LOG`, `BENCH_PC_MARKS`; local tool `msgs.py`).
+  - `autopilot_60k.txt` over 60,000 frames reaches set 3 (frame 7981), set 4 (17461), set 5
+    (30188), set 6 (41859) and set 3 again (54200), with set 1 between the races.
+  - Set 7 (the VS race) needs the DSP-4's firmware on this bench, which is not available here.
+  - Set 2 is reached by no bench movie; the code that loads it is not located.
+- **What the race messages use** (all five races):
+  - the engine flag on every race step, always on voice 6;
+  - race effects `$12` (the engine itself, volume 0, voice 6), `$14`, `$19`, `$1D`, `$1E`,
+    `$20`, `$21`, `$22`, `$24`, `$26`, each on one of voices 5-7;
+  - no second effect request, and no effect gives its own note;
+  - music volume `$7F`, and the master volume fading out at the race's end.
+  - Effects never take the songs' voices: the race songs have 4 channels (voices 0-3).
+- **Implemented:**
+  - **The engine (`sequencer.c`):** at each step with the engine flag, the engine byte's voice
+    plays at that byte's volume (its top 5 bits), and the two pitch bytes are added after the
+    pitch table (`convert_pitch_hz` already took that offset). A song start clears it with the
+    song's voices.
+  - **Echo, the sequencer's side:**
+    - Each instrument's echo bit goes with its notes to the mixer (`mixer_start(..., echo)`;
+      event `on ... echo`).
+    - The set's echo settings come from the instruments-and-settings block (offsets
+      `$400`-`$402`: volume, feedback, delay). Measured: sets 2-7 ask for a 32 ms delay with no
+      feedback; sets 0-1 for no delay (and none of their instruments uses the echo).
+    - Each step, the echo volume is scaled by the music and master volumes (both doubled) as
+      the driver scales it: `((v*music + $80) >> 8) * master + $80) >> 8`. The mixer is told
+      when it changes. The event `echo delay_ms= feedback= vol=` is written only for sets with
+      a delay, so the earlier fingerprints did not change.
+    - `convert_audio.c`: a delay unit is 16 ms (512 stereo frames of the chip's echo memory at
+      32 kHz); the gains on the chip's scale /128. A delay beyond the chip's range, or an echo
+      volume that would not stay positive, stops with a message.
+  - **The mixer's echo, ours:**
+    - one stereo delay line (up to 240 ms), fed by the echo voices after their left/right
+      gains;
+    - output = dry sound × master + delayed sound × echo volume; the feedback (0 in every set)
+      sends the delayed sound round again;
+    - no filter: the driver's start-up sets the chip's echo filter to pass the sound through
+      unchanged and never changes it (measured on the bench). The chip's filter is not
+      reproduced;
+    - a new set or a new delay starts from silence.
+  - **Test options:**
+    - `--screen sound_setN`: the game's loader for set N after the driver's start-up, song 1
+      asked for, the volumes full;
+    - `--sound-replay FILE`: from the port's first request for song 1, each message is replaced
+      by the next one the original sent. The files are local (`notes/sound/seq_tools/replay/`,
+      made by `msgs.py`); without them the tests skip.
+- **Checked against the bench** (`voices_60000`). A local tool, `bench_events.py`, turns the
+  voice report into the port's event words pass by pass. It was checked first on the earlier
+  runs: set 1 gave 854 of 855 (the one left is the stray key-on left by the previous set at the
+  song's start, section 6.5 of the spec) and set 0 gave 2,289 of 2,289.
+
+  | Race | Set | Steps | Identical events |
+  |---|---:|---:|---:|
+  | 1 | 3 | 7,700 | 7,440 of 7,440 |
+  | 2 | 4 | 10,950 | 10,986 of 10,986 |
+  | 3 | 5 | 9,662 | 11,047 of 11,047 |
+  | 4 | 6 | 10,581 | 11,262 of 11,262 |
+  | 5 | 3 | 5,688 | 5,934 of 5,934 |
+
+  - Every key-on (sample, Hz, left/right, echo), cut, let-go, pitch change (the engine's
+    included), volume change (the engine's) and echo setting (through the end fade) is
+    identical, step for step.
+  - The scaffold's song alone (nothing replayed) gives the same music voices up to the race's
+    end fade. Set 3: 3,558 of 3,561 over 7,640 steps (the 3 left are the fade's echo volume).
+    Set 4: 4,531 of 4,531, set 5: 5,445 of 5,445, set 6: 4,266 of 4,266, each over 9,000
+    steps.
+  - Tests: `sound_set{2..7}_song_events` (ROM only, one loop of each song) and
+    `sound_race_set{3..6}_replay` (skipped without the local recordings). Sets 2 and 7 are
+    fingerprints only, not compared with the original (no movie reaches them on this bench);
+    set 7's song is a single rest.
+- **Still stops with a message:** noise, the chip's direct gain, an effect's own note, the second
+  effect request, 50 Hz timing, "tick every step", and any song command not measured. No set's
+  song and none of the races' messages uses any of them.
+- **To listen (git-ignored):**
+  - `notes/sound/race_set3_native.wav`: set 3's song alone, 151 s, one loop;
+  - `notes/sound/race_set3_replay_native.wav`: the movie's first race, with the music, the
+    engine and the effects, 129 s. It clips (1,413 samples), because the engine and the effects
+    play at full volume over the music; the output level is still set 1's open item.
+- **Open:**
+  - the output level and the mixer's curves, by ear;
+  - sets 2 and 7 against the original;
+  - the race's sound in a running race (the port cannot run a race yet).
 
 ## The pre-race screen drawn natively (step 4, 2026-11-26)
 

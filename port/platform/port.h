@@ -36,6 +36,9 @@ unsigned long port_frame_number(void);
 /* Test only: at port frame `frame`, the menus' sound effect request `id` (as the menu code
    writes it). */
 void port_add_test_effect(unsigned long frame, uint8_t id);
+/* Test only: replay the original's recorded sound messages from the port's first request for
+   song 1 (--sound-replay). False when the file cannot be opened. */
+bool port_set_sound_replay(const char* path);
 /* Print a summary of the currently loaded sound set (slots, sizes, total PCM samples). */
 void port_sound_print_set_summary(void);
 /* Two-task split state: whether the split is active, and which task half (0=top, 1=bottom) is running. */
