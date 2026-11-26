@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "assets.h"
+#include "boot.h"
 #include "frame.h"
 #include "misc.h"
 #include "password.h"
@@ -507,7 +508,9 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
     char names[256];
     snprintf(names, sizeof(names), "%s", screen);
     for (char* name = strtok(names, ","); name != NULL; name = strtok(NULL, ",")) {
-        if (strcmp(name, "title_card") == 0) {
+        if (strcmp(name, "boot") == 0) {
+            game_boot();  /* the game's own start-up (decomp b284d72) */
+        } else if (strcmp(name, "title_card") == 0) {
             title_card_show();
         } else if (strcmp(name, "intro") == 0) {
             intro_screen();
@@ -563,3 +566,8 @@ void platform_unported(const char* what) {
     snprintf(msg, sizeof(msg), "the game reached code not converted to C yet: %s", what);
     port_fatal(msg);
 }
+
+/* Decomp b284d72 (game_boot): the console's start-up waits. The port has no vertical blank
+   to wait for before the first frame and no DSP-4 chip to wait for: return at once. */
+void platform_wait_vblank_start(void) {}
+void platform_wait_dsp4_start(void) {}

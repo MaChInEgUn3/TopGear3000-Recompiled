@@ -234,6 +234,17 @@ set_tests_properties(game_picture_title_settled PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# The game's own start-up (decomp game_boot) then the intro, from nothing saved: the intro's zoom
+# picture must be the one that matched the original pixel for pixel.
+add_test(NAME game_boot_intro
+  COMMAND tg3000 --screen boot,intro --fast --frames 300 --shot 295 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_boot_intro PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 295 picture hash 5ad7d5ecba353d04 "
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu game_picture_results game_picture_intro_zoom PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
