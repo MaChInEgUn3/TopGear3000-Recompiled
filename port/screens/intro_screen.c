@@ -122,31 +122,87 @@ static int floor_div256(int v) {
     return (v >= 0) ? (v >> 8) : -(((-v) + 255) >> 8);
 }
 
-static void draw_intro_m7(uint32_t* fb, const uint32_t pal_rgba[256]) {
+static void decode_hdma_window(uint16_t base, uint8_t left_out[INTRO_M7_END_LINE],
+                               uint8_t right_out[INTRO_M7_END_LINE]) {
+    uint32_t p = base;
+    uint32_t end = base + 0x40u;
+    int y = 0;
+    uint8_t cur_l = 0xFFu;
+    uint8_t cur_r = 0x00u;
+
+    while (y < INTRO_M7_END_LINE && p < end) {
+        uint8_t cnt = rd8(p++);
+        if (cnt == 0u) {
+            break;
+        }
+        if ((cnt & 0x80u) != 0u) {
+            port_fatal("intro: unexpected repeat HDMA window entry");
+        }
+        if (p + 2u > end) {
+            port_fatal("intro: HDMA window table overflow");
+        }
+        cur_l = rd8(p++);
+        cur_r = rd8(p++);
+        for (uint8_t k = 0u; k < cnt && y < INTRO_M7_END_LINE; ++k) {
+            left_out[y] = cur_l;
+            right_out[y] = cur_r;
+            ++y;
+        }
+    }
+    while (y < INTRO_M7_END_LINE) {
+        left_out[y] = cur_l;
+        right_out[y] = cur_r;
+        ++y;
+    }
+}
+
+static void draw_intro_m7(uint32_t* fb, const uint32_t pal_rgba[256], uint16_t phase) {
     int scale = (int)(int16_t)rd16(0x017Au);
-    int cx = (int)rd8(0x013Du);
-    int cy = (int)rd8(0x013Bu);
+    /* Phases 0 and 4 call mode7_zoom_view ($013D, $013B); phases 1..3 repurpose $013A/$013C for
+       the window tables without updating Mode 7 scroll, which stays at its phase-0 centre. */
+    int cx = (phase == 0u || phase == 4u) ? (int)rd8(0x013Du) : 0xC0;
+    int cy = (phase == 0u || phase == 4u) ? (int)rd8(0x013Bu) : 0x00;
+
+    uint8_t w1_l[INTRO_M7_END_LINE];
+    uint8_t w1_r[INTRO_M7_END_LINE];
+    uint8_t w2_l[INTRO_M7_END_LINE];
+    uint8_t w2_r[INTRO_M7_END_LINE];
+    bool use_win = (phase >= 1u && phase <= 4u);
+    if (use_win) {
+        uint16_t off = rd16(0x0136u);
+        if (off != 0x0000u && off != 0x0100u) {
+            port_fatal("intro: unexpected HDMA window buffer offset");
+        }
+        decode_hdma_window((uint16_t)(0x0D00u + off), w1_l, w1_r);
+        decode_hdma_window((uint16_t)(0x0D40u + off), w2_l, w2_r);
+    }
 
     for (int sy = 0; sy < INTRO_M7_END_LINE; ++sy) {
         int my = INTRO_M7_CENTRE_Y + floor_div256(scale * (sy - cy));
-        if (my < 0 || my >= 1024) {
-            continue;
-        }
+        bool my_ok = (my >= 0 && my < 1024);
         int ty = my >> 3;
         int py = my & 7;
         uint32_t* dst = &fb[sy * SCREEN_WIDTH];
 
         for (int sx = 0; sx < SCREEN_WIDTH; ++sx) {
+            if (use_win) {
+                bool in1 = (sx >= (int)w1_l[sy] && sx <= (int)w1_r[sy]);
+                bool in2 = (sx >= (int)w2_l[sy] && sx <= (int)w2_r[sy]);
+                if (in1 != in2) {
+                    continue;
+                }
+            }
+            uint8_t tile = 0u;
             int mx = INTRO_M7_CENTRE_X + floor_div256(scale * (sx - cx));
-            if (mx < 0 || mx >= 1024) {
-                continue;
+            int px = 0;
+            int tpy = 0;
+            if (my_ok && mx >= 0 && mx < 1024) {
+                int tx = mx >> 3;
+                tile = g_m7_map[(size_t)ty * INTRO_M7_MAP_DIM + (size_t)tx];
+                px = mx & 7;
+                tpy = py;
             }
-            int tx = mx >> 3;
-            uint8_t tile = g_m7_map[(size_t)ty * INTRO_M7_MAP_DIM + (size_t)tx];
-            if (tile == 0u) {
-                continue;
-            }
-            uint8_t p = g_m7_tiles[(size_t)tile * 64u + (size_t)py * 8u + (size_t)(mx & 7)];
+            uint8_t p = g_m7_tiles[(size_t)tile * 64u + (size_t)tpy * 8u + (size_t)px];
             if (p != 0u) {
                 dst[sx] = pal_rgba[p];
             }
@@ -243,7 +299,7 @@ static void draw_intro_bg2_text(uint32_t* fb, const uint32_t pal_rgba[256], bool
 }
 
 bool intro_screen_active(void) {
-    return rd16(0x013Eu) == 0u
+    return rd16(0x013Eu) <= 4u
         && asset_current(ROLE_TEXT_DRAWINGS_128) == ASSET_INTRO_TEXT_DRAWINGS
         && asset_current(ROLE_OBJ_DRAWINGS_HI) == ASSET_RESULTS_STARS_DRAWINGS
         && asset_current(ROLE_BG_DRAWINGS) == -1
@@ -259,20 +315,25 @@ void intro_screen_draw(uint32_t* fb) {
 
     intro_build_once();
 
+    uint16_t phase = rd16(0x013Eu);
+
     uint32_t pal_rgba[256];
     pal_rgba[0] = convert_color(palette_get(0u));
     for (unsigned i = 1u; i < 256u; ++i) {
         pal_rgba[i] = convert_color(rd16(0x0500u + i * 2u));
     }
 
-    /* 1. Backdrop */
+    /* 1. Backdrop (lines 0..183 use CGRAM 0; lines 184..223 are covered by BG3 black) */
     uint32_t backdrop = pal_rgba[0];
-    for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
+    for (int i = 0; i < INTRO_M7_END_LINE * SCREEN_WIDTH; ++i) {
         fb[i] = backdrop;
+    }
+    for (int i = INTRO_M7_END_LINE * SCREEN_WIDTH; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
+        fb[i] = 0xFF000000u;
     }
 
     /* 2. Mode 7 picture (lines 0..183) */
-    draw_intro_m7(fb, pal_rgba);
+    draw_intro_m7(fb, pal_rgba, phase);
 
     /* 3. Mode 1 BG2 priority-0 text (lines 184..223) */
     draw_intro_bg2_text(fb, pal_rgba, false);

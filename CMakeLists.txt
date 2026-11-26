@@ -184,6 +184,17 @@ add_test(NAME game_picture_intro_zoom
 set_tests_properties(game_picture_intro_zoom PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 295 picture hash 5ad7d5ecba353d04 brightness 15 drawn intro"
 )
+# Regression only (not exactness): the intro's settle phase is 1 pixel off the original per
+# frame (Mode 7 rounding, not copied from the chip; docs/DECISIONS.md). Locks the port's output.
+add_test(NAME game_regression_intro_settle
+  COMMAND tg3000 --wram notes/opt/wram_before_title.bin --screen intro --fast --frames 1316 --shot 1315 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_regression_intro_settle PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 1315 picture hash ed15392db6dbe6e0 "
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu game_picture_results game_picture_intro_zoom PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77

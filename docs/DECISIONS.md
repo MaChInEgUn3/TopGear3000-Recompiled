@@ -452,6 +452,19 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
 - **Test:** `game_picture_intro_zoom`. The intro's later phases (logo slices, curved window,
   colour cycle) are not drawn yet.
 
+## The intro's phases 1-4 drawn natively (step 4, 2026-11-25)
+
+- Phases 1-4 (stars spreading, the picture panning and cycling, then settling): port frames
+  1315/1316 against the bench's steps 1720/1721 differ by **1 pixel each**, in the Mode 7
+  picture (scaling rounding). Not copied from the chip (the rule); a known difference.
+  Everything else (stars, text, window edges) matches.
+- **Per-line effect (listed for the owner's veto): the intro's window.** The game's two window
+  tables (`$0D00`/`$0E00` and `$0D40`/`$0E40`, from the offset in `$0136`, rebuilt every frame)
+  cut the Mode 7 picture line by line; the screen reads them at their fixed addresses in the
+  format the game writes and masks the picture as the screen set-up says (both windows,
+  combined XOR, on that layer). Strict checks as elsewhere.
+- **Test:** `game_regression_intro_settle` locks the port's own output (not exactness).
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
