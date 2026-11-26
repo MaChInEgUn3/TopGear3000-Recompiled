@@ -29,7 +29,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
 
 ## Medium
 
-- **D (request 7). The two-task kernel's tails in C:** `nmi_menu_frame` (`$80:B97B`) and
+- **D (request 7) — DONE in decomp `506cc7d` (ticker, shop, championship as two tasks), adopted.** The two-task kernel's tails in C:** `nmi_menu_frame` (`$80:B97B`) and
   `irq_menu_frame` (`$80:BC9B`) stop at their stack switches (`$80:BC54`/`$80:BDC1`) and the
   callbacks `JSR ($01EC)`/`($02EC)`. Championship, shop and ticker cannot run. A C-level way
   to run task 1's frame then task 2's frame (the tasks share no WRAM, per the decomp's notes),
