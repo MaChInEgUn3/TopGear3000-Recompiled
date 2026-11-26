@@ -85,6 +85,10 @@ set_target_properties(tg3000 PROPERTIES WIN32_EXECUTABLE OFF)
 if(MINGW)
   target_link_options(tg3000 PRIVATE -static)
 endif()
+if(UNIX)
+  # The sound conversions and mixer use the C maths library.
+  target_link_libraries(tg3000 PRIVATE m)
+endif()
 
 enable_testing()
 add_test(NAME rom_sha1_selftest COMMAND tg3000 --selftest)

@@ -769,8 +769,9 @@ and checked on the decomp's bench).
     integers): the timing is the original's, the curve is ours;
   - no echo (sets 0-1 have none audible);
   - 48 kHz stereo float, rendered one game frame at a time from the main thread at the frame
-    boundary. It is pushed to an SDL3 audio stream (`SDL_OpenAudioDeviceStream`), and frames
-    are dropped when more than 6 are queued (fast runs).
+    boundary. It is pushed to an SDL3 audio stream (`SDL_OpenAudioDeviceStream`), which starts
+    with 3 frames of silence queued against jitter; frames are dropped when more than 6 are
+    queued (fast runs).
   - With `TG3000_HEADLESS` set, no device is opened.
 - **Test options:**
   - `--sound-events FILE`: the player's calls to the mixer, with frame and step, plus a
@@ -790,18 +791,26 @@ and checked on the decomp's bench).
   - Tests: `sound_menu_events` (the fingerprint of that run) and `sound_menu_wav` (the mixer,
     headless).
 - **Set 0 through the whole game (`game_main`, `autopilot_60k.txt`, offset 150):**
-  - The intro's song starts at port frame 253; the bench has it at frame 369, so the
-    frame-anchor offset for set 0's song is 116, not 150.
-  - The menu effects the game itself asks for land at port frame + 150 ± 2 of the bench's.
-  - So the song runs about 34 frames later relative to the game's input than on the bench.
-    The 34 frames come before the song starts (the start-up and set load take a different
-    number of frames), not from the player.
+  - The intro's song starts at port frame 253; the bench has it at frame 369 (bench minus
+    port: 116, not the movie's 150).
+  - The first menu effect the game itself asks for comes at port frame 3011 (song step 2758);
+    the bench's at frame 3163 (step 2793): bench minus port 152, the movie's 150 within 2.
+  - Both sides send one message per frame in between. So at the menus the port's song is
+    about 35 steps (0.6 s) behind the original's relative to the game's frames. Where the
+    35 frames go (the port's intro or the frames before the song) is not located yet; the
+    player only counts the messages it gets.
   - Up to step 2747 (before the first effect) every music event is identical: 2,273 of 2,273.
+    The effects after it fall on other steps and voices than on the bench, because of that
+    shift, so they are not compared.
   - Test `sound_set0_events_game_main`.
 - **Open:**
   - The owner listens to the menus' music (a local WAV, never in git) against the original.
     The mixer's curves, interpolation and output level are tuned by ear from there.
-  - The set-0 frame anchor (34 frames).
+  - The output level rests on the converted samples' scale (15-bit, brought to full scale),
+    not on a measurement; 12 of about 3 million samples clip in the 31 s menu WAV.
+  - The set-0 shift of about 35 frames between the song and the game's frames.
+  - Live playback through the audio device runs (checked with SDL's dummy audio driver); its
+    smoothness on real hardware (queue underruns with frame jitter) is not measured.
   - Echo, noise and the engine sound wait for the race sets.
 
 ## Steps (2026-11-24)

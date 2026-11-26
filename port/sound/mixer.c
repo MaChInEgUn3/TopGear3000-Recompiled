@@ -231,6 +231,9 @@ void mixer_open_device(void) {
         fprintf(stderr, "sound: no audio device (%s)\n", SDL_GetError());
         return;
     }
+    /* A cushion of silence (3 frames) so that frame-to-frame jitter does not starve the device. */
+    static const float silence[2 * 3 * 800];
+    SDL_PutAudioStreamData(g_stream, silence, (int)sizeof silence);
     SDL_ResumeAudioStreamDevice(g_stream);
 }
 

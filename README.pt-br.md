@@ -41,7 +41,7 @@ O projeto está na **etapa 4 de 4** (pré-alfa). **Ainda não dá para jogar** e
 |---|---|---|
 | 1 | Esqueleto (CMake, download do SDL3, checagem SHA-1 da ROM, janela vazia, CI) | ✅ Feito |
 | 2 | Camada de plataforma (laço de quadros, controles; [desenho](docs/proposals/video-layer.md)) | ✅ Feito |
-| 3 | Interface de som ([desenho](docs/proposals/sound.md); o tocador espera o decomp) | ✅ Desenhada |
+| 3 | Interface de som ([desenho](docs/proposals/sound.md); a música e os efeitos dos menus já tocam nativamente) | ⏳ Em andamento |
 | 4 | Primeiros menus nativos (cartão de título, senha, menu de opções e tela VS prontos, idênticos pixel a pixel) | ⏳ Em andamento |
 
 ## Nem 1% emulador
@@ -64,7 +64,7 @@ O jogo final não contém **nenhum** modelo da CPU do SNES (65816), chip de víd
 Os itens abaixo são **metas, não promessas** — nenhum deles existe ainda:
 
 * Renderizador de vídeo nativo desenhado por tela a partir dos dados do jogo na memória
-* Reprodutor de som nativo para músicas e efeitos sonoros
+* Reprodutor de som nativo para os conjuntos das corridas (o dos menus já toca)
 * Funções matemáticas nativas do DSP-4
 * Mapeamento configurável de teclado e controle
 * Versões prontas para baixar, para Linux e Windows x86-64
