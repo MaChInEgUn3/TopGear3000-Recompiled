@@ -543,21 +543,7 @@ static void draw_half_objects(int half, uint32_t* fb, const uint32_t pal_rgba[25
 }
 
 static void apply_half_brightness(uint32_t* fb, int y_start, int y_end, uint8_t b) {
-    if (b == 0u) {
-        for (int i = y_start * SCREEN_WIDTH; i < y_end * SCREEN_WIDTH; ++i) {
-            fb[i] = 0xFF000000u;
-        }
-        return;
-    }
-    if (b < 15u) {
-        for (int i = y_start * SCREEN_WIDTH; i < y_end * SCREEN_WIDTH; ++i) {
-            uint32_t px = fb[i];
-            uint32_t r = (((px >> 16) & 0xFFu) * b * 17u) >> 8;
-            uint32_t g = (((px >> 8) & 0xFFu) * b * 17u) >> 8;
-            uint32_t bl = ((px & 0xFFu) * b * 17u) >> 8;
-            fb[i] = 0xFF000000u | (r << 16) | (g << 8) | bl;
-        }
-    }
+    screen_apply_brightness_lines(fb, y_start, y_end, b);
 }
 
 bool champ_screen_active(void) {

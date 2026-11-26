@@ -380,6 +380,8 @@ estamos fazendo com o DSP-4?".
 
 ## The ticker screen: measured, blocked (step 4, 2026-11-25)
 
+(Unblocked by the two-task kernel and the Mode 7 answer; drawn natively since 2026-11-26, below.)
+
 - Measured (`autopilot_60k.txt`, entry at step 15858; memory saved for later in
   `tools/make_reference_memory.sh`): the ticker is a **two-task screen** (`$0008` = `$B97B`, the
   menus' NMI frame with a line interrupt at line 108), so it waits on decomp request 7 like the
@@ -924,9 +926,8 @@ and checked on the decomp's bench).
   - The animated sun stops the port (`$0700` not 0) until a course with one is compared; its
     frames would come by the same streamed-upload capture (`$7F:6640 + k*$480`).
   - The meter's capture is by call pattern until the decomp names it.
-  - Fade frames differ by 1 level in some channels from the original (e.g. port 6605 against
-    `frame_06771.png`: 5,424 pixels, all off by exactly 1). The scaling is the shared
-    `screen_apply_brightness`; measured on this screen only, not changed here.
+  - Fixed (2026-11-26, the brightness rule measured, below): the fade frames differed by 1 level
+    in some channels (e.g. port 6605 against `frame_06771.png`: 5,424 pixels); now 0.
   - Objects of palettes 0-3 are drawn without the glow (as the screen's colour set-up says);
     the glow frames match, but this case was not isolated.
 
@@ -995,11 +996,88 @@ and checked on the decomp's bench).
   - The panel's static differs from the original (port 8346 against `frame_08515.png`: 2,937
     pixels, all inside the static's square): the random state differs after the console's extra
     load frames; the drawing of the static's tiles and map is the same code path.
-  - Fade frames differ by 1 level in some channels (the shared `screen_apply_brightness`, as on
-    the pre-race screen); the first lit frame (brightness 1, port 5746) is drawn black by the
-    port (the panel's map is not sent yet) and differs from the original's (21,602 pixels; not
-    analysed).
+  - Fixed (2026-11-26, the brightness rule measured, below): the fade frames differed by 1 level
+    in some channels; port 5747..5758 now 0 pixels. The first lit frame (brightness 1, port
+    5746) is drawn black by the port (the panel's map is not sent yet) and differs from the
+    original's (21,602 pixels; not analysed).
   - Lists 6-10, player 2's half and the two-player shop were never measured: they stop the port.
+
+## The ticker drawn natively (step 4, 2026-11-26)
+
+- **Identical to the original pixel for pixel on every frame** (`--screen ticker` from
+  `notes/tick/wram_before_tick.bin`, `autopilot_60k.txt` step 15857; port frame F = bench
+  `frame_(F+15868).png`): all 625 frames, 0 to 624, 0 of 57,344 pixels different each: the dark
+  start, the fade-in (brightness 1..14), the lit run with the road stripes passing and the
+  scrolling texts (the player's result, then the `$81` "SECRET BONUS" lines and the end marker),
+  and the fade-out (14..1). Measurements: `notes/probe/TICKER.md`, section F (the earlier
+  probe's object drawings and colour 0 were the bottom half's; corrected there).
+- **How, under the rule (`port/screens/ticker_screen.c`, `port/video/assets.c`):**
+  - One drawing function, the top half only: task 2 takes the one-player early leave and its
+    half stays dark (`$029B` = 0 the whole run); a lit bottom half stops the port.
+  - The top half's shadow block `$019C..$01C1` is one fixed block for the whole run, checked
+    byte for byte: Mode 7, BG1 and objects on the main screen, objects 8x8/16x16 with their
+    drawings at the font, no windows, no colour maths.
+  - Cartridge blocks, unpacked and converted once at start-up: the Mode 7 drawings `$88:8C7D`
+    (101 8bpp tiles), the Mode 7 map `$95:8000` (17x7 tiles at the map's top-left, tile 0
+    elsewhere), the object drawings `$88:8601` (the font, 186 tiles, already a known block).
+    The ticker is recognised by its load in order: `$88:8601` noted and sent, then three
+    streamed uploads joined at their start (the tiles by size and content, the map cleared from
+    `$81:CBF8`, its byte checked 0, then the map's 7 rows of 17 bytes, each compared with the
+    block's row). Any other unpacked stream ends it. The VRAM destinations are ignored.
+  - Captured when the NMI sends them: the top half's sprite table (`$81:0900`/`$0D00`, the last
+    one sent) and its 256 colours (`$81:0500`).
+  - Objects from the captured table, the lowest number in front; checked: drawings 0..185,
+    priority 0, 1 or 3, at most 32 on a line. Priorities 1 and 3 in front of the picture.
+- **Mode 7 use (listed for the owner's veto):** lines 0..107 show the 128x128 Mode 7 map
+  through the game's own view block `$012E..$013D` (ticker_scene_step: two offsets, the matrix,
+  the centre), read at that fixed address in the format the routine writes. In every measured
+  frame (the pass after a race, `$03A8` = 5) the matrix is the identity and the centre (64, 28):
+  the code checks those six words and draws the map moved by the two offsets (13-bit, wrapping
+  at 1024); a turning or zooming view stops. Screen line y is the picture's line y + 1.
+- **Line splits (listed for the veto):** (1) the split at line 108 (the menus' line interrupt):
+  lines 108..223 black, the bottom half being dark; (2) the screen's four line tables
+  (`$81:CBF9..$81:CC0E`, cartridge) hand the top's view block to lines 0..115 and the bottom's
+  (`$022E..`) from line 116, which lies in the dark half: nothing of the second is drawn.
+- **Where the view is taken: when the NMI runs (listed for the veto).** Task 1 writes the next
+  view block right after the NMI, while the picture is being drawn, and the line tables take it
+  at the picture's first line: the bench's picture after the NMI of step N shows step N-1's
+  block with the sprite table that NMI sent. The port takes the block in the two-task branch of
+  `platform_wait_vblank` just before `nmi_prologue` (`ticker_screen_note_nmi`), and draws at the
+  existing two-task draw point. Read at the draw point instead, the Mode 7 picture was one
+  step (3 pixels) off: port 142 against `frame_16010.png`, 144 pixels at x 253..255 (the box
+  entering on the right); the objects, the road stripes among them, matched. No game counter is
+  stepped, no routine retyped.
+- **Per-line effects:** none besides the split above (the line tables carry one block a half).
+- **Tests:** `game_picture_ticker_fade` (port 23, brightness 11, `frame_15891.png`),
+  `game_picture_ticker` (port 142, `frame_16010.png`), `game_picture_ticker_bonus` (port 382, the
+  `$81` text, `frame_16250.png`), all from the saved memory (skipped where absent).
+- **Open:**
+  - The zoom-in (`$03A8` = 0: the turning matrix and the sparks) was never reached in a bench
+    movie: it stops. So do a priority-0 object over an opaque picture pixel (never happened;
+    the title has them behind), a lit bottom half and priority 2.
+  - In full runs the ticker follows a race, which the port cannot run yet (DSP-4).
+  - The port's fade runs half a step out of phase with the bench's (`$019A` low byte `$00`
+    against `$80`; the cause is not located, the port's load also takes 7 frames fewer); each
+    drawn picture's brightness still matches.
+
+## The brightness rule measured (2026-11-26)
+
+- **The rule the bench's pictures follow at brightness 1..14:** each 8-bit channel c (the
+  5-bit colour widened as `c5 << 3 | c5 >> 2`) becomes `(c * ((b << 16) / 15)) >> 16`, integer
+  division first. Brightness 0 is black, 15 unchanged. The shared `screen_apply_brightness`
+  (`port/screens/screens.h`) used `(c * b * 17) >> 8`, one level low in some channels at
+  brightness 2, 4 and 6..14 (identical at 1, 3 and 5). `champ_screen.c` had its own copy for
+  each half; it now calls the shared one (`screen_apply_brightness_lines`).
+- **Checked:** every fade frame of the ticker's fade-in and fade-out (0 pixels; before, up to
+  26,212 pixels a frame, all off by exactly one); the pre-race fade, port 6605, 6609,
+  6612, 6614, 6616, 6619, 6622, 6625, 6628 against `frame_06771.png` and
+  `glow/frame_06775..06794.png` (brightness 13 down to 2): 0 pixels each (before: e.g. 5,424 at
+  6605); the shop's fade-in, port 5747..5758 against `frame_05916..05927.png` (brightness
+  2..13): 0 pixels each. The ticker's colours rule out `c * b / 15` at every level. Port 5746
+  (shop, brightness 1) still differs: the panel's map is not sent yet there (the shop's open
+  item).
+- **Tests:** all 35 earlier tests pass with their hashes unchanged, so nothing was re-pinned.
+  The new `game_picture_ticker_fade` pins a fade frame at brightness 11.
 
 ## Steps (2026-11-24)
 

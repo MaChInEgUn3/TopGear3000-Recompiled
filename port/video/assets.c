@@ -80,6 +80,8 @@ static asset_entry g_assets[ASSET_COUNT] = {
     [ASSET_SHOP_LIST_GEARBOX] = {"SHOP_LIST_GEARBOX", 0x9C8040u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_SHOP_LIST_ARMOR] = {"SHOP_LIST_ARMOR", 0x9E8000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_SHOP_LIST_BOOST] = {"SHOP_LIST_BOOST", 0x9D8F55u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_TICKER_M7_TILES] = {"TICKER_M7_TILES", 0x888C7Du, ASSET_KIND_TILES_8BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_TICKER_M7_MAP] = {"TICKER_M7_MAP", 0x958000u, ASSET_KIND_MAP_16, ROLE_NONE, 0, NULL, 0, 0, 0},
 };
 
 static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1, -1};
@@ -88,6 +90,7 @@ static bool g_title_objs_loaded[4];
 static uint8_t g_champ_streams_mask[CHAMP_HALF_COUNT];
 static champ_half_pieces g_champ_half[CHAMP_HALF_COUNT];
 static racestart_pieces g_racestart;
+static ticker_pieces g_ticker;
 
 /* The shop's four unpacked streams before the split ($8D:8000, $88:8000, $87:8190, $8D:895F,
    in that order: bits 0..3), and each half's pieces. */
@@ -414,7 +417,48 @@ void assets_note_word(uint16_t value) {
 /* Streamed uploads while the pre-race course view is in (race_start_frame_draw, $80:D475):
    each planet's shadow frame, 128 bytes from $7E:8000 + n*$800 + frame*$80, kept by planet;
    the sun's frames ($7F:6640 + k*$480, $480 bytes) are not taken (never compared). */
+/* The ticker's three streams, in their order (ticker_screen_load): the Mode 7 drawings (the
+   unpacked $88:8C7D, by size and content), the map cleared with the fixed byte at $81:CBF8,
+   then the map's 7 rows of 17 tiles (each the unpacked $95:8000's row, by content). Anything
+   out of that order ends the ticker's load. */
+static void ticker_note_stream(uint32_t src, uint32_t size) {
+    if (!g_ticker.font_sent) {
+        return;
+    }
+    const asset_entry* tiles = &g_assets[ASSET_TICKER_M7_TILES];
+    const asset_entry* map = &g_assets[ASSET_TICKER_M7_MAP];
+    if (!g_ticker.tiles_sent) {
+        if (src == 0x7F0000u && size == tiles->size
+            && fnv1a_32(&g_ram[0x10000u], size) == tiles->hash) {
+            g_ticker.tiles_sent = true;
+            return;
+        }
+    } else if (!g_ticker.map_cleared) {
+        if (src == 0x81CBF8u && size == 0x4000u) {
+            if (bus_rd8(0x81CBF8u) != 0x00u) {
+                port_fatal("ticker: the map's clearing byte at $81:CBF8 is not 0 (measured)");
+            }
+            g_ticker.map_cleared = true;
+            return;
+        }
+    } else if (g_ticker.rows_sent != (uint8_t)((1u << TICKER_MAP_ROWS) - 1u)) {
+        uint32_t row = (src - 0x7F0000u) / TICKER_MAP_COLS;
+        if (src >= 0x7F0000u && row < TICKER_MAP_ROWS
+            && src == 0x7F0000u + row * TICKER_MAP_COLS && size == TICKER_MAP_COLS
+            && g_ticker.rows_sent == (uint8_t)((1u << row) - 1u)
+            && memcmp(&g_ram[0x10000u + row * TICKER_MAP_COLS], &map->data[row * TICKER_MAP_COLS],
+                      TICKER_MAP_COLS) == 0) {
+            g_ticker.rows_sent = (uint8_t)(g_ticker.rows_sent | (1u << row));
+            return;
+        }
+    } else {
+        return; /* loaded: later streams are not the ticker's load */
+    }
+    memset(&g_ticker, 0, sizeof(g_ticker));
+}
+
 void assets_note_stream(uint32_t src, uint32_t size) {
+    ticker_note_stream(src, size);
     if (!g_racestart.has_bg3_left || (src >> 16) != 0x7Eu || size != RACESTART_SHADOW_BYTES) {
         return;
     }
@@ -433,6 +477,13 @@ void assets_note_stream(uint32_t src, uint32_t size) {
 /* The sprite table the NMI sends ($81:0900, $220 bytes), kept while the pre-race screen's
    pieces are in. */
 void assets_note_oam(uint32_t src, uint32_t size) {
+    /* The ticker: the top half's sprite table as the NMI sends it ($81:0900 from nmi_prologue,
+       then $81:0900 or $81:0D00 from nmi_menu_frame: the last one sent is the picture's). */
+    if (g_ticker.rows_sent == (uint8_t)((1u << TICKER_MAP_ROWS) - 1u) && size == TICKER_OAM_BYTES
+        && (src == 0x810900u || src == 0x810D00u)) {
+        memcpy(g_ticker.oam, &g_ram[src & 0xFFFFu], TICKER_OAM_BYTES);
+        g_ticker.has_oam = true;
+    }
     /* The shop: each half's sprite table as the frame code sends it (task 1's from $81:0900 or
        $81:0D00, task 2's from $81:1100 or $81:1500). */
     if (g_shop_streams == SHOP_STREAMS_ALL && size == SHOP_OAM_BYTES) {
@@ -528,6 +579,11 @@ static bool shop_note_source(uint32_t rom) {
 }
 
 void assets_note_source(uint32_t rom) {
+    /* The ticker's font starts its load; any other unpacked stream ends the ticker's. */
+    memset(&g_ticker, 0, sizeof(g_ticker));
+    if (rom == 0x888601u) {
+        g_ticker.font_noted = true;
+    }
     /* $87:8190 is also the championship's first stream: it goes on to the championship's
        bookkeeping below; the shop's other streams end the championship's and the pre-race's. */
     if (shop_note_source(rom) && rom != 0x878190u) {
@@ -812,6 +868,11 @@ static bool capture_champ_piece(uint32_t src, uint32_t size) {
 }
 
 void assets_note_upload(uint32_t src, uint32_t size) {
+    if (g_ticker.font_noted && !g_ticker.font_sent && src == 0x7F0000u
+        && size == g_assets[ASSET_PASSWORD_TEXT_DRAWINGS].size
+        && fnv1a_32(&g_ram[0x10000u], size) == g_assets[ASSET_PASSWORD_TEXT_DRAWINGS].hash) {
+        g_ticker.font_sent = true;
+    }
     if (capture_shop_piece(src, size)) {
         return;
     }
@@ -864,6 +925,12 @@ void assets_note_upload(uint32_t src, uint32_t size) {
 /* The shop: each half's 256 colours as the frame code sends them ($81:0500 task 1's, $81:0700
    task 2's, 512 bytes from colour 0). */
 void assets_note_cgram(uint8_t index, uint32_t src, uint32_t size) {
+    /* The ticker: the top half's 256 colours as the NMI sends them ($81:0500). */
+    if (g_ticker.rows_sent == (uint8_t)((1u << TICKER_MAP_ROWS) - 1u) && index == 0u
+        && src == 0x810500u && size == TICKER_COLOUR_BYTES) {
+        memcpy(g_ticker.colours, &g_ram[0x0500u], TICKER_COLOUR_BYTES);
+        g_ticker.has_colours = true;
+    }
     if (g_shop_streams != SHOP_STREAMS_ALL || index != 0u || size != SHOP_COLOUR_BYTES) {
         return;
     }
@@ -905,6 +972,17 @@ void assets_clear_loaded(void) {
     memset(&g_racestart, 0, sizeof(g_racestart));
     g_shop_streams = 0u;
     memset(g_shop_half, 0, sizeof(g_shop_half));
+    memset(&g_ticker, 0, sizeof(g_ticker));
+}
+
+bool assets_ticker_loaded(void) {
+    return g_ticker.font_sent && g_ticker.tiles_sent && g_ticker.map_cleared
+        && g_ticker.rows_sent == (uint8_t)((1u << TICKER_MAP_ROWS) - 1u) && g_ticker.has_oam
+        && g_ticker.has_colours;
+}
+
+const ticker_pieces* assets_ticker(void) {
+    return &g_ticker;
 }
 
 bool assets_racestart_shutter_loaded(void) {

@@ -29,7 +29,10 @@
   per-line subtraction), `champ_screen.c` (the championship, two tasks), `shop_screen.c` (the shop, two tasks:
   the top half, with its fixed windows and the item pictures recognised by their list block), `race_start_screen.c`
   (the pre-race screen: the bar, the closed shutter, the opening course view with its per-line
-  effects listed in `docs/DECISIONS.md`), driven by tables of measured facts per screen.
+  effects listed in `docs/DECISIONS.md`), `ticker_screen.c` (the ticker after a race, two tasks:
+  the top half's Mode 7 picture moved by the game's view block taken when the NMI runs, and the
+  scrolling text objects), driven by tables of measured facts per screen. `screens.h` holds the
+  shared brightness scaling (the bench's measured rule, `(c * ((b << 16) / 15)) >> 16`).
 - `docs/proposals/` — accepted design proposals (`video-layer.md`, `sound.md`).
 - `tools/` — helper CMake scripts (`fetch_deps.cmake`).
 - `deps/` — fetched third-party dependencies (`deps/SDL3`, git-ignored).

@@ -71,6 +71,7 @@ add_executable(tg3000
   port/screens/title_screen.c
   port/screens/champ_screen.c
   port/screens/shop_screen.c
+  port/screens/ticker_screen.c
   port/screens/race_start_screen.c
 )
 target_include_directories(tg3000 PRIVATE
@@ -456,6 +457,35 @@ add_test(NAME game_ticker_runs
 )
 set_tests_properties(game_ticker_runs PROPERTIES
   PASS_REGULAR_EXPRESSION "screen ticker returned at frame "
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The ticker drawn natively (two tasks, Mode 7 top half) from the same saved memory: port frame F
+# = bench frame_(F+15868).png, all 625 frames 0 of 57,344 pixels different. Pinned: a fade-in
+# frame (23, brightness 11: frame_15891.png), the lit result text (142: frame_16010.png) and a
+# "SECRET BONUS" text from bank $81 (382: frame_16250.png).
+add_test(NAME game_picture_ticker_fade
+  COMMAND tg3000 --wram notes/tick/wram_before_tick.bin --screen ticker --fast --frames 24 --shot 23 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_ticker_fade PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 23 picture hash 5e82fbd5960c8541 brightness 11 drawn ticker"
+)
+add_test(NAME game_picture_ticker
+  COMMAND tg3000 --wram notes/tick/wram_before_tick.bin --screen ticker --fast --frames 143 --shot 142 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_ticker PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 142 picture hash 82eea19a0fbb1fd8 brightness 15 drawn ticker"
+)
+add_test(NAME game_picture_ticker_bonus
+  COMMAND tg3000 --wram notes/tick/wram_before_tick.bin --screen ticker --fast --frames 383 --shot 382 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_ticker_bonus PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 382 picture hash e74ddcb2681d7ab6 brightness 15 drawn ticker"
+)
+set_tests_properties(game_picture_ticker_fade game_picture_ticker game_picture_ticker_bonus PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

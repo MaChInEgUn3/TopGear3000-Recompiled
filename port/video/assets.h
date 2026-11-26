@@ -65,6 +65,8 @@ typedef enum {
     ASSET_SHOP_LIST_GEARBOX,       /* $9C:8040, 12992 B (list 3's) */
     ASSET_SHOP_LIST_ARMOR,         /* $9E:8000, 10976 B (list 4's) */
     ASSET_SHOP_LIST_BOOST,         /* $9D:8F55, 13568 B (list 5's) */
+    ASSET_TICKER_M7_TILES,         /* $88:8C7D, 6464 B (the ticker's Mode 7 drawings: 101 8bpp tiles) */
+    ASSET_TICKER_M7_MAP,           /* $95:8000 (the ticker's Mode 7 map: 7 rows of 17 tiles) */
     ASSET_COUNT
 } asset_id;
 
@@ -237,6 +239,31 @@ typedef struct {
 bool assets_shop_loaded(void);
 const shop_half_pieces* assets_shop_half(int half);
 const shop_picture_slice* assets_shop_picture(int row);
+
+/* The ticker ($80:E4E6, notes/probe/TICKER.md). Its load: the font $88:8601 noted and sent
+   (the top half's object drawings), then three streams: the Mode 7 drawings ($7F:0000, the
+   unpacked $88:8C7D), the map cleared (the fixed byte at $81:CBF8, $4000 bytes), and the map's
+   7 rows of 17 tiles ($7F:0000 + 17 * row, the unpacked $95:8000). Then, each frame, the top
+   half's sprite table and colours as the NMI sends them. */
+#define TICKER_MAP_ROWS 7u
+#define TICKER_MAP_COLS 17u
+#define TICKER_OAM_BYTES 0x0220u
+#define TICKER_COLOUR_BYTES 0x0200u
+
+typedef struct {
+    bool font_noted;     /* video_note_source($88:8601) */
+    bool font_sent;      /* ...and its block sent from $7F:0000 */
+    bool tiles_sent;     /* the Mode 7 drawings streamed from $7F:0000 */
+    bool map_cleared;    /* the fixed-byte stream from $81:CBF8, $4000 bytes */
+    uint8_t rows_sent;   /* bit r: the map's row r streamed */
+    bool has_oam;
+    bool has_colours;
+    uint8_t oam[TICKER_OAM_BYTES];          /* the top half's sprite table as the NMI sent it */
+    uint8_t colours[TICKER_COLOUR_BYTES];   /* the top half's 256 colours as the NMI sent them */
+} ticker_pieces;
+
+bool assets_ticker_loaded(void);
+const ticker_pieces* assets_ticker(void);
 
 bool assets_racestart_shutter_loaded(void);
 bool assets_racestart_loaded(void);
