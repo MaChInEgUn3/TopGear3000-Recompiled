@@ -10,10 +10,13 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
 - **A. The DSP-4 race commands as native C.** `src/misc.c` still talks to the chip through about
   270 `dsp4_port_write16`/`dsp4_port_read16` calls; `src/dsp4.c` is native only for `$00`
   (multiply), `$0A` (edges), `$11` (row), `$03`/`$0B` (sprite). Needed: `$01`
-  (`road_rows_project`), `$07` (`road_rows_project2`), `$08` (`road_rows_stream`,
-  `dsp4_answers_store`, VS), `$09` (`object_sprites_stream`, `sprite_put_rows_*`,
+  (`road_rows_project`), `$07` (`road_rows_project2`), `$0D` (the VS race's road, four sites `$85:A59F`/`$85:A8E8`/`$85:AC53`/`$85:AF9B`;
+  corrected by the decomp), `$09` (`object_sprites_stream`, `sprite_put_rows_*`,
   `car_sprite_head`, `sprite_part_put`), `$06` (`oam_high_load`). The port's `dsp4_port_*` stop
-  with a message, so no race runs without them.
+  with a message, so no race runs without them. **Shape (2026-11-26):** the race's C must call
+  native command functions directly with arguments and results (as for `$0A`/`$11`/`$03`/`$0B`).
+  A byte-protocol model of the chip (`Dsp4Chip`, decomp `13e8350`) behind `dsp4_port_*` would be
+  a DSP-4 model in the shipped game, which the rule forbids; it stays a bench tool.
 - **B (request 4) — steps 1-3 (driver start-up, set loader, its race/VS/menu callers) DONE in decomp `e966da4`/`2d72646`/`b67f44e`, adopted; the intro's call $80:89E7 waits on C.** Sound loading in C on three new `platform.h` calls** (design:
   `docs/proposals/sound.md`, Part A): `sound_driver_boot(src)` for the IPL upload `$86:E096`;
   `sound_upload_block(spc_dest, src, size)` once per `[size][dest][data]` block walked by

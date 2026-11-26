@@ -568,6 +568,16 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
   become 16-bit PCM with its loop point when received (two samples do not loop). Test
   `sound_set_menu`. No sequencer or mixer yet.
 
+## The DSP-4: no chip-protocol model in the port (2026-11-26)
+
+- Decomp `13e8350` offered `Dsp4Chip` (reset/write/read/lost, native maths behind a byte
+  protocol that reproduces the chip's quirks) to put behind `dsp4_port_write16/read16`.
+  Decided under the rule (the owner asked for decisions under "0% emulated", not options): not
+  in the port. A byte-level interface with the chip's behaviour is a model of the DSP-4. The
+  port needs the race's C to call native command functions directly (as `dsp4_edges`,
+  `dsp4_row`, `dsp4_sprite` already are); `Dsp4Chip` stays a bench tool. Asked of the decomp
+  (`docs/decomp-requests.md`, A). The port's `dsp4_port_*` keep stopping with a message.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
