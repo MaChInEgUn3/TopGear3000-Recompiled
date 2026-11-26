@@ -4,7 +4,8 @@
 // docs/proposals/sound.md). Each scene change sends one set: a songs block, an instruments and
 // settings block, the samples one by one, then the sample directory. The port keeps the songs,
 // instruments and samples by ROLE (never as a copy of the sound CPU's memory); the directory is
-// ignored (each sample arrives with its slot and loop). The native player reads this (step 3).
+// ignored (each sample arrives with its slot and loop). The native player (port/sound/sequencer.c)
+// is handed the songs and instruments here; a new set resets it first.
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +14,7 @@
 #include "convert_audio.h"
 #include "platform.h"
 #include "port.h"
+#include "sequencer.h"
 #include "tg3000.h"
 
 // Destinations that name a block's role (measured: docs/proposals/sound.md, notes on the 8 sets).
@@ -22,10 +24,7 @@
 static int is_directory_dest(uint16_t d) { return d == 0x4000u || d == 0x2000u || d == 0x2500u; }
 
 typedef struct {
-    int16_t* pcm;
-    size_t num_samples;
-    size_t loop_sample;
-    bool loops;
+    converted_sample pcm;
     uint16_t brr_size;
     uint16_t loop_offset;  // loop point as a byte offset into the BRR sample
     int present;
@@ -37,6 +36,33 @@ static uint8_t* g_instruments;
 static uint16_t g_instruments_size;
 static port_sample g_samples[32];
 static int g_in_upload;
+
+// The driver's start-up upload (decomp e966da4, request 4 step 1). The port runs no sound-CPU
+// program, so the blocks are not kept; only the driver's left/right balance table (16 bytes at
+// its address $1333 in the code block, notes/sound/SEQUENCER.md section 5.1) is read out of it,
+// for the native player's volumes.
+#define DRIVER_BALANCE_TABLE 0x1333u
+#define DRIVER_BALANCE_SIZE 16u
+
+void sound_boot_begin(void) {}
+void sound_boot_start(uint16_t spc_entry) { (void)spc_entry; }
+void sound_clear_ports(void) {}
+
+void sound_boot_block(uint16_t spc_dest, uint32_t src, uint16_t size) {
+    if (spc_dest <= DRIVER_BALANCE_TABLE &&
+        (uint32_t)DRIVER_BALANCE_TABLE + DRIVER_BALANCE_SIZE <= (uint32_t)spc_dest + size) {
+        uint8_t table[DRIVER_BALANCE_SIZE];
+        for (unsigned i = 0; i < DRIVER_BALANCE_SIZE; ++i) {
+            table[i] = bus_rd8(src + (uint32_t)(DRIVER_BALANCE_TABLE - spc_dest) + i);
+        }
+        sequencer_balance_loaded(table);
+    }
+}
+
+const converted_sample* sound_set_sample(unsigned slot) {
+    if (slot >= 32u || !g_samples[slot].present) return NULL;
+    return &g_samples[slot].pcm;
+}
 
 static uint8_t* copy_bus(uint32_t src, uint16_t size) {
     uint8_t* p = (uint8_t*)malloc(size ? size : 1u);
@@ -57,15 +83,19 @@ void sound_upload_end(void) {
 
 void sound_upload_block(uint16_t spc_dest, uint32_t src, uint16_t size) {
     if (spc_dest == SOUND_DEST_SONGS) {
-        // A new set starts with its songs: forget the previous set's samples.
-        for (int i = 0; i < 32; ++i) { free(g_samples[i].pcm); memset(&g_samples[i], 0, sizeof g_samples[i]); }
+        // A new set starts with its songs: the player lets go of the previous set, then its
+        // samples are forgotten.
+        sequencer_new_set();
+        for (int i = 0; i < 32; ++i) { free(g_samples[i].pcm.pcm); memset(&g_samples[i], 0, sizeof g_samples[i]); }
         free(g_songs);
         g_songs = copy_bus(src, size);
         g_songs_size = size;
+        sequencer_songs_loaded(g_songs, g_songs_size);
     } else if (spc_dest == SOUND_DEST_INSTRUMENTS) {
         free(g_instruments);
         g_instruments = copy_bus(src, size);
         g_instruments_size = size;
+        sequencer_instruments_loaded(g_instruments, g_instruments_size);
     } else if (is_directory_dest(spc_dest)) {
         // ignored: every sample already came with its slot and loop
     } else {
@@ -94,11 +124,8 @@ void sound_upload_sample(uint8_t slot, uint16_t spc_dest, uint32_t src, uint16_t
     free(brr);
 
     port_sample* s = &g_samples[slot];
-    free(s->pcm);
-    s->pcm = conv.pcm;
-    s->num_samples = conv.num_samples;
-    s->loop_sample = conv.loop_sample;
-    s->loops = conv.loops;
+    free(s->pcm.pcm);
+    s->pcm = conv;
     s->brr_size = size;
     s->loop_offset = loop_offset;
     s->present = 1;
@@ -110,10 +137,10 @@ void port_sound_print_set_summary(void) {
     for (int i = 0; i < 32; ++i) {
         if (!g_samples[i].present) continue;
         ++count;
-        total_pcm += g_samples[i].num_samples;
+        total_pcm += g_samples[i].pcm.num_samples;
         printf("  slot %d: brr %u B, loop_off %u B, pcm %zu samples, loop_sample %zu, loops %d\n",
                i, (unsigned)g_samples[i].brr_size, (unsigned)g_samples[i].loop_offset,
-               g_samples[i].num_samples, g_samples[i].loop_sample, g_samples[i].loops ? 1 : 0);
+               g_samples[i].pcm.num_samples, g_samples[i].pcm.loop_sample, g_samples[i].pcm.loops ? 1 : 0);
     }
     printf("sound set: songs %u B, instruments %u B, samples %u, total pcm %zu samples\n",
            (unsigned)g_songs_size, (unsigned)g_instruments_size, count, total_pcm);

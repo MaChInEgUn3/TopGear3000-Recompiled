@@ -12,7 +12,15 @@
 - `port/platform/` — the port's side of the decomp's `platform.h`: `frame.c` (the frame boundary,
   `g_ram`/`g_rom`, timing, sound message, DSP-4 stop), `input.c` (keyboard and gamepad),
   `video_events.c` (named graphics/palette events, empty until step 4), `ignored.c` (every
-  register-style call, empty bodies, one file so review is trivial).
+  register-style call, empty bodies, one file so review is trivial), `sound_sets.c` (the
+  driver's start-up and each sound set by role: songs, instruments, samples by slot; hands
+  them to the player).
+- `port/sound/` — the native sound player (`docs/DECISIONS.md`, "The native sound player (set
+  1)"): `convert_audio.c` (every sound conversion, at load: BRR -> PCM, envelope codes ->
+  seconds/levels, pitch values -> Hz, volume scale -> gains), `sequencer.c` (the game's songs
+  and effects with named state, one step per game message, calls the mixer), `mixer.c` (our
+  own voices, interpolation and envelope curves; SDL3 audio stream and/or WAV, one game frame
+  at a time from the main thread).
 - `port/video/` — `convert.c` (every format conversion), `assets.c` (named cartridge blocks,
   recognised when the game uploads them), `palette.c` (the screen's colours as the game sets them).
 - `port/screens/` — one drawing function per kind of screen: `menu_screen.c` (the menus' text
@@ -34,10 +42,12 @@ main() -> rom_load() [1048576 bytes + SHA-1] -> g_rom -> SDL window + renderer (
   screen function (blocking) -> ... the game calls platform_wait_vblank() at every frame wait:
     0. SDL events (quit/Escape -> longjmp back to port_run; input state)
     1. the game's frame code (its NMI, in C): JML target at $0000, then nmi_prologue() and the
-       target word at $0008 (fixed table; unknown -> port_fatal with the value)
+       target word at $0008 (fixed table; unknown -> port_fatal with the value); its
+       sound_send_frame(msg) runs one step of the native sound player
     3. draw: the active screen's own function into a 256x224 picture (title card so far;
        other screens black), then present
-    4. pace at 60.0988 fps (SDL_DelayPrecise)
+    4. one frame of audio from the mixer (SDL3 stream; none when TG3000_HEADLESS), then
+       pace at 60.0988 fps (SDL_DelayPrecise)
 ```
 The game owns the loop; the port lives at the frame boundary (docs/proposals/video-layer.md).
 CLI modes:
@@ -53,6 +63,10 @@ CLI modes:
 - `--wram FILE` (tests): start from a saved 128 KB game memory (e.g. the original's, from the
   decomp's bench) instead of zeroed memory.
 - `--shot F PATH` (tests): print the picture's fingerprint at frame F and save it as BMP (`-`: no file).
+- `--sound-events FILE` (tests): write the sound player's calls to the mixer (frame, step,
+  voice, event, sample, Hz, volumes) and print their fingerprint at exit; `--sound-wav FILE`:
+  write the mixer's output as a WAV (git-ignored paths only); `--sound-effect FRAME ID`: ask
+  the menus' effect ID at FRAME, as the menu code does.
 
 ## Boundary
 The decomp's `src/platform.h` is chip-shaped on purpose (its bench compares with the

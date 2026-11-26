@@ -41,7 +41,7 @@ The project is currently at **step 4 of 4** (pre-alpha). **The game is not playa
 |---|---|---|
 | 1 | Skeleton (CMake, SDL3 fetch, ROM SHA-1 check, empty window, CI) | ✅ Done |
 | 2 | Platform layer (frame loop, input; [design](docs/proposals/video-layer.md)) | ✅ Done |
-| 3 | Sound interface ([design](docs/proposals/sound.md); player waits on the decomp) | ✅ Designed |
+| 3 | Sound interface ([design](docs/proposals/sound.md); the menus' music and effects play natively) | ⏳ In progress |
 | 4 | First native menus (title card, password, options menu, VS screen done, pixel-exact) | ⏳ In progress |
 
 ## Not Even 1% Emulator
@@ -64,7 +64,7 @@ The shipped game contains **no** model of the SNES CPU (65816), video chip (PPU)
 The items below are **goals, not promises** — none of them are implemented yet:
 
 * Native video renderer drawn per screen from game data in memory
-* Native sound player for music and sound effects
+* Native sound player for the race sets (the menus' set plays already)
 * Native DSP-4 math functions
 * Configurable keyboard and controller mapping
 * Prebuilt releases for Linux and Windows x86-64

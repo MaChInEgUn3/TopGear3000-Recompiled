@@ -13,10 +13,12 @@
 #include "boot.h"
 #include "frame.h"
 #include "misc.h"
+#include "mixer.h"
 #include "password.h"
 #include "platform.h"
 #include "port.h"
 #include "screens.h"
+#include "sequencer.h"
 #include "sound.h"
 #include "tg3000.h"
 #include "vs.h"
@@ -100,6 +102,37 @@ void sound_send_frame(const uint8_t msg[16]) {
     memcpy(g_sound_last_msg, msg, sizeof(g_sound_last_msg));
     g_sound_last_frame = g_frame_count;
     (void)g_sound_last_frame;
+    /* One step of the native player per message, as the original driver takes one. */
+    sequencer_message(msg);
+}
+
+unsigned long port_frame_number(void) {
+    return g_frame_count;
+}
+
+/* Test only (--sound-effect FRAME ID): at FRAME, the menus' effect request ID, written as the
+   game's own menu code writes it (func_80894E: volume $FF, note 0, all voices). */
+#define MAX_TEST_EFFECTS 32
+static unsigned long g_test_effect_frame[MAX_TEST_EFFECTS];
+static uint8_t g_test_effect_id[MAX_TEST_EFFECTS];
+static int g_test_effects;
+
+void port_add_test_effect(unsigned long frame, uint8_t id) {
+    if (g_test_effects >= MAX_TEST_EFFECTS) port_fatal("--sound-effect: too many");
+    g_test_effect_frame[g_test_effects] = frame;
+    g_test_effect_id[g_test_effects] = id;
+    ++g_test_effects;
+}
+
+static void test_effects_for_frame(unsigned long frame) {
+    for (int i = 0; i < g_test_effects; ++i) {
+        if (g_test_effect_frame[i] != frame) continue;
+        wr8(0x0463, g_test_effect_id[i]);
+        wr8(0x0464, 0xFF);
+        wr8(0x0465, 0x00);
+        wr8(0x0466, 0xFF);
+        wr8(0x0467, 0x00);
+    }
 }
 
 const uint8_t* port_sound_last_message(void) {
@@ -250,6 +283,7 @@ static void pump_events_and_input(void) {
     }
     test_mask |= movie_buttons_for_frame(g_frame_count);
     port_input_set_test_mask(test_mask);
+    test_effects_for_frame(g_frame_count);
 
     if (g_wram_out_path != NULL && g_frame_count == g_wram_out_frame) {
         FILE* wf = fopen(g_wram_out_path, "wb");
@@ -495,7 +529,8 @@ void platform_wait_vblank(void) {
         present_frame();
     }
 
-    /* d) Pace to 60.0988 fps */
+    /* d) One frame of sound from the mixer, then pace to 60.0988 fps */
+    mixer_output_frame();
     pace_frame();
 
     /* e) Frame counter and limit check */
@@ -661,7 +696,12 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
         } else if (strcmp(name, "ticker") == 0) {
             ticker_screen();
         } else if (strcmp(name, "sound_menu") == 0) {
+            /* The menus' set as the game loads it after a race: the driver's start-up first
+               (the native player reads its balance table), then the set and its song request,
+               with the master volume faded up as the game does after loading it. */
+            sound_boot(DP);
             sound_load_menu(DP, 1);
+            wr16(0x03E0, 0x0001);
             port_sound_print_set_summary();
         } else {
             char msg[128];

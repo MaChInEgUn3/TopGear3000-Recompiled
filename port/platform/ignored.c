@@ -86,10 +86,5 @@ void video_set_m7_vofs(uint16_t value) { (void)value; }
 // A stream slot's source address alone: per-line machinery, ignored like the other dma_* calls.
 void dma_stream_set_source(int slot, uint16_t src) { (void)slot; (void)src; }
 
-// Sound driver start-up (decomp e966da4, request 4 step 1). These hand the sound CPU its
-// program; the port runs no sound CPU program (the rule), so they are accepted and ignored.
-// The sets of songs, instruments and samples arrive through the scene loader's calls.
-void sound_boot_begin(void) {}
-void sound_boot_block(uint16_t spc_dest, uint32_t src, uint16_t size) { (void)spc_dest; (void)src; (void)size; }
-void sound_boot_start(uint16_t spc_entry) { (void)spc_entry; }
-void sound_clear_ports(void) {}
+// Sound driver start-up (decomp e966da4): in port/platform/sound_sets.c, which reads the
+// driver's balance table out of it for the native player.
