@@ -3,8 +3,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "mixer.h"
 #include "port.h"
 #include "rom.h"
+#include "sequencer.h"
 #include "sha1.h"
 #include "tg3000.h"
 
@@ -89,7 +91,8 @@ static void print_usage(const char* prog) {
             "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] "
             "[--movie FILE] [--movie-offset N] [--movie-offset-from FRAME N] [--expect-return] "
             "[--fast] [--shot F PATH] "
-            "[--wram FILE] [--wram-out F PATH] [path/to/TG3000.sfc]\n",
+            "[--wram FILE] [--wram-out F PATH] [--sound-events FILE] [--sound-wav FILE] "
+            "[--sound-effect FRAME ID] [path/to/TG3000.sfc]\n",
             prog);
 }
 
@@ -113,6 +116,8 @@ int main(int argc, char* argv[]) {
     const char* wram_out_path = NULL;
     const char* screen = "game";
     const char* rom_path = NULL;
+    const char* sound_events_path = NULL;
+    const char* sound_wav_path = NULL;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--selftest") == 0) {
@@ -143,6 +148,13 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--shot") == 0 && i + 2 < argc) {
             shot_frame = strtoul(argv[++i], NULL, 10);
             shot_path = argv[++i];
+        } else if (strcmp(argv[i], "--sound-events") == 0 && i + 1 < argc) {
+            sound_events_path = argv[++i];
+        } else if (strcmp(argv[i], "--sound-wav") == 0 && i + 1 < argc) {
+            sound_wav_path = argv[++i];
+        } else if (strcmp(argv[i], "--sound-effect") == 0 && i + 2 < argc) {
+            unsigned long effect_frame = strtoul(argv[++i], NULL, 10);
+            port_add_test_effect(effect_frame, (uint8_t)strtoul(argv[++i], NULL, 0));
         } else if (strcmp(argv[i], "--expect-return") == 0) {
             expect_return = true;
         } else if (strcmp(argv[i], "--fast") == 0) {
@@ -230,6 +242,17 @@ int main(int argc, char* argv[]) {
     }
 
     SDL_SetRenderLogicalPresentation(renderer, 256, 224, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
+
+    /* Sound: the device only outside headless runs (tests); the test outputs on request. */
+    if (getenv("TG3000_HEADLESS") == NULL) {
+        mixer_open_device();
+    }
+    if (sound_wav_path != NULL) {
+        mixer_open_wav(sound_wav_path);
+    }
+    if (sound_events_path != NULL) {
+        sequencer_open_events(sound_events_path);
+    }
 
     port_set_test_options(press_frame, expect_return);
     port_set_fast(fast);

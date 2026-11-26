@@ -60,6 +60,8 @@ add_executable(tg3000
   port/platform/frame.c
   port/platform/sound_sets.c
   port/sound/convert_audio.c
+  port/sound/mixer.c
+  port/sound/sequencer.c
   port/video/convert.c
   port/video/assets.c
   port/video/palette.c
@@ -288,6 +290,53 @@ add_test(NAME sound_set_menu
 )
 set_tests_properties(sound_set_menu PROPERTIES
   PASS_REGULAR_EXPRESSION "sound set: songs 2512 B, instruments 1066 B, samples 9, total pcm 51584 samples"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The native player on the menus' set (docs/DECISIONS.md, "The native sound player (set 1)"):
+# the set-1 song from its start (port frame 12) for 1,600 steps, with the menus' effects asked at
+# the steps where the original played them on the decomp's bench (autopilot_60k.txt, song start
+# at bench frame 15861: $13 at step 1251, $11 at 1342..1442, $13 at 1492). Every key-on, cut,
+# let-go and pitch change matched the bench's voice report (838 of 838 events, all 1,597 steps).
+# Only the events' fingerprint is in the repository.
+add_test(NAME sound_menu_events
+  COMMAND tg3000 --screen boot,sound_menu --fast --frames 1612
+    --sound-effect 1263 0x13 --sound-effect 1354 0x11 --sound-effect 1374 0x11
+    --sound-effect 1394 0x11 --sound-effect 1414 0x11 --sound-effect 1434 0x11
+    --sound-effect 1454 0x11 --sound-effect 1504 0x13
+    --sound-events "${CMAKE_CURRENT_BINARY_DIR}/sound_menu_events.txt"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(sound_menu_events PROPERTIES
+  PASS_REGULAR_EXPRESSION "sound events: 863, fingerprint 731d1e1223e0f496"
+  FAIL_REGULAR_EXPRESSION "FATAL"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The mixer renders the menus' music headless into a WAV in the build directory (never in git).
+add_test(NAME sound_menu_wav
+  COMMAND tg3000 --screen boot,sound_menu --fast --frames 600 --sound-effect 300 0x12
+    --sound-wav "${CMAKE_CURRENT_BINARY_DIR}/sound_menu.wav"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(sound_menu_wav PROPERTIES
+  PASS_REGULAR_EXPRESSION "sound wav: 479210 frames at 48000 Hz written"
+  FAIL_REGULAR_EXPRESSION "FATAL"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The native player on the intro's set (set 0) through the whole game (game_main, autopilot_60k.txt
+# offset 150): the song starts at port frame 253 (bench frame 369); up to port frame 3000 (step
+# 2747, before the first menu effect) every key-on, cut and let-go matched the bench's voice
+# report (2,273 of 2,273 events).
+add_test(NAME sound_set0_events_game_main
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150
+    --fast --frames 3000 --sound-events "${CMAKE_CURRENT_BINARY_DIR}/sound_set0_events.txt"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(sound_set0_events_game_main PROPERTIES
+  PASS_REGULAR_EXPRESSION "sound events: 2290, fingerprint a9b08e203a7a5a8c"
+  FAIL_REGULAR_EXPRESSION "FATAL"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

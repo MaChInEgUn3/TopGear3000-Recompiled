@@ -3,6 +3,8 @@
 **Status: ACCEPTED (2026-11-24), the mixer question settled for now** (see `docs/DECISIONS.md`,
 "Sound: the owner's questions"). Part A is asked of the decomp as request 4. Part B goes ahead with
 the rule kept: conversions at load, our own mixer, tuned against recordings of the original.
+Part A is done (decomp `e966da4`, `2d72646`). Part B's first target (set 1 and the three menu
+effects) is built: `docs/DECISIONS.md`, "The native sound player (set 1)".
 
 Facts below come from reading the decomp's disassembly (bank `$86`) and from throwaway
 measurement tools run on the user's ROM (kept out of git). Statements about what the sound
@@ -60,20 +62,22 @@ set loader) and its helpers to C on top of these calls. The race set-up waits fo
    song format with named state (channels, instruments, durations, tempo), not a translation of
    the driver's program over an array of its memory. It understands only this game's format.
 3. **The message** is turned into actions in C: volumes, music on/off, the two effect requests,
-   the engine sound.
-4. **The mixer** has its own interface (start/stop a sound, set pitch and volume) and only what this
-   game uses: no noise, no modulation, one short echo. Eight voices addressed by chip registers
-   would be the chip, and is not done.
-5. **Driver tables the player needs** (pitches, volume steps) are read from the cartridge at
-   start-up, never copied into the source.
+   the engine sound. *(Built: volumes, music, the first effect request. The second request and
+   the engine sound stop with a message until a set uses them.)*
+4. **The mixer** has its own interface (start a sound, let it go, cut it, set pitch and volume)
+   and only what this game uses: no noise, no modulation, one short echo. Eight voices addressed
+   by chip registers would be the chip, and is not done. *(Built without echo, which sets 0-1
+   do not need: `port/sound/mixer.c`.)*
+5. **Driver tables the player needs** (balance, volume steps) are read from the cartridge at
+   start-up, never copied into the source. *(The pitch octave is computed instead: it equals
+   `round(16384*2^(r/192))`, measured.)*
 6. **First target:** the menus' set (set 1: its song, six instruments, no echo) and the three menu
    effects.
 7. **Check:** the original's driver output measured on the decomp's bench (which note, pitch and
    volume each voice gets, tick by tick), compared event by event with the native sequencer; then
    by ear against recordings of the original made on the bench (kept outside the repository).
-   Today the bench reports only the traffic between the game and the driver, so this needs one
-   more measurement tool on the bench (request 5 to the decomp, or a patch in a separate local
-   copy of the bench, never in the decomp).
+   The bench's `--voice-report` (decomp `d0eaf01`) gives this. *(Done for sets 0 and 1: every
+   key-on, cut, let-go and pitch change identical; the listening comparison is next.)*
 
 ## Question for the owner: how close may the mixer follow the chip?
 
@@ -85,7 +89,9 @@ those become sound is where the line is closest:
 - **(b) The chip's timing for envelopes, the rest ours.** Envelopes attack, decay and release
   with the chip's speeds (that is what makes notes last as long as on the console);
   interpolation and echo stay ours. Recommended: the musical timing is right, and the chip's
-  sound path (interpolation filter, echo filter) is not reproduced.
+  sound path (interpolation filter, echo filter) is not reproduced. *(What was built for set 1,
+  per the owner's rule: the envelope times converted at load, our own smooth curves through
+  them, cubic Hermite interpolation.)*
 - **(c) The chip's exact curves.** The chip's interpolation filter, envelope steps and echo
   filter, reproduced as math inside our mixer (still no registers). Sounds identical, and is
   the closest to a model of the sound chip.

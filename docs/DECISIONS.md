@@ -711,6 +711,99 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
 - **A, `416560f`:** the DSP-4 road command ($01) is being measured again (not waiting on the
   owner any more); nothing to adopt yet.
 
+## The native sound player (set 1) (step 3, 2026-11-26)
+
+The menus' music and their three effects play natively, under the rule "nem 1% emulador": no
+sound-CPU program runs, and no model of the SPC700 or of the S-DSP exists in the port. Spec:
+the local `notes/sound/SEQUENCER.md` (the driver's song format and timing, read from its code
+and checked on the decomp's bench).
+
+- **The sequencer (`port/sound/sequencer.c`)** is a rewrite against the game's song format,
+  with named state:
+  - per channel: order list, pattern position, wait, instrument, volume;
+  - per voice: note pitch, tune, hold, volume, effect owner, and the two per-step pitch tables
+    (offset sequence, sweep).
+  - **Clock:** one step per game message (`sound_send_frame`), as the driver takes one. Each
+    step runs in the driver's order: the message (volumes, music request, effect request), a
+    song start, each voice's output, the pitch tables, the pending note starts, then the song's
+    ticks. Ticks come from a tempo accumulator: tempo/197 a step at 60 Hz.
+  - **Notes:** a note read in a tick cuts its voice at once and starts on the next step. A note
+    is held for its instrument's hold time, or until a let-go event (`$E8`). Once let go, it
+    falls at the instrument's sustain rate.
+  - **Effects:** effect N plays instrument N-1 at the effect note, on the voice (of those the
+    request allows) whose hold runs out first. Music notes skip that voice until the effect's
+    hold has run out.
+  - **Volume:** the music volume reaches a channel at its volume commands and at each pattern
+    start, as in the original.
+  - **Output:** the sequencer calls the mixer's own interface (start with sample, Hz,
+    left/right gain and envelope; pitch; volume; let go; cut). It never builds register values.
+- **What stops with a message (`port_fatal`):** only things no song or menu effect of the
+  game uses:
+  - any song command other than notes, rest, drum, instrument, volume, `$E8` and `$FF`;
+  - an instrument with echo, noise, or the chip's direct gain, when it is keyed;
+  - an effect request carrying its own note, and the second effect request;
+  - the engine sound, 50 Hz timing, and the "tick every step" setting.
+
+  Without a loaded set or a started driver (tests that start from saved memory), nothing plays.
+- **Read from the cartridge, never copied into source:**
+  - songs, instruments and the two pitch tables, from the set's blocks as the game sends them;
+  - the volume-step table, from the same blocks;
+  - the driver's left/right balance table, read out of the driver's start-up upload
+    (`sound_boot_block`, now in `port/platform/sound_sets.c`). Every note of the game plays
+    at its centre entries, which sit slightly left.
+  - The driver's 192-step pitch octave is computed (it equals `round(16384*2^(r/192))`,
+    measured).
+- **Converted at load, in one file (`port/sound/convert_audio.c`):**
+  - each sample's BRR to PCM (15-bit, given a gain to full scale);
+  - each instrument's ADSR codes to seconds and levels: a linear attack time, a time constant
+    for the fall to the sustain level, the sustain level in eighths, a time constant for the
+    fall once let go (none when its code is 0), and an 8 ms cut;
+  - the driver's pitch value to Hz;
+  - the chip's volume scale (127 = full) to a gain.
+
+  The chip's envelope rate codes and these scales sit only there.
+- **The mixer (`port/sound/mixer.c`), ours:**
+  - 8 voices;
+  - 4-point cubic Hermite (Catmull-Rom) interpolation, not the chip's Gaussian filter;
+  - smooth exponential envelope curves through the converted times (the chip steps in
+    integers): the timing is the original's, the curve is ours;
+  - no echo (sets 0-1 have none audible);
+  - 48 kHz stereo float, rendered one game frame at a time from the main thread at the frame
+    boundary. It is pushed to an SDL3 audio stream (`SDL_OpenAudioDeviceStream`), and frames
+    are dropped when more than 6 are queued (fast runs).
+  - With `TG3000_HEADLESS` set, no device is opened.
+- **Test options:**
+  - `--sound-events FILE`: the player's calls to the mixer, with frame and step, plus a
+    fingerprint printed at exit;
+  - `--sound-wav FILE`: the mixer's output (git-ignored paths only);
+  - `--sound-effect FRAME ID`: an effect request written as the menu code writes it.
+- **`--screen sound_menu`** now runs the driver start-up first, then the set. It also fades the
+  master volume up, as the game does after loading the set.
+- **Checked against the bench (`voices_15790_22000`, song start at bench frame 15861 = step 0;
+  port: `--screen boot,sound_menu`, song start at port frame 12):**
+  - Every voice's key-on (step, sample, pitch, left/right volume), cut, let-go and pitch change
+    is identical over all 1,597 steps of the bench run: 838 of 838 events.
+  - The run includes 8 menu effects (`$13` at steps 1251 and 1492; `$11` at 1342, 1362, 1382,
+    1402, 1422 and 1442), asked at the same steps. The voice each one took and its pitch tables
+    (32 pitch changes) match.
+  - `$12` has no bench reference; it plays without error.
+  - Tests: `sound_menu_events` (the fingerprint of that run) and `sound_menu_wav` (the mixer,
+    headless).
+- **Set 0 through the whole game (`game_main`, `autopilot_60k.txt`, offset 150):**
+  - The intro's song starts at port frame 253; the bench has it at frame 369, so the
+    frame-anchor offset for set 0's song is 116, not 150.
+  - The menu effects the game itself asks for land at port frame + 150 ± 2 of the bench's.
+  - So the song runs about 34 frames later relative to the game's input than on the bench.
+    The 34 frames come before the song starts (the start-up and set load take a different
+    number of frames), not from the player.
+  - Up to step 2747 (before the first effect) every music event is identical: 2,273 of 2,273.
+  - Test `sound_set0_events_game_main`.
+- **Open:**
+  - The owner listens to the menus' music (a local WAV, never in git) against the original.
+    The mixer's curves, interpolation and output level are tuned by ear from there.
+  - The set-0 frame anchor (34 frames).
+  - Echo, noise and the engine sound wait for the race sets.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.
