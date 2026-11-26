@@ -44,6 +44,11 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `dma_hdma_get_table` (`irq_vs_split`) need state a non-emulating port does not keep. If
   possible, have the C keep its own WRAM copy of what it reads back, or name the value.
 
+- **K. Name the pre-race meter's words** (`draw_meter`, `hud.c`): before its 10
+  `video_write_vram_word` calls, a note like `video_note_vs_panels`, e.g.
+  `video_note_meter(vram_word, value)` or the words' WRAM source, so the port stops recognising
+  them by call pattern (recorded as a bend in DECISIONS, pre-race screen).
+
 ## Low (enhancements)
 
 - **I (request 3) — DONE in decomp `d0eaf01` (`video_note_source`), adopted (ignored for now; content recognition kept).** Name the ROM source of decompressed uploads (e.g.
