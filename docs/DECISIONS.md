@@ -831,6 +831,16 @@ and checked on the decomp's bench).
   - Live playback through the audio device runs (checked with SDL's dummy audio driver); its
     smoothness on real hardware (queue underruns with frame jitter) is not measured.
   - Echo, noise and the engine sound wait for the race sets.
+- **Decided (2026-11-26, under the rule): the format constants in the player.** `sequencer.c`
+  names a few numbers of the song format (the command ranges, the instrument block's layout, the
+  NTSC tempo divisor 197, the drum pitch, the effect note) and `sound_sets.c` the place of the
+  balance table in the driver's start-up upload. They describe the game's data, like a picture's
+  layout, and are read against the cartridge's own blocks; no table of the driver is copied
+  (the pitch table is computed, the volume steps and balance are read from the set and the
+  start-up upload). Allowed; any new one goes into the same named lists.
+- **Open:** in the whole game, the intro's song (set 0) starts about 35 steps later than on the
+  bench relative to the game's own timing; to be located. Nobody has listened yet: the owner has
+  the menus' recording to compare by ear.
 
 ## Steps (2026-11-24)
 
