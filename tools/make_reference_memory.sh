@@ -45,6 +45,13 @@ if [ "$#" -ne 3 ]; then
 fi
 
 DECOMP_DIR="$(cd "$1" && pwd)"
+# A one-run patch of the bench (dump_at_pc, record_race_pacing, record_race_tape) is undone on any
+# exit, so a failed build or run never leaves the bench clone patched.
+BENCH_PATCHED=0
+restore_bench() {
+  if [ "$BENCH_PATCHED" = 1 ]; then git -C "$DECOMP_DIR" checkout -- tools/bench/bench.c; fi
+}
+trap restore_bench EXIT
 ROM_PATH="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
 mkdir -p "$3"
 OUT_DIR="$(cd "$3" && pwd)"
@@ -117,6 +124,7 @@ dump_at_pc() {
     echo "Error: $DECOMP_DIR/tools/bench has local changes; refusing to patch it" >&2
     exit 1
   fi
+  BENCH_PATCHED=1
   python3 - "$DECOMP_DIR/tools/bench/bench.c" <<'PY'
 import sys
 p = sys.argv[1]
@@ -146,6 +154,7 @@ PY
   make -C "$DECOMP_DIR/tools/bench" LLE_CXX="$BENCH_LLE_CXX" >/dev/null
   TG3000_DUMP_PC="$pc" TG3000_DUMP_FILE="$out" "$BENCH" "$ROM_PATH" "$steps" --movie "$movie" >/dev/null || true
   git -C "$DECOMP_DIR" checkout -- tools/bench/bench.c
+  BENCH_PATCHED=0
   make -C "$DECOMP_DIR/tools/bench" LLE_CXX="$BENCH_LLE_CXX" >/dev/null
   if [ ! -s "$out" ]; then
     echo "Error: PC $pc was not reached in $steps steps of $movie" >&2
@@ -168,6 +177,7 @@ record_race_pacing() {
     echo "Error: $DECOMP_DIR/tools/bench has local changes; refusing to patch it" >&2
     exit 1
   fi
+  BENCH_PATCHED=1
   python3 - "$DECOMP_DIR/tools/bench/bench.c" <<'PY'
 import sys
 p = sys.argv[1]
@@ -210,6 +220,7 @@ PY
   TG3000_RACE_REFRESHES="$out/race_refreshes.raw" TG3000_RACE_WAIT_FILE="$out/wram_race_wait.bin" \
     "$BENCH" "$ROM_PATH" "$steps" --movie "$movie" --dsp4-firmware "$fw" >/dev/null || true
   git -C "$DECOMP_DIR" checkout -- tools/bench/bench.c
+  BENCH_PATCHED=0
   make -C "$DECOMP_DIR/tools/bench" LLE_CXX="$lle" >/dev/null
   if [ ! -s "$out/race_refreshes.raw" ] || [ ! -s "$out/wram_race_wait.bin" ]; then
     echo "Error: the race loop was not reached in $steps steps of $movie" >&2
@@ -251,6 +262,7 @@ record_race_tape() {
     echo "Error: $DECOMP_DIR/tools/bench has local changes; refusing to patch it" >&2
     exit 1
   fi
+  BENCH_PATCHED=1
   python3 - "$DECOMP_DIR/tools/bench/bench.c" <<'PY'
 import sys
 p = sys.argv[1]
@@ -337,6 +349,7 @@ PY
     "$BENCH" "$ROM_PATH" "$steps" --movie "$movie" --dsp4-tape-out "$tmp/tape.bin" --dsp4-report "$tmp/report.txt" \
     --dump "$out/tape_anchors" --every 1000000 >/dev/null || true
   git -C "$DECOMP_DIR" checkout -- tools/bench/bench.c
+  BENCH_PATCHED=0
   make -C "$DECOMP_DIR/tools/bench" LLE_CXX="$BENCH_LLE_CXX" >/dev/null
   if ! grep -q '^E ' "$tmp/marks.txt"; then
     echo "Error: race_end was not reached in $steps steps of $movie" >&2
