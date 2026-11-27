@@ -87,6 +87,8 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   chosen from the first band line (`$0486` + `$00BE`, `$002E`); nothing in WRAM records the
   choice. A WRAM copy (or a named note) would let the race's drawing read it instead of
   re-deriving the game's test.
+  **Measured (2026-11-27, `notes/probe/RACE.md`):** `$09` at all three race anchors (bench steps
+  8171, 8271, 8624); `$29` only at the loop's frames 0-1, under forced blank.
 
 - **N — CONFIRMED by the decomp (2026-11-27): mode 1 runs with the firmware DSP-4 (its coverage map came from the bench's own chip, whose answers take another path); likely a demo race mode (bit 13 of `$03DC`); being ported.** The race wrapper's mode 1 runs in `autopilot_60k.txt` (observation, 2026-11-26; firmware
   bench). `race_wrapper` is entered with `$03DC & 3` = 1 (`$03DC` = `$2001`, `$047C` bit 15) at
@@ -153,3 +155,17 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   the loop's first head and retypes `race_mode_one`'s four-line loop and `race_end` in `frame.c`.
   A named `race_mode_one_loop()` (the `do { head; wait; body } while (!rest); race_end();` part)
   called by `race_mode_one` would let the port call the game's own code there.
+
+- **T. Name the race HUD's words** (2026-11-27). The HUD (BG3) is redrawn only by the race's
+  non-taking NMIs: `race_hud_draw` writes 52 words a HUD NMI, and `hud_markers_put` writes its
+  own, through `video_write_vram_word` with no WRAM home. WRAM runs ahead of the picture (at
+  bench step 8624 the clock in WRAM reads 1"32, the picture 1"27). A note per run, like
+  `video_note_vs_panels` (e.g. `video_note_race_hud(index, value)`, or the words' WRAM source),
+  would let the port draw them by name instead of capturing the 52-word run by call pattern (a
+  bend, as for the pre-race meter, request K).
+
+- **U. The race's scroll table in effect as game state** (2026-11-27). At non-taking refreshes
+  WRAM `$1E46`/`$1E48` already name the next BG1/BG2 scroll table (7 of 7 frames tested), while
+  the picture still shows the one the last `dma_hdma_set_table` call gave. A WRAM copy of the
+  table in effect (or a named note) would spare the port a shadow of that call's argument
+  (decision H: no register shadows in the port).

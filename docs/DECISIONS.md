@@ -1323,8 +1323,9 @@ with the firmware DSP-4 (`--dsp4-firmware`; bsnes v087 fetched by the decomp's
   32 colours. Added to the palette catalogue as "race colours 0-31".
 - **Track-dependent blocks: the game's own tables, enumerated at start-up.** The race's track
   pictures are unpacked by the game from tables indexed by the track (`$83:8410` → `$83:8447` →
-  `$83:8585`/`$8597`: 9 packed tile sets; `$84:FD33`, `$84:FDA1`/`$FE0F`, `$84:FE7D`; the sky row
-  `$83:A484`; the objects' table `$86:AE36` → `$86:0000`). Chosen: the drawing run converts every
+  `$83:8585`/`$8597`: 9 packed tile sets; `$84:FD33`, `$84:FDA1`/`$FE0F`, `$84:FE7D`; the HUD's
+  laps-total digit `$83:A484` by `$1F06` (first called a "sky row"; corrected by the race
+  measurement, `notes/probe/RACE.md`); the objects' table `$86:AE36` → `$86:0000`). Chosen: the drawing run converts every
   entry these tables name at start-up (as the other screens' named blocks) and recognises each
   upload against that catalogue by WRAM source, size and content; the port never reads `$047B`
   to pick a block (that would retype the game's choice). Not cataloguing only the tracks the movies
@@ -1530,7 +1531,10 @@ native sprite commands (request A); it is deleted when the race's C calls them (
    previous call stops sooner (frame 670).
 5. **WRAM at three anchors** (`tape_anchors/`: the bench's WRAM at the entry of the J-th taking
    race NMI, the first from about 1 s, 3 s and 10 s on that falls in the loop's wait, as the
-   port's do; the bench's pictures of that step and the next; the port's by `--wram-out` at frame
+   port's do; the bench's pictures of that step and the next, **mis-paired:** a bench
+   `frame_N.png` shows step N-3's picture (the bench renderer's two alternating buffers), so port
+   frame F pairs with `frame_(F+8117).png`, and the saved pictures are earlier ones (the WRAM
+   comparison below is not affected). The port's by `--wram-out` at frame
    bench step - 8113; `notes/race/tape_anchor_diff.py`): takes 25 (bench 8171, port frame 58), 72
    (8271, 158) and 221 (8624, 511) **equal the bench's but for `$00BC`** (the band IRQ's cursor;
    the port does not run that IRQ) **and `$1FD5-$1FF3`** (the 65816 stack, which the C does not
@@ -1643,6 +1647,32 @@ frames (comparisons only).
   only after a race, which the port cannot run (DSP-4 sprite commands, request A).
 - **Pre-race and shop states after a race** (later tracks of a championship played through):
   reached here by the star names instead; the same screens.
+
+## The race's sky and HUD measured (2026-11-27)
+
+**For the owner's veto: the per-line effects the race's first slice will use.** Measured on the
+bench at the tape's three anchors (`notes/probe/RACE.md` §12-20, local): a re-drawing from the
+measured facts alone (every video word and colour from an upload the port makes, recognised by
+its source; the per-line values from the game's WRAM tables) gives 0 of 57,344 pixels
+different at all three. Nothing is drawn yet; this fixes what the draw function will rest on.
+
+- **The sky** is colour 0 (`$7E:6A33`, set every NMI); the scroll table aims rows 4-106 at a
+  transparent line. **The horizon** (rows 107-170) is BG1 (tiles from `$7F:6860`, map rows from
+  `$7F:6460`/`$6660`, cut from the track's tile set); BG2 is a copy behind it that never wins a
+  pixel there. **The HUD** is BG3 (map unpacked from `$87:8B3D`, font `$8F:85F5`, minimap tiles
+  `$7E:230C`) plus sprites 0-1 (the minimap dots, after request A). No colour maths, no masking
+  window at the anchors. **Mode 7: none** in the race (the load writes the identity matrix once).
+- **Per-line effects the slice needs (each vetoable):**
+  1. BG1's horizontal scroll per line (the game's HDMA 5; its table from the WRAM headers at
+     `$06B3`/`$06D1`/`$06EF`, rows from `$83:A500`/`$83:A5DC` and WRAM `$1536`, `$1100-$15FF`);
+  2. BG2's, the same (HDMA 6, `$072B`/`$0749`/`$0767`, `$1556`);
+  3. the window edges per line (HDMA 4, `$7E:4CCC`, rows at `$7E:8AB7`, `$7E:2E2C`/`$318C`).
+  Measured but for later slices: the band colour streams (`$21-$24` from `$7E:(00C8)`,
+  `$31-$34` from `$7E:(00CC)`), the band BG mode byte (`$047E`/`$0480`) and the band line
+  interrupts (`$0486`, masks `$0596`).
+- **Bends still open:** the BG mode (request M), the HUD's words (request T: until named, a
+  capture of `race_hud_draw`'s 52-word run by call pattern, like the pre-race meter), the scroll
+  table in effect at non-taking refreshes (request U).
 
 ## Steps (2026-11-24)
 
