@@ -84,7 +84,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   choice. A WRAM copy (or a named note) would let the race's drawing read it instead of
   re-deriving the game's test.
 
-- **N. The race wrapper's mode 1 runs in `autopilot_60k.txt`** (observation, 2026-11-26; firmware
+- **N — CONFIRMED by the decomp (2026-11-27): mode 1 runs with the firmware DSP-4 (its coverage map came from the bench's own chip, whose answers take another path); likely a demo race mode (bit 13 of `$03DC`); being ported.** The race wrapper's mode 1 runs in `autopilot_60k.txt` (observation, 2026-11-26; firmware
   bench). `race_wrapper` is entered with `$03DC & 3` = 1 (`$03DC` = `$2001`, `$047C` bit 15) at
   step 44736 (track `$14`, wrapper tail at 52506) and step 57099 (track `$13`). The C has
   `tg3000_unported("$82:89B5 ...")` there ("never ran"). Inferred from `$03DC` at the wrapper's
