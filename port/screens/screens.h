@@ -66,6 +66,10 @@ void title_screen_draw(uint32_t* fb);
 
 bool champ_screen_active(void);
 void champ_screen_draw(uint32_t* fb);
+/* Each half taken as its interrupt sends it: the top at the NMI, the bottom at the IRQ. */
+void champ_screen_note_split(void);
+void champ_screen_note_nmi(void);
+void champ_screen_note_irq(void);
 
 bool shop_screen_active(void);
 void shop_screen_draw(uint32_t* fb);

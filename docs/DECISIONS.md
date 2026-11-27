@@ -634,22 +634,21 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
 - **The first two-task split screen (`$0008` = `$B97B`), reached from `game_main()` with
   `autopilot_60k.txt` (offset 150):**
   - **Moment 1 (settled menu, `NAME` / `CONTROL` / `SPEED` / `RACE`):** port frame 4067 matches
-    `frame_04365.png` (`0` of `57,344` pixels different) and port frame 4214 matches
+    `frame_04365.png` (`0` of `57,344` pixels different) and port frame 4215 (4214 before each
+    half was taken at its interrupt, below) matches
     `frame_04366.png` (`0` of `57,344` pixels different). Before the `Down` press at movie step
     4360 (port frame 4212), the console's unthrottled `$80:C2BB` menu loop runs ~3 passes per
     display frame while the decomp's `champ_menu` runs one pass per frame (`platform_wait_vblank`
     at the end of each pass), so the 16-step cursor colour cycle (`dp+$1E`) advances at 1x speed
     in the port until `Down` resets `dp+$1E = 0` on both sides.
-  - **Moment 0 (opening slide, no objects):** the top half (lines `0..107`) matches
-    `frame_03367.png` at port frame 3189 and `frame_03368.png` at port frame 3190 with `0` of
-    `27,648` pixels different each; the bottom half (lines `116..223`, plus the 8-line blanked
-    split gap `108..115`) matches `frame_03367.png` at port frame 3191 and `frame_03368.png` at
-    port frame 3192 with `0` of `29,696` pixels different each. The 2-frame phase difference
-    between the two halves during the opening slide comes from the split hand-off in
-    `platform_wait_vblank`: task 2 gets its first turn after frame 1's `irq_menu_frame_tail`
-    (`upload_slot_drain(0x0200)`), and after `wait_frames(0x0010)` task 2 sets its `$02EC =
-    $C5E0` frame hook after that frame's `task_frame_hook(0x0200)` has already run; once task 2's
-    shutter finishes opening 5 frames later, both halves stay in sync.
+  - **Moment 0 (opening slide, no objects):** since each half is taken at its interrupt (below),
+    every frame of the fade-in and the slide matches the bench half by half, `0` pixels each:
+    the top half (lines `0..107`) at port frame N = bench `frame_(N+177).png` (3173..3204), the
+    bottom half (lines `116..223`, plus the 8-line blanked split gap `108..115`) at N =
+    bench `frame_(N+176).png` (3173..3195). Once task 2's bar has closed (port 3196 on), the
+    bottom half stands still and whole frames match: port 3196..3204 = `frame_03373..03381.png`,
+    `0` of `57,344` pixels different. The remaining one frame between the halves is the
+    console's CPU time in the load (below).
 - **How, under the rule (`port/screens/champ_screen.c`, `port/video/assets.c`):**
   - **Screen recognition:** `$0008 == 0xB97B`, `port_split_active()`, and both halves have noted
     all five unpacked ROM streams and captured their initial BG1 map, BG2 map, and fire band
@@ -692,8 +691,11 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
     by `+/-4` before `menu_bar_lines_end` writes entry 0 for the next frame (so the three line
     counts in RAM sum to `112` or `104`); `champ_screen.c` recovers the active frame's entry 0
     (`cnt0 -/+ 4`, `val0 +/- 4`) so the three segments sum to the half's 108 lines.
-- **Tests:** `game_main_movie_to_champ` (moment 0, port frame 3191), `game_picture_champ_menu`
-  (moment 1, port frame 4214), `game_picture_champ_name` (`explore_menu.txt` offset 150, NAME
+- **Tests:** `game_main_movie_to_champ` (moment 0, port frame 3196 = `frame_03373.png`; was 3191,
+  which matched no single bench frame), `game_picture_champ_slide` (port 3191, both halves
+  moving: top = `frame_03368.png`, bottom = `frame_03367.png`, 0 pixels each),
+  `game_picture_champ_menu` (moment 1, port frame 4215; was
+  4214, same picture hash), `game_picture_champ_name` (`explore_menu.txt` offset 150, NAME
   entry `$80:C6D4`, port frame 4648 against `frame_04801.png`, `0` of `57,344` pixels different;
   port frame 4348 against `frame_04501.png` and port frame 4649 against `frame_04802.png` also
   `0` of `57,344` pixels different), `game_picture_champ_controls` (`explore_menu.txt` offset 150,
@@ -713,12 +715,57 @@ do 0% emulado". **Delegated under the rule**, with the same safeguards as the pe
     BG1 rows `3..10` to tiles `172..238` (palette 0).
   - Submenu objects use 8x8 and 16x16 (`is_large`) sprites in palettes `0..2` with priorities `2`
     and `3` (drawn in front of BG2 priority-1 shutter tiles).
-- **Open:** during the opening slide the bottom half runs 2 frames behind the top half compared
-  with the original (each half alone is exact). The cause is in the order of the two-task
-  hand-off (`port/platform/frame.c`), not in the drawing; to be checked against the decomp's
-  two-task contract. The cursor glow before the first key press also cycles slower than on the
-  console (the console's menu loop runs several passes per frame); only the 4 letters of the
-  lit item differ.
+- **Open:** the cursor glow before the first key press cycles slower than on the console (the
+  console's menu loop runs several passes per frame); only the 4 letters of the lit item differ.
+  The halves' remaining one frame during the opening: see "The championship's halves, each as
+  its interrupt sends it".
+
+## The championship's halves, each as its interrupt sends it (2026-11-26)
+
+- **Was:** during the opening slide the bottom half ran 2 frames behind the top half compared
+  with the original (each half alone exact). Measured per frame, port and bench (game memory at
+  every step, `notes/champ/slide/`: `trace_bench.sh`, `match.py`), it is two things of one frame
+  each:
+  1. **The draw point (fixed).** On the console the top half's registers, colours and sprite
+     table go out in the NMI (`nmi_menu_frame`, from `$0100`'s block, `$0500` and the table at
+     `$016E`) and task 1 runs right after it; the bottom half's go out in the line interrupt
+     (`irq_menu_frame`, from `$0200`'s block, `$0700`, `$026E`) and task 2 runs right after it.
+     The port draws after task 2's turn and after task 1's, so it read both tasks' latest
+     writes one picture early. In the fade only the NMI changes anything (no effect); in the
+     slide task 1 moves `$019E` itself, so the top half came one frame early: the top matched
+     bench N+177 in the fade but N+178 in the slide, the bottom N+176 throughout.
+  2. **The console's CPU time in the load (not imitated).** Both tasks unpack the same five
+     streams (`queue_unpacked_upload`). On the bench the first four uploads come out at the same
+     steps for both tasks (3315, 3316, 3321, 3323), but task 1 finishes the large `$98:8000`
+     one later in real time (task 2 queues it at step 3334, task 1 in the next frame's top half),
+     so task 2 starts its fade one frame period (`$0024`) earlier: `$029A` at step 3344, `$019A`
+     at 3345; task 2's bar hook at counter `$0CEE`, task 1's first slide step at `$0CF0`. In the
+     port the tasks unpack instantly, are in step, and both fade in the same frame. Matching
+     it would need the console's CPU speed per task (a CPU model), like the intro's 35 load
+     frames ("The native sound player: the race sets"); not imitated. Under the agreed order
+     the hand-off has nothing to change: each task's turn, slot drain (`upload_slot_drain`,
+     NMI for task 1, IRQ tail for task 2) and hook come in the same order on both sides.
+- **How (listed for the veto):** `champ_screen_note_nmi()` (after `nmi_prologue`, just before
+  `nmi_menu_frame`) and `champ_screen_note_irq()` (just before `irq_menu_frame`) take, for
+  their half, the tasks' direct pages `$0100..$02FF`, the half's 256 colours and its sprite
+  table at the pointer, which is what each handler sends; `champ_screen.c` draws from those
+  (registers, scroll, colours, objects, brightness). The per-line table `$1B00` stays read at
+  the draw point (each half's hook writes it right after the interrupt, for the same picture).
+  Like the ticker's view block (taken when the NMI runs). No game RAM written, no counter
+  stepped, no routine retyped. `platform_task_split` clears what was taken.
+- **Checked:** every fade and slide frame matches per half (above); moment 1, NAME, CONTROL:
+  0 pixels at port 4067, 4215, 4348, 4648, 4649, 5033 (4214 became 4215, same picture). The
+  bottom half's taking at the IRQ is not yet told apart from a read at the draw point by any
+  compared frame (task 2 changes nothing it draws in them); it follows the same order as the
+  top's. The shop and the ticker do not use it; all tests pass.
+- **For the decomp:** the question whether the original gives task 2 a head start (or it is only
+  CPU time) is filed as `docs/decomp-requests.md`, L.
+- **Open:**
+  - the halves' one frame (above), unless the decomp's answer to L shows an order to follow;
+  - the first lit frame: the bench lights the bottom half at brightness 1 in `frame_03348.png`
+    and the top in `frame_03349.png`; the port draws nothing at brightness 1 (port 3172: the
+    halves' pieces are not all in yet, the screen is not recognised) and starts at brightness 2
+    (port 3173). What the bench's brightness-1 pictures show was not compared.
 
 ## Decomp at 416560f: requests J and C's top loop delivered (2026-11-26)
 
@@ -831,8 +878,9 @@ and checked on the decomp's bench).
 - **Open:**
   - The owner listens to the menus' music (a local WAV, never in git) against the original.
     The mixer's curves, interpolation and output level are tuned by ear from there.
-  - The output level rests on the converted samples' scale (15-bit, brought to full scale),
-    not on a measurement; 12 of about 3 million samples clip in the 31 s menu WAV.
+  - Done (2026-11-26, "The mixer's output level"): the output level was the converted samples'
+    scale alone and clipped (12 of about 3 million samples in the 31 s menu WAV); now one fixed
+    headroom gain, measured, and nothing clips.
   - The set-0 shift of about 35 frames between the song and the game's frames: located (see
     "The native sound player: the race sets", set 0).
   - Live playback through the audio device runs (checked with SDL's dummy audio driver); its
@@ -952,12 +1000,45 @@ and checked on the decomp's bench).
 - **To listen (git-ignored):**
   - `notes/sound/race_set3_native.wav`: set 3's song alone, 151 s, one loop;
   - `notes/sound/race_set3_replay_native.wav`: the movie's first race, with the music, the
-    engine and the effects, 129 s. It clips (1,413 samples), because the engine and the effects
-    play at full volume over the music; the output level is still set 1's open item.
+    engine and the effects, 129 s. It clipped (1,413 samples) because the engine and the effects
+    play at full volume over the music; re-rendered with the headroom below, peak 0.741, none.
 - **Open:**
-  - the output level and the mixer's curves, by ear;
+  - the mixer's curves, by ear (the output level: below);
   - sets 2 and 7 against the original;
   - the race's sound in a running race (the port cannot run a race yet).
+
+## The mixer's output level (2026-11-26)
+
+- **Was:** the mix went out at the converted samples' scale (`convert_pcm_gain`, 15-bit to full
+  scale) and was clamped, so the races clipped where the engine and the effects play over the
+  music.
+- **Measured** (the loudest sample of the mix before the clamp, full scale = 1; `--sound-wav`
+  now prints it with the number of clamped samples):
+
+  | Render | Peak | Clamped samples |
+  |---|---:|---:|
+  | menu song alone (`--screen boot,sound_menu --frames 1900`: `menu_set1_native.wav`, 31.6 s) | 1.089 | 12 |
+  | menu song with the 8 effects of `sound_menu_events` (same, plus its `--sound-effect` list) | 1.405 | 72 |
+  | race 1, set 3 (`race_set3_8094`, 7,740 frames) | 1.482 | 1,412 |
+  | race 2, set 4 (`race_set4_17574`, 10,990) | 1.523 | 7,513 |
+  | race 3, set 5 (`race_set5_30292`, 9,702) | 1.763 | 7,010 |
+  | race 4, set 6 (`race_set6_41951`, 10,621) | 1.345 | 1,109 |
+  | race 5, set 3 (`race_set3_54313`, 5,800) | 1.483 | 1,496 |
+
+  (the races: `--screen boot,sound_setN --sound-replay notes/sound/seq_tools/replay/race_setN_FROM.txt`.)
+- **Decided:** one fixed output gain, `OUTPUT_HEADROOM` = 0.5 (-6 dB) in `port/sound/mixer.c`,
+  on the whole mix after the echo: the loudest measured (1.763) becomes 0.881, about 1.1 dB below
+  full scale. No compressor or limiter: a fixed gain keeps every voice's level relative to the
+  others as before, and nothing measured needs more. The clamp stays as a guard only.
+- **After:** peaks 0.545 (menu song alone), 0.702 (with effects), 0.741, 0.761, 0.881, 0.672,
+  0.742 (races 1-5); 0 samples clamped in all seven. Re-rendered (git-ignored):
+  `notes/sound/menu_set1_native.wav` (the menu song alone, as before) and
+  `notes/sound/race_set3_replay_native.wav` (race 1).
+- **Tests:** no test hashed audio samples (the sound tests fingerprint the player's events,
+  which the gain does not touch: all unchanged). `sound_menu_wav` now also requires `peak 0.x,
+  clipped 0`.
+- **Open:** the level by ear against the original (the owner); a set or race louder than these
+  seven would clamp again (the WAV line shows it).
 
 ## The pre-race screen drawn natively (step 4, 2026-11-26)
 
@@ -1111,9 +1192,22 @@ and checked on the decomp's bench).
     pixels, all inside the static's square): the random state differs after the console's extra
     load frames; the drawing of the static's tiles and map is the same code path.
   - Fixed (2026-11-26, the brightness rule measured, below): the fade frames differed by 1 level
-    in some channels; port 5747..5758 now 0 pixels. The first lit frame (brightness 1, port
-    5746) is drawn black by the port (the panel's map is not sent yet) and differs from the
-    original's (21,602 pixels; not analysed).
+    in some channels; port 5747..5758 now 0 pixels.
+  - **The first lit frame (brightness 1, port 5746 against `frame_05915.png`, 21,602 pixels):
+    analysed 2026-11-26, not a draw-point or hand-off matter; kept black.** The traced words
+    (frame counter, NMI target, both halves' brightness, fade, slots, hooks, queues) are the
+    same on both sides, step for step (port frame N = bench step N+166): the NMI that starts the
+    fade (`$019A` = `$0100`, port 5745, bench 5911) comes while task 1's queue still holds the
+    panel's map (head `$018C` = 2, tail `$018E` = 0); the queue is sent at the next NMI (5746 /
+    5912: head = tail = 4), from which on the port matches (5747 = `frame_05916.png`, 0 pixels).
+    So the original's brightness-1 picture shows what the video memory still held: the shop's
+    BG2 is right, but the BG1 panel shows a map left there from before (which screen's was not
+    checked) read with the shop's tiles (stray letters in the list and price areas), and no
+    objects (the list, the credits and the icon are absent: the sprite table at `$016E` holds no
+    visible object at port 5745, 47 at 5746). Drawn from the later map, 2,718 pixels still
+    differ, all in those areas. The
+    port cannot draw the left-over video memory without a model of it (no VRAM-shaped buffer),
+    so it keeps the frame black (the screen is recognised only once its pieces are in).
   - Lists 6-10, player 2's half and the two-player shop were never measured: they stop the port.
 
 ## The ticker drawn natively (step 4, 2026-11-26)
@@ -1188,8 +1282,8 @@ and checked on the decomp's bench).
   `glow/frame_06775..06794.png` (brightness 13 down to 2): 0 pixels each (before: e.g. 5,424 at
   6605); the shop's fade-in, port 5747..5758 against `frame_05916..05927.png` (brightness
   2..13): 0 pixels each. The ticker's colours rule out `c * b / 15` at every level. Port 5746
-  (shop, brightness 1) still differs: the panel's map is not sent yet there (the shop's open
-  item).
+  (shop, brightness 1) still differs: the panel's map is not sent yet there; the original shows
+  left-over video memory (analysed in the shop's section).
 - **Tests:** all 35 earlier tests pass with their hashes unchanged, so nothing was re-pinned.
   The new `game_picture_ticker_fade` pins a fade frame at brightness 11.
 

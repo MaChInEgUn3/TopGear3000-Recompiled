@@ -298,6 +298,7 @@ void platform_task_split(void (*task)(uint16_t dp)) {
         port_fatal("SDL_CreateSemaphore failed");
     }
     g_task2_fn = task;
+    champ_screen_note_split();
     g_task2_abort = false;
     g_task2_running = true;
     g_split_active = true;
@@ -581,6 +582,7 @@ void platform_wait_vblank(void) {
 
     if (g_split_active) {
         /* Two-task split active: IRQ -> task 2 turn -> draw+present -> NMI -> pacing. */
+        champ_screen_note_irq();  /* the bottom half as irq_menu_frame sends it */
         irq_menu_frame();
         irq_menu_frame_tail();
         if (g_task2_running) {
@@ -590,6 +592,7 @@ void platform_wait_vblank(void) {
         present_frame(false);
         ticker_screen_note_nmi();
         nmi_prologue();   /* every NMI starts with it, then the $0008 target (here $B97B) */
+        champ_screen_note_nmi();  /* the top half as nmi_menu_frame sends it */
         nmi_menu_frame();
         nmi_menu_frame_tail();
         nmi_tail();

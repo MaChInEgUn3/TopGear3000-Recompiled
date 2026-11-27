@@ -19,14 +19,15 @@
   1)"): `convert_audio.c` (every sound conversion, at load: BRR -> PCM, envelope codes ->
   seconds/levels, pitch values -> Hz, volume scale -> gains), `sequencer.c` (the game's songs
   and effects with named state, one step per game message, calls the mixer), `mixer.c` (our
-  own voices, interpolation, envelope curves and echo delay line; SDL3 audio stream and/or WAV,
+  own voices, interpolation, envelope curves, echo delay line and one fixed output headroom; SDL3 audio stream and/or WAV,
   one game frame at a time from the main thread).
 - `port/video/` — `convert.c` (every format conversion), `assets.c` (named cartridge blocks,
   recognised when the game uploads them), `palette.c` (the screen's colours as the game sets them).
 - `port/screens/` — one drawing function per kind of screen: `menu_screen.c` (the menus' text
   screens: title card, password display, options menu with its two per-line effects, and VS
   screen), `results_screen.c` (the results screen with 3D starfield sprites and `$0D00`
-  per-line subtraction), `champ_screen.c` (the championship, two tasks), `shop_screen.c` (the shop, two tasks:
+  per-line subtraction), `champ_screen.c` (the championship, two tasks; each half taken as its
+  interrupt sends it: the top at the NMI, the bottom at the line interrupt), `shop_screen.c` (the shop, two tasks:
   the top half, with its fixed windows and the item pictures recognised by their list block), `race_start_screen.c`
   (the pre-race screen: the bar, the closed shutter, the opening course view with its per-line
   effects listed in `docs/DECISIONS.md`), `ticker_screen.c` (the ticker after a race, two tasks:
@@ -73,7 +74,8 @@ CLI modes:
 - `--shot F PATH` (tests): print the picture's fingerprint at frame F and save it as BMP (`-`: no file).
 - `--sound-events FILE` (tests): write the sound player's calls to the mixer (frame, step,
   voice, event, sample, Hz, volumes) and print their fingerprint at exit; `--sound-wav FILE`:
-  write the mixer's output as a WAV (git-ignored paths only); `--sound-effect FRAME ID`: ask
+  write the mixer's output as a WAV (git-ignored paths only) and print its peak and clamped
+  samples; `--sound-effect FRAME ID`: ask
   the menus' effect ID at FRAME, as the menu code does; `--sound-replay FILE`: from the port's
   first request for song 1, replace each sound message with the next one the original sent
   (recorded on the decomp's bench, a local file; exit 77 when absent). Test scaffolds:

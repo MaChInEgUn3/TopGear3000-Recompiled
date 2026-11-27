@@ -266,23 +266,35 @@ set_tests_properties(game_main_to_options PROPERTIES
   SKIP_RETURN_CODE 77
 )
 # The whole game with autopilot_60k.txt (offset 150) reaches the championship screen ($0008 = $B97B,
-# split active): moment 0 (opening slide, port frame 3191) and moment 1 (settled menu, port frame
-# 4214 = bench frame_04366.png, 0 of 57,344 pixels different).
+# split active): moment 0 (opening slide, port frame 3196 = bench frame_03373.png) and moment 1
+# (settled menu, port frame 4215 = bench frame_04366.png), 0 of 57,344 pixels different each.
 add_test(NAME game_main_movie_to_champ
-  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --fast --frames 3195 --shot 3191 -
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --fast --frames 3200 --shot 3196 -
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 set_tests_properties(game_main_movie_to_champ PROPERTIES
-  PASS_REGULAR_EXPRESSION "frame 3191 picture hash c1d5f300daaddaad brightness 15 drawn champ"
+  PASS_REGULAR_EXPRESSION "frame 3196 picture hash cfc758786a2a003f brightness 15 drawn champ"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The opening slide with both halves moving (task 2's bar closing, task 1's slide): each half as
+# its interrupt sent it; top = bench frame_03368.png, bottom = frame_03367.png, 0 pixels each (the
+# one frame between the halves is the console's CPU time in the load, docs/DECISIONS.md).
+add_test(NAME game_picture_champ_slide
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --fast --frames 3195 --shot 3191 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_champ_slide PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 3191 picture hash 9b584f6e12e30411 brightness 15 drawn champ"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
 add_test(NAME game_picture_champ_menu
-  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --fast --frames 4216 --shot 4214 -
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --fast --frames 4217 --shot 4215 -
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 set_tests_properties(game_picture_champ_menu PROPERTIES
-  PASS_REGULAR_EXPRESSION "frame 4214 picture hash 23aaa266fd1955f7 brightness 15 drawn champ"
+  PASS_REGULAR_EXPRESSION "frame 4215 picture hash 23aaa266fd1955f7 brightness 15 drawn champ"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
@@ -422,14 +434,15 @@ set_tests_properties(sound_menu_events PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
-# The mixer renders the menus' music headless into a WAV in the build directory (never in git).
+# The mixer renders the menus' music headless into a WAV in the build directory (never in git);
+# nothing may reach the output clamp (docs/DECISIONS.md, "The mixer's output level").
 add_test(NAME sound_menu_wav
   COMMAND tg3000 --screen boot,sound_menu --fast --frames 600 --sound-effect 300 0x12
     --sound-wav "${CMAKE_CURRENT_BINARY_DIR}/sound_menu.wav"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 set_tests_properties(sound_menu_wav PROPERTIES
-  PASS_REGULAR_EXPRESSION "sound wav: 479210 frames at 48000 Hz written"
+  PASS_REGULAR_EXPRESSION "sound wav: 479210 frames at 48000 Hz written, peak 0[.][0-9]+, clipped 0"
   FAIL_REGULAR_EXPRESSION "FATAL"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77

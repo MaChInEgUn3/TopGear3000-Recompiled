@@ -57,6 +57,18 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `video_note_meter(vram_word, value)` or the words' WRAM source, so the port stops recognising
   them by call pattern (recorded as a bend in DECISIONS, pre-race screen).
 
+- **L. Question (not a change request): the championship tasks' phase after the load**
+  (2026-11-26; DECISIONS, "The championship's halves, each as its interrupt sends it"). During
+  the championship's load (`champ_task`: five `queue_unpacked_upload`, then `champ_slot_wait`),
+  the first four uploads come out at the same bench steps for both tasks (3315, 3316, 3321,
+  3323, `autopilot_60k.txt`), but task 2 queues the `$98:8000` one at step 3334 and task 1 at
+  3335, so after the load task 2 runs one `$0024` ahead of task 1 for the whole opening (fade,
+  bar, slide). The port's tasks run in step under the agreed order, so its bottom half is one
+  frame behind the original's. Is this only the 65816's time slices (task 1's share of the frame
+  shortened by the NMI's work), or does the original give task 2 a head start somewhere (the IRQ
+  trampoline at `$0005`, the first `nmi_menu_frame`, `split_screen_setup`) that the
+  `platform_task_split` contract should state?
+
 ## Low (enhancements)
 
 - **I (request 3) — DONE in decomp `d0eaf01` (`video_note_source`), adopted (ignored for now; content recognition kept).** Name the ROM source of decompressed uploads (e.g.

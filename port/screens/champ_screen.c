@@ -90,6 +90,64 @@ static uint8_t g_obj_gfx_tiles[CHAMP_OBJ_GFX_COUNT * 64u];
 static uint32_t g_noise_gen[CHAMP_HALF_COUNT];
 static uint8_t g_noise_tiles[CHAMP_HALF_COUNT][CHAMP_BG_NOISE_COUNT * 64u];
 
+/* Each half as its interrupt sends it (the draw point, listed for the veto): the top half's
+   registers, colours and sprite table go out in the NMI (nmi_menu_frame, from $0100's block,
+   $0500 and the table at $016E), the bottom half's in the line interrupt (irq_menu_frame, from
+   $0200's block, $0700 and the table at $026E). Task 1 runs right after the NMI and task 2 right
+   after the IRQ, so what they write next shows in the following picture; the port draws after
+   task 2's turn, so it takes each half's values when its interrupt runs (champ_screen_note_nmi /
+   champ_screen_note_irq) instead of reading them at the draw point. The tasks' direct pages
+   $0100..$02FF are kept whole for the half (the fields the drawing reads, the window logic at
+   $01B2/$01B3 included, are listed in validate_half_registers). */
+typedef struct {
+    bool taken;
+    uint8_t page[0x200];                /* $0100..$02FF */
+    uint8_t colours[0x200];             /* $0500 (top) or $0700 (bottom) */
+    uint16_t oam_at;                    /* $016E or $026E */
+    uint8_t oam[0x220];                 /* the sprite table at oam_at */
+} champ_half_sent;
+static champ_half_sent g_sent[CHAMP_HALF_COUNT];
+
+static void take_half(int half) {
+    champ_half_sent* s = &g_sent[half];
+    memcpy(s->page, &g_ram[0x0100], sizeof s->page);
+    memcpy(s->colours, &g_ram[half == 0 ? 0x0500 : 0x0700], sizeof s->colours);
+    /* Taken on every two-task frame (the shop and the ticker too); a pointer the championship
+       does not use stops the port only when it is drawn (draw_half_objects). */
+    s->oam_at = rd16(half == 0 ? 0x016Eu : 0x026Eu);
+    if (s->oam_at + sizeof s->oam <= 0x2000u) {
+        memcpy(s->oam, &g_ram[s->oam_at], sizeof s->oam);
+    } else {
+        memset(s->oam, 0, sizeof s->oam);
+    }
+    s->taken = true;
+}
+
+void champ_screen_note_split(void) {
+    g_sent[0].taken = false;
+    g_sent[1].taken = false;
+}
+
+void champ_screen_note_nmi(void) { take_half(0); }
+void champ_screen_note_irq(void) { take_half(1); }
+
+/* A byte of the half's direct pages as sent. */
+static uint8_t sent8(int half, uint16_t addr) {
+    if (addr < 0x0100u || addr > 0x02FFu) {
+        port_fatal("champ: read outside the sent direct pages");
+    }
+    return g_sent[half].page[addr - 0x0100u];
+}
+static uint16_t sent16(int half, uint16_t addr) {
+    return (uint16_t)(sent8(half, addr) | (sent8(half, (uint16_t)(addr + 1u)) << 8));
+}
+static uint16_t sent_colour(int half, unsigned i) {
+    return (uint16_t)(g_sent[half].colours[i * 2u] | (g_sent[half].colours[i * 2u + 1u] << 8));
+}
+static uint8_t sent_oam8(int half, unsigned off) {
+    return g_sent[half].oam[off];
+}
+
 static void champ_build_once(void) {
     static const int ids[9] = {
         ASSET_CHAMP_BG_TILES_A,
@@ -233,33 +291,33 @@ static const uint8_t* champ_obj_tile_pixels(int half, uint16_t tile) {
 
 static void validate_half_registers(int half) {
     uint16_t dp = (half == 0) ? 0x0100u : 0x0200u;
-    int16_t bg1_vofs = (int16_t)rd16(dp + 0x9Eu);
+    int16_t bg1_vofs = (int16_t)sent16(half, (uint16_t)(dp + 0x9Eu));
     uint8_t exp_objsel = (half == 0) ? 0x01u : 0x03u;
     uint8_t exp_bg1sc = (half == 0) ? 0x00u : 0x40u;
     uint8_t exp_bg2sc = (half == 0) ? 0x04u : 0x44u;
     uint8_t exp_bg12nba = (half == 0) ? 0x11u : 0x55u;
-    uint8_t tm = rd8(dp + 0xBCu);
+    uint8_t tm = sent8(half, dp + 0xBCu);
 
-    if (rd16(dp + 0x9Cu) != 0u
+    if (sent16(half, dp + 0x9Cu) != 0u
         || bg1_vofs < -1 || bg1_vofs > 39
-        || (half == 0 && (rd8(0x01C2u) != 0u || rd8(0x01C4u) != 0u))
-        || rd16(dp + 0xA0u) != 0u
-        || rd8(dp + 0xA8u) != 0x01u
-        || rd8(dp + 0xA9u) != 0x00u
-        || rd8(dp + 0xADu) != exp_objsel
-        || rd8(0x01B2u) != 0x00u
-        || rd8(0x01B3u) != 0x00u
-        || rd8(dp + 0xB4u) != exp_bg1sc
-        || rd8(dp + 0xB5u) != exp_bg2sc
-        || rd8(dp + 0xB8u) != exp_bg12nba
-        || rd8(dp + 0xBAu) != 0x00u
-        || rd8(dp + 0xBBu) != 0x00u
+        || (half == 0 && (sent8(half, 0x01C2u) != 0u || sent8(half, 0x01C4u) != 0u))
+        || sent16(half, dp + 0xA0u) != 0u
+        || sent8(half, dp + 0xA8u) != 0x01u
+        || sent8(half, dp + 0xA9u) != 0x00u
+        || sent8(half, dp + 0xADu) != exp_objsel
+        || sent8(half, 0x01B2u) != 0x00u
+        || sent8(half, 0x01B3u) != 0x00u
+        || sent8(half, dp + 0xB4u) != exp_bg1sc
+        || sent8(half, dp + 0xB5u) != exp_bg2sc
+        || sent8(half, dp + 0xB8u) != exp_bg12nba
+        || sent8(half, dp + 0xBAu) != 0x00u
+        || sent8(half, dp + 0xBBu) != 0x00u
         || (tm != 0x12u && tm != 0x13u)
-        || rd8(dp + 0xBDu) != 0x00u
-        || rd8(dp + 0xBEu) != 0x00u
-        || rd8(dp + 0xBFu) != 0x00u
-        || rd8(dp + 0xC0u) != 0x00u
-        || rd8(dp + 0xC1u) != 0x00u) {
+        || sent8(half, dp + 0xBDu) != 0x00u
+        || sent8(half, dp + 0xBEu) != 0x00u
+        || sent8(half, dp + 0xBFu) != 0x00u
+        || sent8(half, dp + 0xC0u) != 0x00u
+        || sent8(half, dp + 0xC1u) != 0x00u) {
         char msg[128];
         snprintf(msg, sizeof(msg), "champ: unexpected shadow register state in half %d", half);
         port_fatal(msg);
@@ -431,7 +489,7 @@ static void draw_half_bg2(int half, const champ_half_pieces* hp, uint32_t* fb,
 static void draw_half_bg1(int half, const champ_half_pieces* hp, uint32_t* fb,
                           const uint32_t pal_rgba[256], int y_start, int y_end) {
     uint16_t dp = (half == 0) ? 0x0100u : 0x0200u;
-    int vofs = (int)(int16_t)rd16(dp + 0x9Eu) - (half == 0 ? 0 : 0x74);
+    int vofs = (int)(int16_t)sent16(half, (uint16_t)(dp + 0x9Eu)) - (half == 0 ? 0 : 0x74);
     for (int y = y_start; y < y_end; ++y) {
         int my = (y + vofs + 1) & 255;
         int row = my >> 3;
@@ -461,7 +519,8 @@ static void draw_half_bg1(int half, const champ_half_pieces* hp, uint32_t* fb,
 static void draw_half_objects(int half, uint32_t* fb, const uint32_t pal_rgba[256],
                               int y_start, int y_end, bool want_front) {
     uint16_t dp = (half == 0) ? 0x0100u : 0x0200u;
-    uint16_t oam_low = rd16(dp + 0x6Eu);
+    uint16_t oam_low = g_sent[half].oam_at;
+    (void)dp;
     if (half == 0) {
         if (oam_low != 0x0900u && oam_low != 0x0D00u) {
             port_fatal("champ: unexpected top OAM pointer at $016E");
@@ -471,19 +530,18 @@ static void draw_half_objects(int half, uint32_t* fb, const uint32_t pal_rgba[25
             port_fatal("champ: unexpected bottom OAM pointer at $026E");
         }
     }
-    uint16_t oam_high = (uint16_t)(oam_low + 0x0200u);
 
     for (int i = (int)CHAMP_SPRITE_COUNT - 1; i >= 0; --i) {
-        uint32_t lo_addr = (uint32_t)oam_low + (uint32_t)i * 4u;
-        uint8_t x_lo = rd8(lo_addr);
-        uint8_t y_raw = rd8(lo_addr + 1u);
+        unsigned lo_off = (unsigned)i * 4u;
+        uint8_t x_lo = sent_oam8(half, lo_off);
+        uint8_t y_raw = sent_oam8(half, lo_off + 1u);
         if (y_raw >= SCREEN_HEIGHT) {
             continue;
         }
-        uint8_t tile_lo = rd8(lo_addr + 2u);
-        uint8_t attr = rd8(lo_addr + 3u);
-        uint8_t hi = (uint8_t)((rd8((uint32_t)oam_high + ((uint32_t)i >> 2))
-                                >> (((uint32_t)i & 3u) * 2u)) & 3u);
+        uint8_t tile_lo = sent_oam8(half, lo_off + 2u);
+        uint8_t attr = sent_oam8(half, lo_off + 3u);
+        uint8_t hi = (uint8_t)((sent_oam8(half, 0x200u + ((unsigned)i >> 2))
+                                >> (((unsigned)i & 3u) * 2u)) & 3u);
         bool is_large = (hi & 2u) != 0u;
         uint16_t tile = (uint16_t)(tile_lo | ((uint16_t)(attr & 1u) << 8));
         uint16_t pal = (attr >> 1) & 7u;
@@ -551,8 +609,8 @@ bool champ_screen_active(void) {
 }
 
 void champ_screen_draw(uint32_t* fb) {
-    uint8_t b_top = screen_decode_brightness("champ", rd8(0x019Bu));
-    uint8_t b_bot = screen_decode_brightness("champ", rd8(0x029Bu));
+    uint8_t b_top = g_sent[0].taken ? screen_decode_brightness("champ", sent8(0, 0x019Bu)) : 0u;
+    uint8_t b_bot = g_sent[1].taken ? screen_decode_brightness("champ", sent8(1, 0x029Bu)) : 0u;
     if (b_top == 0u && b_bot == 0u) {
         screen_apply_brightness(fb, 0u);
         return;
@@ -587,11 +645,11 @@ void champ_screen_draw(uint32_t* fb) {
         validate_half_maps(half, hp);
 
         uint16_t pal_base = (half == 0) ? 0x0500u : 0x0700u;
-        uint16_t w102 = rd16(pal_base + 0x0102u);
-        uint16_t w104 = rd16(pal_base + 0x0104u);
-        uint16_t w106 = rd16(pal_base + 0x0106u);
-        uint16_t w108 = rd16(pal_base + 0x0108u);
-        bool pal_ok = (rd16(pal_base) == 0u && w108 == 0x0000u)
+        uint16_t w102 = sent_colour(half, 0x81u);
+        uint16_t w104 = sent_colour(half, 0x82u);
+        uint16_t w106 = sent_colour(half, 0x83u);
+        uint16_t w108 = sent_colour(half, 0x84u);
+        bool pal_ok = (sent_colour(half, 0u) == 0u && w108 == 0x0000u)
             && ((w102 == 0x0E03u && w104 == 0x0040u && w106 == 0x109Fu)
                 || (w102 == 0x0FFFu && w104 == 0x018Cu && w106 == 0x109Fu)
                 || (w102 == 0x0FFFu && w104 == 0x0042u && w106 == 0x14BFu));
@@ -604,11 +662,11 @@ void champ_screen_draw(uint32_t* fb) {
 
         uint32_t pal_rgba[256];
         for (unsigned i = 0; i < 256u; ++i) {
-            pal_rgba[i] = convert_color(rd16((uint32_t)pal_base + i * 2u));
+            pal_rgba[i] = convert_color(sent_colour(half, i));
         }
 
         uint16_t dp = (half == 0) ? 0x0100u : 0x0200u;
-        bool bg1_enabled = (rd8(dp + 0xBCu) == 0x13u);
+        bool bg1_enabled = (sent8(half, (uint16_t)(dp + 0xBCu)) == 0x13u);
 
         /* 1. Backdrop */
         uint32_t backdrop = pal_rgba[0];

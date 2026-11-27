@@ -27,6 +27,12 @@
 #define SILENT_LEVEL (1.0f / 2048.0f)     /* an envelope below this has ended */
 #define DEVICE_QUEUE_LIMIT_FRAMES 6       /* drop a frame of audio rather than lag behind */
 #define ECHO_MAX_SAMPLES 12288            /* past the longest delay the game can ask (240 ms) */
+/* The output's headroom: one fixed gain on the whole mix (the voices' relative levels are
+   untouched). Measured before it (docs/DECISIONS.md, "The mixer's output level"): the loudest
+   sample of the menu song with its effects is 1.405 of full scale, of the bench's five race
+   replays (music, engine, effects, echo) 1.345-1.763 (set 5). Halved, the loudest is 0.881:
+   nothing reaches the clamp below, which stays only as a guard. */
+#define OUTPUT_HEADROOM 0.5f
 
 typedef enum { ENV_OFF, ENV_ATTACK, ENV_DECAY, ENV_SUSTAIN, ENV_CUT } env_phase;
 
@@ -51,6 +57,8 @@ static float g_master;
 static SDL_AudioStream* g_stream;
 static FILE* g_wav;
 static uint32_t g_wav_frames;
+static float g_peak;          /* the loudest sample before the clamp, full scale = 1 */
+static uint32_t g_clipped;    /* samples the clamp cut */
 static double g_frame_carry;
 
 /* The echo's delay line (stereo, interleaved), its length in output samples and gains. */
@@ -220,9 +228,12 @@ static void render(float* out, int frames) {
         }
         if (++g_echo_at >= g_echo_len) g_echo_at = 0;
     }
-    const float gain = convert_pcm_gain();
+    const float gain = convert_pcm_gain() * OUTPUT_HEADROOM;
     for (int i = 0; i < 2 * frames; ++i) {
         float x = out[i] * gain;
+        float a = fabsf(x);
+        if (a > g_peak) g_peak = a;
+        if (a > 1.0f) ++g_clipped;
         out[i] = x > 1.0f ? 1.0f : (x < -1.0f ? -1.0f : x);
     }
 }
@@ -250,7 +261,8 @@ static void wav_close(void) {
     fwrite(h, 1, sizeof h, g_wav);
     fclose(g_wav);
     g_wav = NULL;
-    printf("sound wav: %u frames at %d Hz written\n", (unsigned)g_wav_frames, OUT_RATE);
+    printf("sound wav: %u frames at %d Hz written, peak %.4f, clipped %u\n",
+           (unsigned)g_wav_frames, OUT_RATE, (double)g_peak, (unsigned)g_clipped);
     fflush(stdout);
 }
 
