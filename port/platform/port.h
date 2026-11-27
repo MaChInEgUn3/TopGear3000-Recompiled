@@ -45,6 +45,17 @@ bool port_set_race_refreshes(int n);
 /* Test only: the refresh count of each race step from a recording of the original (one count
    per line, step 1 first; --race-refresh-replay). False when the file cannot be opened. */
 bool port_set_race_refresh_replay(const char* path);
+/* TEST ONLY (--dsp4-tape, port/platform/test_dsp4_tape.c): the race's recorded DSP-4 port calls
+   replayed in order, a write checked against the recording. False when the file cannot be
+   opened. The summary prints how many calls matched (nothing without a tape). */
+bool port_set_dsp4_tape(const char* path);
+void port_dsp4_tape_summary(void);
+/* TEST ONLY (--dsp4-tape-nmis, before port_set_dsp4_tape): run the tape's recorded race NMIs where
+   the bench ran them; port_dsp4_tape_race_wait takes the next one for a race-loop wait (false when
+   off). port_refresh_once is one whole port refresh (input, NMI, picture, sound, pacing). */
+void port_set_dsp4_tape_nmis(bool on);
+bool port_dsp4_tape_race_wait(void);
+void port_refresh_once(void);
 /* Print a summary of the currently loaded sound set (slots, sizes, total PCM samples). */
 void port_sound_print_set_summary(void);
 /* Two-task split state: whether the split is active, and which task half (0=top, 1=bottom) is running. */

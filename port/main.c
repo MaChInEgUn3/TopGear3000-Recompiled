@@ -93,7 +93,7 @@ static void print_usage(const char* prog) {
             "[--fast] [--shot F PATH] "
             "[--wram FILE] [--wram-out F PATH] [--sound-events FILE] [--sound-wav FILE] "
             "[--sound-effect FRAME ID] [--sound-replay FILE] [--race-refreshes 2|3] "
-            "[--race-refresh-replay FILE] [path/to/TG3000.sfc]\n",
+            "[--race-refresh-replay FILE] [--dsp4-tape FILE] [--dsp4-tape-nmis] [path/to/TG3000.sfc]\n",
             prog);
 }
 
@@ -121,6 +121,7 @@ int main(int argc, char* argv[]) {
     const char* sound_wav_path = NULL;
     const char* sound_replay_path = NULL;
     const char* race_refresh_replay_path = NULL;
+    const char* dsp4_tape_path = NULL;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--selftest") == 0) {
@@ -171,6 +172,12 @@ int main(int argc, char* argv[]) {
             }
         } else if (strcmp(argv[i], "--race-refresh-replay") == 0 && i + 1 < argc) {
             race_refresh_replay_path = argv[++i];
+        } else if (strcmp(argv[i], "--dsp4-tape") == 0 && i + 1 < argc) {
+            /* TEST ONLY: the race's DSP-4 port calls from a bench recording (test_dsp4_tape.c) */
+            dsp4_tape_path = argv[++i];
+        } else if (strcmp(argv[i], "--dsp4-tape-nmis") == 0) {
+            /* TEST ONLY: with --dsp4-tape, its recorded race NMIs where the bench ran them */
+            port_set_dsp4_tape_nmis(true);
         } else if (strcmp(argv[i], "--expect-return") == 0) {
             expect_return = true;
         } else if (strcmp(argv[i], "--fast") == 0) {
@@ -247,6 +254,13 @@ int main(int argc, char* argv[]) {
         return 77;
     }
 
+    /* The same for the race's recorded DSP-4 port calls (bench, local; tests only). */
+    if (dsp4_tape_path != NULL && !port_set_dsp4_tape(dsp4_tape_path)) {
+        fprintf(stderr, "SKIP: recorded DSP-4 tape not found (%s)\n", dsp4_tape_path);
+        rom_free(rom_data);
+        return 77;
+    }
+
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         rom_free(rom_data);
@@ -296,6 +310,7 @@ int main(int argc, char* argv[]) {
         port_set_wram_out(wram_out_frame, wram_out_path);
     }
     int rc = port_run(renderer, screen, frame_limit);
+    port_dsp4_tape_summary();
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

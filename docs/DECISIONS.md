@@ -1433,6 +1433,119 @@ steps) is parked for later. No settings file exists yet; the setting is a comman
   on the firmware bench: `$03DC` = `$2001` (mode 1, `$82:89B5`) at steps 44736 (track `$14`)
   and 57099 (track `$13`), both with `$047C` = `$FF00`; the other entries mode 0 (7903, 23259,
   33079) or 2 (20362, 39876). Reported to the decomp (docs/decomp-requests.md, N).
+- **Since then:** the race runs in tests with a recording of its DSP-4 sprite calls ("The DSP-4
+  tape (tests only)", below): 911 refreshes from the loop's first head, every `$09`/`$06` call as
+  recorded, `$1E9E` reaching the motion code at the recorded counts.
+
+## The DSP-4 tape (tests only) (2026-11-27)
+
+**Listed for the owner's veto: two test-only recordings, nothing in the shipped path.** Under the
+rule "nem 1% emulador" no DSP-4 model goes into the port, not even in a dev build (the
+byte-protocol model was refused: "The DSP-4: no chip-protocol model in the port"). A tape is a
+recording, like `--movie` and `--race-refresh-replay`: values taken from one bench run, replayed
+in order, nothing computed. It lets the one-player race run in tests while the decomp finishes the
+native sprite commands (request A); it is deleted when the race's C calls them (the decomp has
+`dsp4_list_*`, `dsp4_objects_*`, `dsp4_high_table` in its gate).
+
+1. **`--dsp4-tape FILE`** (`port/platform/test_dsp4_tape.c`, the one place): `dsp4_port_read16`
+   answers the next recorded read; `dsp4_port_write16` must equal the next recorded write, and
+   any difference stops the port (`port_fatal`: the call's index, its bench step, expected and
+   got, the port frame). Without the flag both calls stop the game with the old message.
+2. **`--dsp4-tape-nmis`** (a second recording, vetoable on its own): the tape also says where the
+   bench ran each race NMI between two of those calls (from loop step 1's head on); each is run
+   there as one whole port refresh (input, the NMI dispatch, the picture, sound, pacing, frame
+   counter), and each race-loop wait takes the next one instead of the pacing setting's count.
+   `--race-refresh-replay` is then unused. Without it the tape's NMI lines are ignored.
+3. **`--screen race_loop`** (frame.c, test scaffold): `race_mode_one`'s loop (head, wait, body,
+   rest) and `race_end` retyped from the decomp's C, entered from the original's memory at the
+   loop's first head. It does not follow the decomp by itself: if `race_mode_one` changes, this
+   copy must be changed by hand (it goes with the tape).
+
+- **Source (decomp `ca47c97`, bench clone `~/tg3000-decomp-bench` checked out there and
+  rebuilt):** `tools/make_reference_memory.sh`, `record_race_tape`, one run of
+  `autopilot_60k.txt` (its first race, track `$00`: `race_wrapper` at bench step 7903 to
+  `race_end` at 15760). The bench's **default DSP-4**, not `--dsp4-firmware`: the port answers
+  `$01`/`$07`/`$08` with `src/dsp4.c` as that bench does, and the firmware run takes another path
+  from the race's first frames (a first-frame rounding `src/dsp4.c` does not model). So the
+  `$09`/`$06` answers on the tape are the bench's clean-room stand-in's, **not the console's**.
+  The bench's own formats are reused: `--dsp4-tape-out` (every data-port byte: PC label, value,
+  read/write) and `--dsp4-report` (each PC label's command); a one-run patch of `bench.c`
+  (restored with `git checkout`, as the script's other patches) adds the marks only. Kept: the
+  bytes at the PC labels the report gives `$09` and `$06` (no such label is shared with a
+  native command: checked), paired into words (both bytes of a word carry the same label).
+  Checked: 2848 `$09` streams, each opening `0009 0080 00A9 0000 0000 0100 0004`, and 2848 `$06`
+  loads, each one write and 16 reads: 4,727,876 calls, 2848 loop steps.
+- **Files (local, `notes/race/`, never in git; `race_tape*.txt` also in `.gitignore`):**
+  `race_tape.txt` (`W hhhh` / `R hhhh` a call each; `N S` a race NMI the bench ran before the
+  next call, in bench step S; `P S` one after its step's last call and before its rest, run as
+  that call returns; 7561 N, 86 P), `race_refreshes_tape.txt` (`$1E9E` per loop step, this run:
+  904 of 2, 1937 of 3, 7 of 4; the firmware run's `race_refreshes.txt` stays for its tests),
+  `race_tape_marks.txt` (every NMI, loop head, first wait entry, rest, with bench step, `$00B8`
+  and the raw tape position), `wram_race_loop.bin` (WRAM at the loop's first head, `$82:8645`,
+  bench step 8112), `tape_anchors/` (below).
+- **Test scaffold `--screen race_loop`** (frame.c): `race_mode_one`'s loop and `race_end` as the
+  game has them, from `wram_race_loop.bin`. Needed because of finding 1.
+
+**Findings (measured, in order):**
+
+1. **From `race_wrapper` (`--screen race`, the tape alone): stop at port frame 89, call 439**
+   (bench step 8113), in step 1's first draw: `object_sprite_shadowed`'s bob height, read from
+   the frame counter `$0024` through `$84:A200`: `FFC5` against `FFC7` (test
+   `game_race_tape_wrapper_stop`; the same with the firmware run's `race_refreshes.txt`, whose
+   lines are not used before frame 89). The counter differs by the load's length: from
+   `race_wrapper` to the NMI before step 1's first draw the console ran 210 NMIs (one menu NMI and
+   209 race NMIs, bench steps 7903-8112), the port 89 (its waits only; the rest is the console's
+   CPU time, which the port has not and does not estimate). Measured: `$0024` = `$0058` in the
+   port at frame 89 and `$00D1` in the original's memory at the loop's first head (121 apart),
+   both just before the NMI of bench step 8113. With the tape's NMIs placed
+   (`--dsp4-tape-nmis`) the same stop comes at frame 90: placement does not rescue this entry. Not pacing, not step 1's
+   count (step 1 has no race wait in the port or on the bench: `$00B8` = 0 at its wait in both);
+   not fixable in `frame.c` without a CPU model. Harmless for a player (an animation phase); for
+   the tests the race is entered at the loop's first head instead.
+2. **From the loop's head with the tape alone: stop at frame 0, call 439** (`FFC8` against
+   `FFC7`): the bench's NMI of step 8113 fell in step 1's body before its stream, and the port
+   runs NMIs only at its wait. Measured over the run: 2084 of 2848 steps have an NMI between two
+   of their `$09`/`$06` calls, and 1039 of 2847 steps took their frame before the wait (in the
+   rest or the head). Placing the HUD's NMIs at the wait (the "open point" of "Race pacing") cannot
+   follow the tape past one step; hence `--dsp4-tape-nmis`.
+3. **With `--dsp4-tape-nmis` and the movie's pads (`--movie-offset 8113`): 911 refreshes**, loop
+   steps 1-389, bench steps 8113-9023 (about 15 s of race), every call as recorded, port frame F =
+   bench step F + 8113 throughout (the tape checks it at every NMI). Tests `game_race_tape_runs`
+   (900 refreshes, 530,261 calls) and `game_race_tape_stop`. Fixed on the way, in the tape's
+   placement (port side): 86 NMIs fell after a step's last call and before its rest (the first at
+   loop step 9, bench 8138); run at the next call they counted for the next step (`$1E9E` 2
+   instead of 3 at step 9, stop at frame 28); now `P`, run as the call returns. Without the movie
+   the run stops at frame 578 (the pads drive the car).
+4. **The stop at frame 911, call 538280** (bench step 9023, loop step 389): `object_sprite_shadowed`
+   again (`FFC1` against `FFC0`): the bench's NMI of step 9023 fell after call 538274 and before
+   the object's `$0024` read; the port can place a recorded NMI only at a call, here 538275, after
+   the read. The limit of a tape placed at DSP-4 calls. Checked: with that one NMI marked to run
+   after call 538274 instead (a scratch copy of the tape), call 538280 passes and the run goes to
+   frame 965 (bench step 9077, loop step 408), the next known stop: in step 407 (bench 9073) an
+   NMI fell between `race_frame_rest`'s read of `$00BA` and its clear, counted by no step on the
+   console; the port counts it for the next step. Running every mid-step NMI right after the
+   previous call stops sooner (frame 670).
+5. **WRAM at three anchors** (`tape_anchors/`: the bench's WRAM at the entry of the J-th taking
+   race NMI, the first from about 1 s, 3 s and 10 s on that falls in the loop's wait, as the
+   port's do; the bench's pictures of that step and the next; the port's by `--wram-out` at frame
+   bench step - 8113; `notes/race/tape_anchor_diff.py`): takes 25 (bench 8171, port frame 58), 72
+   (8271, 158) and 221 (8624, 511) **equal the bench's but for `$00BC`** (the band IRQ's cursor;
+   the port does not run that IRQ) **and `$1FD5-$1FF3`** (the 65816 stack, which the C does not
+   use): 31, 30 and 29 bytes. (Two takes during the head, 70 and 220, differ also in the head's
+   work half done on the bench: scratch `$0114-$011E`, the race order `$1E6A-$1E90`, the cars at
+   `$FAxx-$FCxx`; hence anchors at the wait.)
+
+**Not done here:** no change to the shipped pacing; the `frame.c` edits are test hooks only (one
+line in `race_wait_refreshes`, `port_refresh_once`, `race_loop`). The expected cause, step 1
+taking 1 refresh where the console took 3, is not the first stop and stays open (with the NMI tape
+its NMIs are placed; without it, the port's step 1 keeps `$1E9E` = 1). The anchors were chosen
+again, at takes in the wait, after a first set (takes 25, 70, 220) caught the head half done.
+
+**Open items:** the native `$09`/`$06` (request A), then this file and the flags go; the race
+drawn (nothing of it is drawn yet); for the shipped pacing, the HUD's NMIs and the frame counter
+advance at the wait in the port and during the body on the console (an animation phase of a
+frame, not a game difference); the pause and `race_end`'s frame waits under the NMI tape
+(untested: the run stops before them).
 
 ## Steps (2026-11-24)
 

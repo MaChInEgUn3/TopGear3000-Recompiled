@@ -58,6 +58,7 @@ add_executable(tg3000
   port/platform/video_events.c
   port/platform/input.c
   port/platform/frame.c
+  port/platform/test_dsp4_tape.c
   port/platform/sound_sets.c
   port/sound/convert_audio.c
   port/sound/mixer.c
@@ -573,6 +574,52 @@ foreach(case "default;;2" "3;--race-refreshes;3" "replay;--race-refresh-replay;3
     SKIP_RETURN_CODE 77
   )
 endforeach()
+# TEST ONLY: the DSP-4 tape (docs/DECISIONS.md, "The DSP-4 tape (tests only)"): the race's $09/$06
+# port calls recorded on the decomp's bench (default DSP-4) by tools/make_reference_memory.sh
+# (notes/race/race_tape.txt, local), a write checked and a read answered in order. Skipped where
+# the local files are absent.
+# From race_wrapper, the tape alone: the first draw's first frame-counter object differs at call
+# 439 (the console's load takes 210 refreshes, the port's 89: $0024 differs when step 1 draws).
+add_test(NAME game_race_tape_wrapper_stop
+  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 300
+          --dsp4-tape notes/race/race_tape.txt --race-refresh-replay notes/race/race_refreshes_tape.txt
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_race_tape_wrapper_stop PROPERTIES
+  PASS_REGULAR_EXPRESSION "FATAL \\(frame 89\\): DSP-4 tape: call 439 \\(bench step 8113\\): another value: expected W FFC7, got W FFC5"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# From the race loop's first head (notes/race/wram_race_loop.bin, the same bench run), with the
+# tape's recorded NMIs where the bench ran them (--dsp4-tape-nmis, listed apart for the owner's
+# veto) and the movie's pads (port frame F = bench step F + 8113): 900 refreshes (loop steps 1-386,
+# bench steps 8113-9012) with every call as recorded and the frames one to one with the bench's.
+add_test(NAME game_race_tape_runs
+  COMMAND tg3000 --wram notes/race/wram_race_loop.bin --screen race_loop --fast --frames 900
+          --dsp4-tape notes/race/race_tape.txt --dsp4-tape-nmis
+          --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 8113
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_race_tape_runs PROPERTIES
+  PASS_REGULAR_EXPRESSION "dsp4 tape: 530261 of 4727876 calls matched \\(up to bench step 9012\\)"
+  FAIL_REGULAR_EXPRESSION "FATAL|bench step - port frame"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The same run's first difference (the finding): an object's frame-counter bob at frame 911 (loop
+# step 389): the bench's NMI fell between a call and the object's $0024 read; the port can place a
+# recorded NMI only at a call, here after that read.
+add_test(NAME game_race_tape_stop
+  COMMAND tg3000 --wram notes/race/wram_race_loop.bin --screen race_loop --fast --frames 2000
+          --dsp4-tape notes/race/race_tape.txt --dsp4-tape-nmis
+          --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 8113
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_race_tape_stop PROPERTIES
+  PASS_REGULAR_EXPRESSION "FATAL \\(frame 911\\): DSP-4 tape: call 538280 \\(bench step 9023\\): another value: expected W FFC0, got W FFC1"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 # Two-task kernel (decomp request D, step 1): the ticker screen runs from saved game memory
 # (a local file under notes/, never in git) and returns by itself. Skipped where absent.
 add_test(NAME game_ticker_runs

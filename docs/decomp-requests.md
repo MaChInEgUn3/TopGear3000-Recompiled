@@ -34,6 +34,10 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `vs_sprites` 31, `vs_proj_pass` 22 with `road_port_product32` 5, `oam_high_load2` 2,
   `vs_proj_tail` 1. Please keep the results in the sprite tables in WRAM as now (`$1576`/`$1796`,
   high table at `$1776` + `D+$8E`): the port draws from them.
+  **Meanwhile (2026-11-27, tests only):** the port's tests run the race with a recording of these
+  calls from the bench (`--dsp4-tape`, docs/DECISIONS.md "The DSP-4 tape (tests only)"): 911
+  refreshes from the loop's first head, WRAM equal to the bench's at three anchors. It goes when
+  the race's C calls the native `$09`/`$06`.
 - **B (request 4) — steps 1-3 (driver start-up, set loader, its race/VS/menu callers) DONE in decomp `e966da4`/`2d72646`/`b67f44e`, adopted; the intro's call $80:89E7 waits on C.** Sound loading in C on three new `platform.h` calls** (design:
   `docs/proposals/sound.md`, Part A): `sound_driver_boot(src)` for the IPL upload `$86:E096`;
   `sound_upload_block(spc_dest, src, size)` once per `[size][dest][data]` block walked by
@@ -111,3 +115,9 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `video_note_source(rom_bus, vram_word)`, ignored by the bench's comparison).
 - **J (request 6) — DONE in decomp `f22a687` (`video_note_vs_panels`), adopted: the port builds the VS panels from the 14 rows the game names; the write-pattern capture is gone.** Hand over the VS panels' arrangement by name (`vs_graphics_load` writes it
   word by word today; the port recognises the write pattern).
+
+- **P. The one-player race loop as its own function** (2026-11-27). The port's test entry
+  `--screen race_loop` (DSP-4 tape, tests only; DECISIONS, "The DSP-4 tape (tests only)") starts at
+  the loop's first head and retypes `race_mode_one`'s four-line loop and `race_end` in `frame.c`.
+  A named `race_mode_one_loop()` (the `do { head; wait; body } while (!rest); race_end();` part)
+  called by `race_mode_one` would let the port call the game's own code there.
