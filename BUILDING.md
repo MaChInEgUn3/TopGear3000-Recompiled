@@ -102,6 +102,10 @@ git submodule update --init --recursive
   `password_show`, `vs`, `options`, `race` with its saved memory, ...; `game`, the default, runs
   the whole game) and quit after N frames (0 = until the window closes).
   `TG3000_HEADLESS=1` turns error message boxes off.
+* `--race-refreshes 2|3`: screen refreshes per race step (README, Settings; default 2, other
+  values refused). Test only: `--race-refresh-replay FILE` plays the refresh count of each step
+  the original took, recorded on the bench (`notes/race/race_refreshes.txt`, see below);
+  `--screen race_wait` runs the race loop's wait alone from `notes/race/wram_race_wait.bin`.
 * Controls: arrows = D-pad, Z = B, X = A, A = Y, S = X, Q = L, W = R, Enter = Start,
   Right Shift = Select, Esc = quit; or the first connected gamepad (SNES button positions).
 * `tg3000 --check-rom [path]` verifies ROM size (`1,048,576` bytes) and SHA-1 without opening a window. If `[path]` is omitted, it checks `input/TG3000.sfc` first and falls back to `TG3000.sfc` in the current directory.
@@ -124,3 +128,8 @@ The script also writes `wram_before_tick.bin`, `wram_before_res.bin` and
 `wram_before_title_screen.bin` (see its header for each one's test). `wram_before_race.bin`
 (`game_race_load_runs`) is taken at a PC rather than a frame end: the script patches the bench's
 `tools/bench/bench.c` for one run and restores it, so that file must have no local changes.
+With `DSP4_FIRMWARE=input/dsp4.rom` (a bench tool only; the port never uses it) the script also
+records the race's pacing on the firmware bench: `race_refreshes.txt` (the refreshes each loop
+step of `autopilot_60k.txt`'s first race took, `$1E9E`) and `wram_race_wait.bin` (WRAM at the
+race loop's wait); copy both to `notes/race/` (`game_race_load_runs_refresh_replay`,
+`game_race_wait_*`).

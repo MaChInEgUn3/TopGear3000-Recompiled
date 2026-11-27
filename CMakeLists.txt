@@ -524,6 +524,55 @@ set_tests_properties(game_race_load_runs PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# Race pacing (docs/DECISIONS.md, "Race pacing"). The setting: 2 (default) or 3 screen
+# refreshes per race step; any other value is refused (no ROM needed).
+foreach(bad 1 4 2x)
+  add_test(NAME port_race_refreshes_refuses_${bad} COMMAND tg3000 --race-refreshes ${bad})
+  set_tests_properties(port_race_refreshes_refuses_${bad} PROPERTIES
+    PASS_REGULAR_EXPRESSION "--race-refreshes: ${bad} is not allowed")
+endforeach()
+# The load and step 1 are not paced (step 1 has no race wait before it in the port): with 3
+# refreshes, or the original's recorded counts, the same stop at the same frame.
+add_test(NAME game_race_load_runs_paced_3
+  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 300 --race-refreshes 3
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+add_test(NAME game_race_load_runs_refresh_replay
+  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 300
+          --race-refresh-replay notes/race/race_refreshes.txt
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_race_load_runs_paced_3 game_race_load_runs_refresh_replay PROPERTIES
+  PASS_REGULAR_EXPRESSION "FATAL \\(frame 89\\): the race's DSP-4 commands are not native yet"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+# The race loop's wait alone (race_frame_wait), from the original's memory at that wait with the
+# frame requested (notes/race/wram_race_wait.bin, loop step 300 on, autopilot_60k.txt with the
+# DSP-4 firmware; made by tools/make_reference_memory.sh with DSP4_FIRMWARE): one step's
+# refreshes, each a whole race NMI (the first takes the frame), counted by the game in $00BA.
+# With the recording, the wait takes step 2's recorded count (3, the file's second line).
+foreach(case "default;;2" "3;--race-refreshes;3" "replay;--race-refresh-replay;3")
+  list(GET case 0 name)
+  list(GET case 1 opt)
+  list(GET case 2 expect)
+  set(arg "")
+  if(name STREQUAL "3")
+    set(arg 3)
+  elseif(name STREQUAL "replay")
+    set(arg notes/race/race_refreshes.txt)
+  endif()
+  add_test(NAME game_race_wait_${name}
+    COMMAND tg3000 --wram notes/race/wram_race_wait.bin --screen race_wait --fast --frames 30 ${opt} ${arg}
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  set_tests_properties(game_race_wait_${name} PROPERTIES
+    PASS_REGULAR_EXPRESSION "race wait: ${expect} refreshes, .00BA ${expect}, .00B8 0001 -> 0000"
+    FAIL_REGULAR_EXPRESSION "FATAL"
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+    SKIP_RETURN_CODE 77
+  )
+endforeach()
 # Two-task kernel (decomp request D, step 1): the ticker screen runs from saved game memory
 # (a local file under notes/, never in git) and returns by itself. Skipped where absent.
 add_test(NAME game_ticker_runs

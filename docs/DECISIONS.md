@@ -1303,7 +1303,7 @@ with the firmware DSP-4 (`--dsp4-firmware`; bsnes v087 fetched by the decomp's
   (`race_hud_draw`) is drawn only by NMIs that do not take a picture (3033 of them; 0 of 3045
   taking ones), so a port running one step per vblank would never redraw it. Whether the port
   runs one step per vblank or keeps 2-3, and how the HUD then gets drawn, is the owner's
-  game-speed question.
+  game-speed question (decided: "Race pacing", below).
 - **Entry: `--screen race`** runs `race_wrapper()` from the original's WRAM at its first
   instruction (`$82:8342`, step 7903 line 10), `notes/race/wram_before_race.bin`. No step end is
   clean there (the end of step 7902 is before `top_race_prep`: `$0005`, `$0008`, `$0024`,
@@ -1328,13 +1328,111 @@ with the firmware DSP-4 (`--dsp4-firmware`; bsnes v087 fetched by the decomp's
   reach. Checked: from each race's wrapper memory, the port's WRAM after its own load (the C
   reading the same tables) equals the bench's at `race_track_start` for tracks `$00`, `$22` and
   `$0C`, except the pads and counters (`$000C-$0024`, `$00BA`), the stack, and `$045F` on track
-  0 (a sound flag; port `$01`, bench `$FF`, not investigated).
+  0 (a sound flag; port `$01`, bench `$FF`: a timing difference, not a port bug, see "Race
+  pacing", check O).
 - **Draw point: after the NMI** (the usual one, not the pre-race screen's). At three anchors no
   byte of a live table (windows, both scroll tables and their data, the band streams, band list,
   mode bytes, the live sprite table) changes between the picture's first band IRQ and the next
   NMI; the bench's HDMA report lists mid-picture writes into enabled tables only at
   `$0200-$0203` (134 of about 6,900 frames) and `$11B2-$11B5` (8), besides the first frame.
 - **Not done here:** the sky/road/HUD band rows against pictures, the catalogue code, any drawing.
+
+## Race pacing (2026-11-27)
+
+**The owner (verbatim):** "é um port, então não se beneficiar de hardware infinitamente mais
+potente é maluquice também, porém para quem quer uma opção mais próxima do original também
+deveria ser possível". Under the rule "nem 1% emulador" (no CPU/PPU/sound/DSP-4 model; never
+change or predict the game's logic in the port).
+
+**Decided (with the advisor):** a port setting, "screen refreshes per race step",
+`--race-refreshes N`: **2 by default** (the game as written with the console's slowdown
+removed: the console's own light-scene rate, about 30 pictures a second), **3** allowed (the
+console's heavy-scene rate, closer to the original), anything else refused at start-up. 1 is
+not offered: the HUD would never be redrawn (only NMIs that do not take a picture draw it) and
+the per-step logic (gear index, the nitro shake's random draws shared with the AI's route
+choice) would run about 3x faster; it would need game-logic changes. A fixed count is a pacing
+setting, not a CPU model: the console's count comes from its CPU and DSP-4 time, which the port
+does not have and does not estimate. True 60 pictures a second (drawing interpolated between
+steps) is parked for later. No settings file exists yet; the setting is a command-line option
+(README, Settings).
+
+- **Without pacing the port runs 1 refresh a step** (checked by reading the decomp at `0aa501a`):
+  the loop `race_mode_one` is head, `race_frame_wait` (`while($00B8 & 1) platform_wait_vblank()`),
+  body, `race_frame_rest`; the head and body never wait (every `platform_wait_vblank`,
+  `wait_frames`, `wait_one_frame`, `wait_03e0` and `wait_flag_76` call in `src/` listed with its
+  function: the one-player race's are `race_wrapper_head`/`_tail`, `race_sound` and its set
+  loader, `race_track_start_head`/`_tail`, `race_frame_wait`, `race_pause` and `race_end`; the
+  generic ones, `fade_out_wait`, `queue_unpacked_upload`, `wipe_columns`, have no caller in the
+  race), so the port's wait sees exactly one
+  race NMI (`$85:8377` → `$83CE`, `nmi_race_full`), which takes the frame (clears bit 0) and
+  ends the wait. `nmi_race_tail` (every race NMI) sends the sound message (`sound_frame`), reads
+  the pads (`pads_read_long_2`) and counts `$0024` and `$00BA`; `race_frame_rest` keeps `$00BA`
+  in `$1E9E` (the step's refresh count, which scales the motion) and clears it.
+- **Where the refreshes go:** `port/platform/frame.c`, `race_wait_refreshes()`, keyed on the
+  race's NMI: vector `$85:8377`, `$0008` = `$83CE`, and the frame requested (`$00B8` bit 0) at
+  the wait's entry. That wait gets N refreshes, each a whole `refresh()` as at any other wait:
+  input pumped, the full NMI dispatch (the first takes the frame; the others are the HUD's NMIs,
+  with their pads, sound message and `race_hud_draw` as the game has them), the picture
+  presented, a frame of sound, pacing to 60.0988 Hz, the port's frame counter +1 (so `--movie`
+  stays one line per refresh). Every other wait gets 1.
+- **Waits excluded (frame waits):** `wait_frames` waits for `$0024` to reach an exact value, so
+  several refreshes in one call would overshoot it and hang. With the frame requested these are
+  the pause's (`$0026` bit 4, set by `race_pause`) and `race_end`'s (the loop over:
+  `race_frame_rest`'s own end test, `$0146` = 0 and no brightness in `$014A & $0F00`, still
+  holds, since no NMI runs between the rest and the next wait in the port). Before step 1 the
+  only wait is `race_track_start_tail`'s frame wait (frame not requested), so **step 1 takes 1
+  refresh** in the port (the console's step 1 counts from that frame wait: 3 in the recording).
+- **Open point: where the HUD's NMIs fall.** On the console the NMIs that do not take a frame
+  fire during the step's body (the body takes 368-691 scan lines); the port can only place them
+  at its wait, right after the taking one, before the body. Same count and order relative to the
+  taking NMI, different place relative to the body's writes (e.g. `race_hud_digits` sets
+  `$00B8` bit 2 in the body: on the console the HUD NMI of the same step may already draw those
+  digits; in the port they are drawn at the next step's wait). Measured on the bench (W lines of
+  `notes/race/probe_autopilot_16300.log`): `$00B8` at the wait's entry is `0000` 1181 times,
+  `0001` 1852, `0004` 12, never `0005`; in the port it will be `0005` at every step (the digits
+  always pending when the HUD's NMI runs).
+- **Open point: the step after a pause.** The pause's first frame wait takes the frame (its NMI
+  clears bit 0), then `race_frame_rest` clears `$00BA`; the next step finds the frame not
+  requested and does not wait, so its rest keeps `$1E9E` = 0 in the port, a value the console
+  never produces (there NMIs fall during that step's head and body), and some motion code loops
+  on it (`misc.c` near `$ED8A`, "one step per frame counted in `$1E9E`"). Not reachable yet; to
+  be settled when the race runs.
+- **Test only: `--race-refresh-replay FILE`** plays the refresh count the original took at each
+  step, recorded on the decomp's bench with the DSP-4 firmware (`notes/race/race_refreshes.txt`,
+  `DSP4_FIRMWARE=... tools/make_reference_memory.sh`: `$1E9E` at every loop head after the first
+  and at `race_end`; 3045 steps of `autopilot_60k.txt`'s first race: 999 of 2, 2039 of 3, 7 of 4;
+  counted between rests, so slightly different from the head-to-head 995/2042/7 above). Like
+  `--movie`, it is a recording of the original, not a processor model; it never ships as a
+  setting. Line 1 (step 1) is skipped (no wait to place it); the port's first race wait takes
+  line 2; after the last line the setting applies.
+- **Tested** (`ctest`; local files under `notes/race/`, skipped where absent):
+  `port_race_refreshes_refuses_{1,4,2x}` (no ROM needed); `game_race_load_runs`,
+  `game_race_load_runs_paced_3`, `game_race_load_runs_refresh_replay` (the load and the first
+  frame reach the same stop, `object_sprites_stream` at port frame 89: step 1 is not paced);
+  `game_race_wait_{default,3,replay}`: `--screen race_wait` runs the game's `race_frame_wait()`
+  once from the original's WRAM at that wait with the frame requested
+  (`notes/race/wram_race_wait.bin`: the first entry from loop step 300 on), giving 2 / 3 / 3
+  (step 2's recorded count) refreshes, `$00BA` the same, `$00B8` 1 → 0, no stop. The replay was
+  thus exercised at one wait only (its line 2, on a step-300 memory). By hand: the same dump
+  with `$00B8` bit 2 set (the port's usual case, which the bench never shows at a wait), the
+  second (non-taking) NMI ran `race_hud_draw` without a stop (bit 2 cleared).
+- **Untested** (the race cannot run past port frame 89 until `$09` is native, request A): any
+  step's body and rest after a paced wait (`$1E9E` = N reaching the motion code), the HUD drawn
+  in a running race, the pause and `race_end` exclusions in a run, the replay past its first
+  line in a run, a whole race at 2 or 3 against the original's timing, input feel.
+- **Check O (`$045F` after the load), answered:** not a port bug. On the firmware bench
+  (`autopilot_60k.txt`) `$045F` = `$01` at `race_track_build` (`$82:856D`, step 8093 line 220)
+  and `$FF` at `race_track_start` (`$82:85D6`, 8110 line 253), with 18 race NMIs (`$838A`,
+  `nmi_race_tail` → `sound_frame` → `sound_send_message`, which writes `$FF` after every message)
+  in between: the console's load frames (the only writer of `$FF` in `src/` is
+  `sound_send_message`; the others write `$00`/`$01`: `boot.c`, `race_sound`, the set loader,
+  `sound_load_menu`, the VS sound). The port has no wait in `race_track_build`; its `$01`
+  goes out with the first race NMI after it (`race_track_start_head`'s frame wait, port frame
+  87 → `$FF` at 88).
+- **Check N (the wrapper's mode 1), confirmed:** WRAM at the mode call (`$82:83B8`, every entry)
+  on the firmware bench: `$03DC` = `$2001` (mode 1, `$82:89B5`) at steps 44736 (track `$14`)
+  and 57099 (track `$13`), both with `$047C` = `$FF00`; the other entries mode 0 (7903, 23259,
+  33079) or 2 (20362, 39876). Reported to the decomp (docs/decomp-requests.md, N).
 
 ## Steps (2026-11-24)
 

@@ -39,6 +39,12 @@ void port_add_test_effect(unsigned long frame, uint8_t id);
 /* Test only: replay the original's recorded sound messages from the port's first request for
    song 1 (--sound-replay). False when the file cannot be opened. */
 bool port_set_sound_replay(const char* path);
+/* Screen refreshes per one-player race step (--race-refreshes): 2 (default) or 3; false for any
+   other count (docs/DECISIONS.md, "Race pacing"). */
+bool port_set_race_refreshes(int n);
+/* Test only: the refresh count of each race step from a recording of the original (one count
+   per line, step 1 first; --race-refresh-replay). False when the file cannot be opened. */
+bool port_set_race_refresh_replay(const char* path);
 /* Print a summary of the currently loaded sound set (slots, sizes, total PCM samples). */
 void port_sound_print_set_summary(void);
 /* Two-task split state: whether the split is active, and which task half (0=top, 1=bottom) is running. */

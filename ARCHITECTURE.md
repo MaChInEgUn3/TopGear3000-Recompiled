@@ -57,6 +57,10 @@ main() -> rom_load() [1048576 bytes + SHA-1] -> g_rom -> SDL window + renderer (
        other screens black), then present
     4. one frame of audio from the mixer (SDL3 stream; none when TG3000_HEADLESS), then
        pace at 60.0988 fps (SDL_DelayPrecise)
+    (steps 0-4 are one refresh. The one-player race loop's wait (race NMI $85:8377 with $0008 =
+    $83CE and the frame requested, $00B8 bit 0; not the pause's or race_end's frame waits)
+    takes N refreshes, --race-refreshes 2 (default) or 3: the first NMI takes the frame, the
+    others are the HUD's; race_wait_refreshes() in frame.c, docs/DECISIONS.md "Race pacing")
 ```
 The game owns the loop; the port lives at the frame boundary (docs/proposals/video-layer.md).
 CLI modes:
@@ -66,7 +70,10 @@ CLI modes:
   `options`, `results`, `ticker`, `race`): which game code to run. `race` runs `race_wrapper()`
   (with `--wram notes/race/wram_before_race.bin`); the race NMI (`$85:8377`: `$838A` tail,
   `$83CE` full frame) is dispatched, nothing of the race is drawn yet, and it stops at the first
-  DSP-4 sprite command.
+  DSP-4 sprite command. `race_wait` (test) runs `race_frame_wait()` alone from
+  `notes/race/wram_race_wait.bin` and prints the refreshes it took.
+- `--race-refreshes 2|3` (setting): screen refreshes per race step; `--race-refresh-replay FILE`
+  (test): the original's recorded count per step (`notes/race/race_refreshes.txt`).
 - `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
 - `--expect-return` (tests): exit 2 if the screen function has not returned by then.
 - `--press F` (tests): hold A+B for 6 frames from frame F.

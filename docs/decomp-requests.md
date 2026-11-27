@@ -89,9 +89,18 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   step 44736 (track `$14`, wrapper tail at 52506) and step 57099 (track `$13`). The C has
   `tg3000_unported("$82:89B5 ...")` there ("never ran"). Inferred from `$03DC` at the wrapper's
   entry (`race_wrapper_head` does not write it); `$82:89B5` itself was not hooked. The port's
-  whole-game run would stop there.
+  whole-game run would stop there. **Checked at the switch (2026-11-27):** WRAM dumped at the
+  mode call `$82:83B8` on every wrapper entry (firmware bench, `autopilot_60k.txt`): `$03DC & 3`
+  = 1 (`$03DC` = `$2001`, `$047C` = `$FF00`) at 44736 (track `$14`) and 57099 (track `$13`), so
+  `$82:89B5` runs there; mode 0 at 7903/23259/33079, mode 2 at 20362/39876.
 
-- **O. Question: `$045F` after the race's load** (2026-11-26). From the same wrapper memory, the
+- **O — ANSWERED by the port (2026-11-27): not a C issue.** On the firmware bench `$045F` = `$01`
+  at `race_track_build` (`$82:856D`, step 8093) and `$FF` at `race_track_start` (`$82:85D6`,
+  8110), with 18 race NMIs (`nmi_race_tail` → `sound_frame` → `sound_send_message`, which writes
+  `$FF` after each message) in between: a message sent during the console's load frames. The
+  port has no frame inside `race_track_build`, so the same message goes out at
+  `race_track_start_head`'s frame wait (port frame 87, `$FF` from 88). Nothing to change.
+  **Question: `$045F` after the race's load** (2026-11-26). From the same wrapper memory, the
   port's WRAM at `race_track_start` equals the bench's except pads/counters and, on track 0,
   `$045F` (port `$01` as `race_sound` writes it, bench `$FF`). Is `$FF` written by something on
   the console side (the sound handshake) that the C leaves to the platform?

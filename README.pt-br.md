@@ -27,6 +27,7 @@ Você precisa fornecer sua própria cópia legal da ROM **Top Gear 3000 (USA)**:
 * [Requisitos do sistema](#requisitos-do-sistema)
 * [Planejado](#planejado)
 * [Perguntas frequentes (FAQ)](#perguntas-frequentes-faq)
+* [Configurações](#configurações)
 * [Como compilar](#como-compilar)
 * [Estrutura do projeto](#estrutura-do-projeto)
 * [Contribuindo](#contribuindo)
@@ -35,7 +36,7 @@ Você precisa fornecer sua própria cópia legal da ROM **Top Gear 3000 (USA)**:
 
 ## Estado atual
 
-O projeto está na **etapa 4 de 4** (pré-alfa). **Ainda não dá para jogar** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e roda algumas telas do jogo a partir do C do decomp, na velocidade do console, com teclado e controle já ligados (ainda sem uso: nada aparece na tela). As primeiras telas já são desenhadas de forma nativa, idênticas ao original pixel a pixel: o cartão de título, a tela da senha, o menu de opções (com o brilho do cursor), a digitação da senha e a tela VS. As outras telas ainda ficam pretas. Ainda não há saves, configurações, mods, widescreen nem gameplay.
+O projeto está na **etapa 4 de 4** (pré-alfa). **Ainda não dá para jogar** e **ainda não existem releases**. Hoje, o executável compila no Linux e no Windows x86-64, confere sua ROM (tamanho e SHA-1) e roda algumas telas do jogo a partir do C do decomp, na velocidade do console, com teclado e controle já ligados (ainda sem uso: nada aparece na tela). As primeiras telas já são desenhadas de forma nativa, idênticas ao original pixel a pixel: o cartão de título, a tela da senha, o menu de opções (com o brilho do cursor), a digitação da senha e a tela VS. As outras telas ainda ficam pretas. Ainda não há saves, arquivo de configurações (uma configuração por linha de comando, veja [Configurações](#configurações)), mods, widescreen nem gameplay.
 
 | Etapa | Marco | Estado |
 |---|---|---|
@@ -85,6 +86,23 @@ O C da decompilação usa builtins de GCC/Clang (como `__builtin_trap()`). Use G
 
 #### Precisa do firmware do DSP-4?
 Não. O arquivo `dsp4.rom` nunca é necessário, pois os comandos do DSP-4 serão implementados como funções nativas em C.
+
+## Configurações
+
+Por enquanto as configurações são opções de linha de comando (ainda não há arquivo de
+configurações).
+
+* `--race-refreshes 2|3`: atualizações de tela por passo da corrida. No console a corrida roda
+  mais devagar que a tela: cada passo da corrida leva de 2 a 4 atualizações de tela, conforme o
+  quanto o console precisa calcular (2 nas cenas leves, 3 na maior parte da corrida), e o jogo
+  move tudo pelo número de atualizações que o passo levou.
+  * `2` (padrão): o jogo como foi escrito, sem a lentidão do console (o ritmo das cenas leves,
+    cerca de 30 quadros por segundo).
+  * `3`: o ritmo das cenas pesadas do console (cerca de 20 quadros por segundo), mais perto da
+    sensação do original.
+
+  Outros valores são recusados (1 exigiria mudar a lógica do jogo). Desenhar a 60 quadros por
+  segundo entre os passos fica para depois. A corrida ainda não dá para jogar.
 
 ## Como compilar
 

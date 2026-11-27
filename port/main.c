@@ -92,7 +92,8 @@ static void print_usage(const char* prog) {
             "[--movie FILE] [--movie-offset N] [--movie-offset-from FRAME N] [--expect-return] "
             "[--fast] [--shot F PATH] "
             "[--wram FILE] [--wram-out F PATH] [--sound-events FILE] [--sound-wav FILE] "
-            "[--sound-effect FRAME ID] [--sound-replay FILE] [path/to/TG3000.sfc]\n",
+            "[--sound-effect FRAME ID] [--sound-replay FILE] [--race-refreshes 2|3] "
+            "[--race-refresh-replay FILE] [path/to/TG3000.sfc]\n",
             prog);
 }
 
@@ -119,6 +120,7 @@ int main(int argc, char* argv[]) {
     const char* sound_events_path = NULL;
     const char* sound_wav_path = NULL;
     const char* sound_replay_path = NULL;
+    const char* race_refresh_replay_path = NULL;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--selftest") == 0) {
@@ -158,6 +160,17 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--sound-effect") == 0 && i + 2 < argc) {
             unsigned long effect_frame = strtoul(argv[++i], NULL, 10);
             port_add_test_effect(effect_frame, (uint8_t)strtoul(argv[++i], NULL, 0));
+        } else if (strcmp(argv[i], "--race-refreshes") == 0 && i + 1 < argc) {
+            /* Screen refreshes per race step (docs/DECISIONS.md, "Race pacing"): 2 or 3. */
+            const char* v = argv[++i];
+            if (!((strcmp(v, "2") == 0 && port_set_race_refreshes(2)) ||
+                  (strcmp(v, "3") == 0 && port_set_race_refreshes(3)))) {
+                fprintf(stderr, "--race-refreshes: %s is not allowed (2: the game without the "
+                                "console's slowdown, 3: the console's heavy-scene rate)\n", v);
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--race-refresh-replay") == 0 && i + 1 < argc) {
+            race_refresh_replay_path = argv[++i];
         } else if (strcmp(argv[i], "--expect-return") == 0) {
             expect_return = true;
         } else if (strcmp(argv[i], "--fast") == 0) {
@@ -223,6 +236,13 @@ int main(int argc, char* argv[]) {
     /* The same for a replay of the original's sound messages (recorded on the bench, local). */
     if (sound_replay_path != NULL && !port_set_sound_replay(sound_replay_path)) {
         fprintf(stderr, "SKIP: recorded sound messages not found (%s)\n", sound_replay_path);
+        rom_free(rom_data);
+        return 77;
+    }
+
+    /* The same for the original's recorded race refresh counts (bench, local). */
+    if (race_refresh_replay_path != NULL && !port_set_race_refresh_replay(race_refresh_replay_path)) {
+        fprintf(stderr, "SKIP: recorded race refresh counts not found (%s)\n", race_refresh_replay_path);
         rom_free(rom_data);
         return 77;
     }

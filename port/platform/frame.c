@@ -581,6 +581,81 @@ static void pace_frame(void) {
     }
 }
 
+/* Race pacing (docs/DECISIONS.md, "Race pacing"): the screen refreshes each step of the
+   one-player race loop takes. On the console a step takes as many refreshes as its CPU and DSP-4
+   work lasts (2-4, measured); the game counts them ($00BA, kept in $1E9E by race_frame_rest) and
+   moves everything by that count. The port has no CPU time, so its loop would take 1 refresh a
+   step (the wait sees one NMI, which takes the frame) and never redraw the HUD (drawn only by
+   NMIs that do not take a frame). A port setting, not a CPU model: 2 (default) or 3 refreshes a
+   step, every refresh a whole NMI as the game has it (pads, sound message, the HUD), presented
+   and paced to 60.0988 Hz. Test only: --race-refresh-replay plays the counts the original took,
+   recorded on the decomp's bench (like --movie, a recording, not a model). */
+static int g_race_refreshes = 2;
+static uint8_t* g_rr_replay;
+static size_t g_rr_len;
+static size_t g_rr_at = 1;  /* the file's step 1 has no wait to go to (race_wait_refreshes) */
+
+bool port_set_race_refreshes(int n) {
+    if (n != 2 && n != 3) return false;
+    g_race_refreshes = n;
+    return true;
+}
+
+bool port_set_race_refresh_replay(const char* path) {
+    FILE* f = fopen(path, "r");
+    if (f == NULL) return false;
+    char line[128];
+    size_t cap = 0;
+    while (fgets(line, sizeof line, f) != NULL) {
+        if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
+        char* end = NULL;
+        unsigned long n = strtoul(line, &end, 10);
+        if (end == line || n < 1 || n > 15) {
+            fclose(f);
+            port_fatal("--race-refresh-replay: a line is not a refresh count (1-15)");
+        }
+        if (g_rr_len == cap) {
+            cap = cap ? cap * 2 : 4096;
+            uint8_t* next = realloc(g_rr_replay, cap);
+            if (next == NULL) port_fatal("--race-refresh-replay: out of memory");
+            g_rr_replay = next;
+        }
+        g_rr_replay[g_rr_len++] = (uint8_t)n;
+    }
+    fclose(f);
+    if (g_rr_len < 2) port_fatal("--race-refresh-replay: fewer than two refresh counts in the file");
+    return true;
+}
+
+/* How many refreshes this wait takes, read from the game's state before its NMI runs: N at the
+   race loop's wait (race_frame_wait), 1 at any other. The port reaches one wait per step, the
+   loop's, with the frame requested ($00B8 bit 0): the first NMI takes it, the others are the
+   HUD's (on the console they come during the step's body; the port can only place them at its
+   wait). The race's other waits are frame waits (wait_frames: the frame counter must reach an
+   exact value, so they get one refresh each): the pause's ($0026 bit 4), race_end's (the loop
+   over: race_frame_rest's own end test, $0146 = 0 and no brightness in $014A, still holds; no NMI
+   runs between the rest and the next wait in the port) and race_track_start_tail's before step 1
+   (the frame not requested). So step 1 takes 1 refresh in the port: the console's step 1 counts
+   from that frame wait, which the port cannot stretch. */
+static int race_wait_refreshes(void) {
+    if (!nmi_enabled || rd8(0x0000) != 0x5C || rd16(0x0001) != 0x8377 || rd8(0x0003) != 0x85
+        || rd16(0x0008) != 0x83CE || (rd16(0x00B8) & 0x0001) == 0 || (rd16(0x0026) & 0x0010) != 0
+        || (rd16(0x0146) == 0 && (rd16(0x014A) & 0x0F00) == 0)) {
+        return 1;
+    }
+    if (g_rr_replay != NULL && g_rr_at < g_rr_len) {
+        int n = g_rr_replay[g_rr_at++];
+        if (g_rr_at == g_rr_len) {
+            printf("race refresh replay: steps 2-%zu played\n", g_rr_len);
+            fflush(stdout);
+        }
+        return n;
+    }
+    return g_race_refreshes;
+}
+
+static void refresh(void);
+
 void platform_wait_vblank(void) {
     if (g_split_active && SDL_GetCurrentThreadID() != g_task1_thread_id) {
         SDL_SignalSemaphore(g_sem_task1);
@@ -590,7 +665,14 @@ void platform_wait_vblank(void) {
         }
         return;
     }
+    int n = g_split_active ? 1 : race_wait_refreshes();
+    for (int i = 0; i < n; ++i) {
+        refresh();
+    }
+}
 
+/* One screen refresh: input, the NMI, the picture, a frame of sound, the 60.0988 Hz pacing. */
+static void refresh(void) {
     /* a) Pump SDL events first, so the game's frame code (which reads the pads) sees this
        frame's input, not the last one's. */
     pump_events_and_input();
@@ -799,6 +881,18 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
                the original's memory at $82:8342, dumped on the decomp's bench by
                tools/make_reference_memory.sh) */
             race_wrapper();
+        } else if (strcmp(name, "race_wait") == 0) {
+            /* Test only: the race loop's wait alone (race_frame_wait), from the original's memory
+               at that wait with the frame requested (with --wram notes/race/wram_race_wait.bin,
+               dumped on the decomp's bench by tools/make_reference_memory.sh): the refreshes
+               one race step takes in the port, and what its NMIs left (the count $00BA the
+               step will keep, the request bits of $00B8: bit 2 cleared by the HUD's NMI). */
+            unsigned long from = g_frame_count;
+            uint16_t b8 = rd16(0x00B8);
+            race_frame_wait();
+            printf("race wait: %lu refreshes, $00BA %u, $00B8 %04X -> %04X\n", g_frame_count - from,
+                   (unsigned)rd16(0x00BA), (unsigned)b8, (unsigned)rd16(0x00B8));
+            fflush(stdout);
         } else if (strcmp(name, "sound_menu") == 0) {
             /* The menus' set as the game loads it after a race: the driver's start-up first
                (the native player reads its balance table), then the set and its song request,
