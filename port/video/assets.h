@@ -65,6 +65,7 @@ typedef enum {
     ASSET_SHOP_LIST_GEARBOX,       /* $9C:8040, 12992 B (list 3's) */
     ASSET_SHOP_LIST_ARMOR,         /* $9E:8000, 10976 B (list 4's) */
     ASSET_SHOP_LIST_BOOST,         /* $9D:8F55, 13568 B (list 5's) */
+    ASSET_SHOP_LIST_SPECIAL,       /* $97:8000 (lists 6-10's, the specials) */
     ASSET_TICKER_M7_TILES,         /* $88:8C7D, 6464 B (the ticker's Mode 7 drawings: 101 8bpp tiles) */
     ASSET_TICKER_M7_MAP,           /* $95:8000 (the ticker's Mode 7 map: 7 rows of 17 tiles) */
     ASSET_COUNT
@@ -190,6 +191,8 @@ typedef struct {
     uint8_t shadow[RACESTART_MAX_PLANETS][RACESTART_SHADOW_BYTES]; /* from $7E:8000+n*$800+f*$80 */
     bool has_meter;             /* the meter's 10 words as draw_meter wrote them */
     uint16_t meter[RACESTART_METER_WORDS];
+    bool has_sun;               /* the animated sun's frame was streamed ($7F:6640 + k*$480) */
+    uint8_t sun_frame;          /* k: the frame of $92:80B2's 16 sun frames the source names */
 } racestart_pieces;
 
 /* The shop ($80:8BC5, notes/probe/SHOP.md). Per half (task 1: $7F:0000.., task 2: $7F:8000..):

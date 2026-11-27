@@ -82,6 +82,9 @@ CLI modes:
 - `--wram FILE` (tests): start from a saved 128 KB game memory (e.g. the original's, from the
   decomp's bench) instead of zeroed memory.
 - `--shot F PATH` (tests): print the picture's fingerprint at frame F and save it as BMP (`-`: no file).
+- `--shots FIRST LAST EVERY DIR` (tests): save every EVERY-th picture of frames FIRST..LAST as
+  `DIR/port_NNNNN.bmp`, for comparing with the bench's pictures. A `--movie` file that is absent
+  (the port's own test movies under `notes/movies/` are local) exits 77 when `--frames` is given.
 - `--sound-events FILE` (tests): write the sound player's calls to the mixer (frame, step,
   voice, event, sample, Hz, volumes) and print their fingerprint at exit; `--sound-wav FILE`:
   write the mixer's output as a WAV (git-ignored paths only) and print its peak and clamped

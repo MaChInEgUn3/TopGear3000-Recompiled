@@ -1118,8 +1118,9 @@ and checked on the decomp's bench).
   `game_picture_racestart_open` (6598, re-aligned input), `game_picture_racestart_camera`
   (`explore_pw.txt`, 6544).
 - **Open:**
-  - The animated sun stops the port (`$0700` not 0) until a course with one is compared; its
-    frames would come by the same streamed-upload capture (`$7F:6640 + k*$480`).
+  - Closed 2026-11-27 ("Closing the unmeasured stops", below): the animated planet (`$0700`
+    not 0, called "the sun" here before it was seen: it is scenery kind 2, a 6x6 turning planet)
+    is drawn from its streamed frame and compared in all four systems that have one.
   - The meter's capture is by call pattern until the decomp names it.
   - Fixed (2026-11-26, the brightness rule measured, below): the fade frames differed by 1 level
     in some channels (e.g. port 6605 against `frame_06771.png`: 5,424 pixels); now 0.
@@ -1209,6 +1210,8 @@ and checked on the decomp's bench).
     port cannot draw the left-over video memory without a model of it (no VRAM-shaped buffer),
     so it keeps the frame black (the screen is recognised only once its pieces are in).
   - Lists 6-10, player 2's half and the two-player shop were never measured: they stop the port.
+    Lists 6-8 closed 2026-11-27 ("Closing the unmeasured stops", below); list 9 waits on the
+    decomp (request Q), list 10 never opens; the two-player shop needs a second controller.
 
 ## The ticker drawn natively (step 4, 2026-11-26)
 
@@ -1433,6 +1436,85 @@ steps) is parked for later. No settings file exists yet; the setting is a comman
   on the firmware bench: `$03DC` = `$2001` (mode 1, `$82:89B5`) at steps 44736 (track `$14`)
   and 57099 (track `$13`), both with `$047C` = `$FF00`; the other entries mode 0 (7903, 23259,
   33079) or 2 (20362, 39876). Reported to the decomp (docs/decomp-requests.md, N).
+
+## Closing the unmeasured stops (2026-11-27)
+
+Ordinary play reached states the port stopped on because they were never compared. New input
+movies (the port's own, `notes/movies/`, local and git-ignored, the bench's text format; their
+recipes below and in each file's header; the scripts that made and compared them in
+`notes/movies/tools/`), run on the decomp's bench at the pinned `ca47c97` and in the port.
+
+- **How the movies reach later championships: the password screen's star names.** The code table
+  at `$8A:CDAB` (strings XOR `$9A`) holds 12 star names (`password_code_run`: `MERAK` track 0,
+  `ZOSMAR` 3, `SARIN` 7, `ALDERAM` `$0B`, `KAJAM` `$0F`, `LESATH` `$14`, `MIRAM` `$18`, `SUBRAT`
+  `$1C`, `TOYGETA` `$20`, `VEGA 5` `$23`, `NAOSPHEIN` `$27`, `KRAZ` `$2A`). Typed (the grid's
+  taps as `tools/password_movie.py`, with the 60-step glide wait for every last-column key, SPACE
+  included), they set `$0444`; then 1 PLAYER FULL starts the championship at that track and
+  `top_tallies` opens the shop lists the earlier tracks would have (`result_tally`). The
+  difficulty variant (`$03DC` bits 8-9) is OPTIONS > DIFFICULTY (once: variant 1 to 2). All
+  measured on the bench: `$0444` = `$2A`, `$03DC` = `$1110` / `$1210`, the list counts at `$036E`.
+- **Movies:** `star_<name>.txt` (12: `code_infodata.txt` to the password screen, the name typed
+  from step 3700, its tail from 5100 to the track description); `shop_buy_jump.txt`,
+  `shop_buy_attractor.txt`, `shop_buy_warp.txt`, `shop_buy_infrared.txt` (OPTIONS, DIFFICULTY
+  once, PASSWORD, KRAZ, 1 PLAYER FULL, RACE, the track description; in the shop Down to the
+  list, A, B: one item each, see request P); probes `kraz_probe.txt`, `kraz_probe2.txt`,
+  `hard_probe.txt`, `two_probe.txt`, `split_probe.txt`.
+
+**Closed, pixel for pixel against the bench (0 of 57,344 pixels):**
+
+- **The pre-race screen's animated planet** (`scenery_build` kind 2: `$0700` = its step, a 6x6
+  block of BG1 tiles 476..511 from map word `$11DC`, palette 4). In every frame the frame code
+  streams its picture: `$480` bytes from `$7F:6640 + k*$480`, the unpacked `$92:80B2` at offset
+  `$3F40 + k*$480` (frame k of 16; the block was already converted at start-up). The port takes
+  k from the stream's source (as the planets' shadows), checks the bytes against the block, and
+  draws the frame's tiles from the converted block; a planet tile on screen before any frame was
+  streamed stops. Compared: KRAZ (track `$2A`), every port frame 6298..6720 against bench
+  N+165, 422 frames (the shutter opening, the camera moving, the planet turning, at rest);
+  SARIN, LESATH, VEGA 5 (the three other systems with one), every 15th frame 6290..6560 at lag
+  164/165; the other 8 systems every 5th frame of the same window (54 each). No per-line effect
+  added.
+- **"More planets than measured"** is not reachable: `scenery_build` gives every system at most
+  six records (ROM table `$81:C3D0` by `$84:A240`), the animated one not counted, so at most 6
+  shadow slots; the guard stays.
+- **Shop lists 6-8** (Jump, Attractor, Warp; `$97:8000`, now converted at start-up as
+  `SHOP_LIST_SPECIAL`): the bench's upload queue (`notes/shop/scan_ring.sh` on the movies) gives
+  each item's picture (`+$1F20`/`$E60` Jump, `+$0E60`/`$10C0` Attractor, `+$0000`/`$E60` Warp,
+  `+$2D80`/`$EA0` Infra-Red; first object drawing 276, sent as `$840` bytes and the rest) and,
+  once bought, its level picture (`+$4C80`, `+$4A40`, `+$47C0`, `+$4F00`, `$280` bytes, drawing
+  256). Added as rows of the measured table; the item-picture cap rose to 134 drawings
+  (Attractor's). Compared: port 9296 = bench `frame_09475.png` for each (bought); Jump also at
+  port 8984 (typed) and Warp at 9056. Between such frames the item screens differ only where an
+  animation's phase comes from the console's longer loads (the caret's blink, x 92..98; the
+  turning icon): the same cause as the cursor glow in the championship, not the drawing.
+
+**Tests** (skipped where the movie is absent; a missing `--movie` file now exits 77 when
+`--frames` is given): `game_picture_racestart_kraz_moving` (6340 = `frame_06505.png`),
+`game_picture_racestart_kraz` (6600 = `frame_06765.png`), `game_picture_racestart_vega5` (6500 =
+`frame_06665.png`), `game_picture_shop_jump`, `game_picture_shop_attractor`,
+`game_picture_shop_warp` (9296 = `frame_09475.png`). Test option `--shots FIRST LAST EVERY DIR`
+writes the pictures of a range of frames (comparisons only).
+
+**Out of reach, and why:**
+
+- **Shop list 9 (Infra-Red):** reached (variant 2, KRAZ) and its picture uploads match the
+  measured slices, but the C has no case for its view (`$80:AFE1`): no objects, no price, the
+  view state differs from the bench's (decomp request Q). List 10 ('P'): its count stays 0 in
+  every variant (ROM tally tables `$85:D501`/`D530`/`D55F`), it never opens.
+- **Back from an item screen to the list:** the C's `shop_item_screen` never returns (request P);
+  the port stays on the item. So each movie sees one item.
+- **Two players:** the main menu's 2 PLAYERS lights both halves of the championship (bench:
+  both menus over the noise panels from step 3502), but the bench and the port drive controller 1
+  only, and player 2's half waits for its own RACE (the bench's top bar stays closed from 4600 on),
+  so the two-player shop and pre-race are not reachable with these movies. The port stops at
+  port frame 3350 on the bottom half's sprite table at the line interrupt (sprite 7, drawing 157,
+  at 136,148), a drawing the championship's load never sends (port upload trace: nothing covers
+  it); what the original shows there was not isolated. Not closed (a second controller in both
+  movie readers, then a measurement of the two-player opening). 1 PLAYER SPLIT runs as 1 PLAYER
+  FULL up to the shop (bottom half dark), no stop.
+- **The ticker's and the championship's lit bottom half after a race, the zoom-in ticker:**
+  only after a race, which the port cannot run (DSP-4 sprite commands, request A).
+- **Pre-race and shop states after a race** (later tracks of a championship played through):
+  reached here by the star names instead; the same screens.
 
 ## Steps (2026-11-24)
 

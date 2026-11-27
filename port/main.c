@@ -90,7 +90,7 @@ static void print_usage(const char* prog) {
     fprintf(stderr,
             "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] "
             "[--movie FILE] [--movie-offset N] [--movie-offset-from FRAME N] [--expect-return] "
-            "[--fast] [--shot F PATH] "
+            "[--fast] [--shot F PATH] [--shots FIRST LAST EVERY DIR] "
             "[--wram FILE] [--wram-out F PATH] [--sound-events FILE] [--sound-wav FILE] "
             "[--sound-effect FRAME ID] [--sound-replay FILE] [--race-refreshes 2|3] "
             "[--race-refresh-replay FILE] [path/to/TG3000.sfc]\n",
@@ -108,6 +108,10 @@ int main(int argc, char* argv[]) {
     unsigned long frame_limit = 0;
     unsigned long shot_frame = 0;
     const char* shot_path = NULL;
+    unsigned long shots_first = 0;
+    unsigned long shots_last = 0;
+    unsigned long shots_every = 1;
+    const char* shots_dir = NULL;
     const char* movie_path = NULL;
     long movie_offset = 0;
     bool movie_offset_from_set = false;
@@ -151,6 +155,11 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--shot") == 0 && i + 2 < argc) {
             shot_frame = strtoul(argv[++i], NULL, 10);
             shot_path = argv[++i];
+        } else if (strcmp(argv[i], "--shots") == 0 && i + 4 < argc) {
+            shots_first = strtoul(argv[++i], NULL, 10);
+            shots_last = strtoul(argv[++i], NULL, 10);
+            shots_every = strtoul(argv[++i], NULL, 10);
+            shots_dir = argv[++i];
         } else if (strcmp(argv[i], "--sound-events") == 0 && i + 1 < argc) {
             sound_events_path = argv[++i];
         } else if (strcmp(argv[i], "--sound-wav") == 0 && i + 1 < argc) {
@@ -233,6 +242,17 @@ int main(int argc, char* argv[]) {
         }
         fclose(wf);
     }
+    /* The same for an input movie kept locally (the port's own test movies under notes/movies/,
+       never in git). */
+    if (movie_path != NULL && frames_given) {
+        FILE* mf = fopen(movie_path, "rb");
+        if (mf == NULL) {
+            fprintf(stderr, "SKIP: input movie not found (%s)\n", movie_path);
+            rom_free(rom_data);
+            return 77;
+        }
+        fclose(mf);
+    }
     /* The same for a replay of the original's sound messages (recorded on the bench, local). */
     if (sound_replay_path != NULL && !port_set_sound_replay(sound_replay_path)) {
         fprintf(stderr, "SKIP: recorded sound messages not found (%s)\n", sound_replay_path);
@@ -286,6 +306,7 @@ int main(int argc, char* argv[]) {
     port_set_test_options(press_frame, expect_return);
     port_set_fast(fast);
     port_set_shot(shot_frame, shot_path);
+    port_set_shots(shots_first, shots_last, shots_every, shots_dir);
     if (movie_path != NULL) {
         port_set_movie(movie_path, movie_offset);
         if (movie_offset_from_set) {

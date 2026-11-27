@@ -400,6 +400,61 @@ set_tests_properties(game_picture_shop_list game_picture_shop_fade game_picture_
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# States closed with the port's own test movies (local files under notes/movies/, never in git:
+# skipped where absent; docs/DECISIONS.md, "Closing the unmeasured stops"). Each frame below was
+# compared with the decomp's bench picture named: 0 of 57,344 pixels different.
+# The pre-race screen's animated planet (scenery kind 2, $0700 not 0): star names typed on the
+# password screen. KRAZ (track $2A): port 6340 = bench frame_06505.png (the camera moving, the
+# big planet turning), port 6600 = frame_06765.png (at rest); VEGA 5 (track $23, kind $8002):
+# port 6500 = frame_06665.png.
+add_test(NAME game_picture_racestart_kraz_moving
+  COMMAND tg3000 --movie notes/movies/star_kraz.txt --movie-offset 150 --fast --frames 6341 --shot 6340 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_racestart_kraz_moving PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 6340 picture hash c758bcf984d85a08 brightness 15 drawn race_start"
+)
+add_test(NAME game_picture_racestart_kraz
+  COMMAND tg3000 --movie notes/movies/star_kraz.txt --movie-offset 150 --fast --frames 6601 --shot 6600 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_racestart_kraz PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 6600 picture hash d18728c2ec08efee brightness 15 drawn race_start"
+)
+add_test(NAME game_picture_racestart_vega5
+  COMMAND tg3000 --movie notes/movies/star_vega5.txt --movie-offset 150 --fast --frames 6501 --shot 6500 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_racestart_vega5 PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 6500 picture hash ca7899eec4f25122 brightness 15 drawn race_start"
+)
+# The shop's special lists 6-8 ($97:8000), difficulty variant 2 and KRAZ, each item viewed and
+# bought: Jump, Attractor, Warp at port 9296 = bench frame_09475.png each.
+add_test(NAME game_picture_shop_jump
+  COMMAND tg3000 --movie notes/movies/shop_buy_jump.txt --movie-offset 150 --fast --frames 9297 --shot 9296 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_shop_jump PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 9296 picture hash e379b74147d748d3 brightness 15 drawn shop"
+)
+add_test(NAME game_picture_shop_attractor
+  COMMAND tg3000 --movie notes/movies/shop_buy_attractor.txt --movie-offset 150 --fast --frames 9297 --shot 9296 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_shop_attractor PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 9296 picture hash 143b1cf73f6be62c brightness 15 drawn shop"
+)
+add_test(NAME game_picture_shop_warp
+  COMMAND tg3000 --movie notes/movies/shop_buy_warp.txt --movie-offset 150 --fast --frames 9297 --shot 9296 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_shop_warp PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 9296 picture hash e99f8b4174e01215 brightness 15 drawn shop"
+)
+set_tests_properties(game_picture_racestart_kraz_moving game_picture_racestart_kraz game_picture_racestart_vega5 game_picture_shop_jump game_picture_shop_attractor game_picture_shop_warp PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 set_tests_properties(game_smoke_title_card game_smoke_password_press game_picture_title_card game_screen_sequence game_picture_password_show game_picture_options game_picture_vs game_picture_password_entry game_picture_options_submenu game_picture_results game_picture_intro_zoom PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77

@@ -52,6 +52,9 @@
 #define RS_SHADOW_FIRST_TILE 2u  /* BG3 tiles 2..: 16 per planet, their second plane streamed */
 #define RS_SHADOW_TILES 16u
 #define RS_MAX_PLANETS 6u
+#define RS_SUN_FIRST 476u        /* $92:80B2 [$3F40..$873F]: BG1 tiles 476..511, 16 frames */
+#define RS_SUN_TILES 36u
+#define RS_SUN_FRAMES 16u
 
 /* ---- The meter (draw_meter, $80:DA5F): row 6, columns 2..11 of BG2 (its words captured) ---- */
 #define RS_METER_ROW 6
@@ -66,13 +69,14 @@ static uint16_t g_last_nmi = 0;
 static uint16_t g_glow_sent = 0;
 
 static bool g_built = false;
-static uint32_t g_gens[6];
+static uint32_t g_gens[7];
 static uint8_t g_shutter_px[RS_SHUTTER_TILES * 64u];
 static uint8_t g_champ_b_px[RS_CHAMP_B_COUNT * 64u];
 static uint8_t g_course_px[RS_COURSE_COUNT * 64u];
 static uint8_t g_obj_font_px[RS_OBJ_FONT_COUNT * 64u];
 static uint8_t g_obj_hi_px[RS_OBJ_HI_COUNT * 64u];
 static uint8_t g_bg3_fixed_px[RS_BG3_FIXED_TILES * 64u];
+static uint8_t g_sun_px[RS_SUN_FRAMES * RS_SUN_TILES * 64u];
 
 static void rs_fatal_u(const char* what, unsigned v) {
     char msg[128];
@@ -94,12 +98,13 @@ static const uint8_t* rs_asset(int id, size_t expected) {
 }
 
 static void build_drawings_once(void) {
-    static const int ids[6] = {
+    static const int ids[7] = {
         ASSET_CHAMP_BG_TILES_A, ASSET_CHAMP_BG_OBJ_TILES_B, ASSET_RACESTART_BG_TILES,
         ASSET_CHAMP_OBJ_FONT,   ASSET_RACESTART_OBJ_TILES,  ASSET_RACESTART_BG3_TILES,
+        ASSET_RACESTART_SUN_FRAMES,
     };
     bool same = g_built;
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 7; ++i) {
         if (asset_generation(ids[i]) != g_gens[i]) {
             same = false;
         }
@@ -119,7 +124,9 @@ static void build_drawings_once(void) {
                        g_obj_hi_px);
     convert_tiles_2bpp(rs_asset(ASSET_RACESTART_BG3_TILES, RS_BG3_FIXED_TILES * 16u),
                        RS_BG3_FIXED_TILES, g_bg3_fixed_px);
-    for (int i = 0; i < 6; ++i) {
+    convert_tiles_4bpp(rs_asset(ASSET_RACESTART_SUN_FRAMES, RS_SUN_FRAMES * RS_SUN_TILES * 32u),
+                       RS_SUN_FRAMES * RS_SUN_TILES, g_sun_px);
+    for (int i = 0; i < 7; ++i) {
         g_gens[i] = asset_generation(ids[i]);
     }
     g_built = true;
@@ -601,7 +608,9 @@ typedef struct {
     const racestart_pieces* maps;
 } course_maps;
 
-/* BG1: the scenery (tiles 64..358, palettes 1..4) and the blank tile 0. */
+/* BG1: the scenery (tiles 64..358, palettes 1..4), the blank tile 0 and the animated sun
+   (tiles 476..511, palette 4: scenery_build's 6x6 block from $11DC; "the sun's frame": the
+   drawings of the frame the frame code streamed for this picture). */
 static uint8_t bg1_pixel(const course_maps* c, int mx, int my, uint8_t* pal) {
     const uint8_t* map = (mx >= 256) ? c->maps->bg1_right_map : c->maps->bg1_left_map;
     uint16_t e = le16(&map[(size_t)((my >> 3) * 32 + ((mx & 255) >> 3)) * 2u]);
@@ -612,6 +621,12 @@ static uint8_t bg1_pixel(const course_maps* c, int mx, int my, uint8_t* pal) {
     } else if (m.tile >= RS_COURSE_FIRST && m.tile < RS_COURSE_FIRST + RS_COURSE_COUNT
                && m.pal >= 1u && m.pal <= 4u) {
         t = &g_course_px[(size_t)(m.tile - RS_COURSE_FIRST) * 64u];
+    } else if (m.tile >= RS_SUN_FIRST && m.tile < RS_SUN_FIRST + RS_SUN_TILES && m.pal == 4u
+               && !m.hflip && !m.vflip) {
+        if (!c->maps->has_sun) {
+            rs_fatal_u("a sun tile on screen before its first frame was streamed", e);
+        }
+        t = &g_sun_px[((size_t)c->maps->sun_frame * RS_SUN_TILES + (m.tile - RS_SUN_FIRST)) * 64u];
     }
     if (t == NULL || m.prio) {
         rs_fatal_u("unexpected BG1 entry in the course view", e);
@@ -752,11 +767,6 @@ static void draw_course_view(uint32_t* fb) {
     read_window_table(0x7F0100u, &w2);
     rgb5 glow = read_leader_glow(g_glow_sent);
 
-    /* The sun's animation (BG1 tiles 476..511, when $0700 is not 0) was never compared with the
-       original: stop. */
-    if (rd16(0x0700u) != 0u) {
-        port_fatal("race_start: an animated sun (not compared with the original yet)");
-    }
     if (!maps->has_oam) {
         port_fatal("race_start: the sprite table was not sent before the course view");
     }
