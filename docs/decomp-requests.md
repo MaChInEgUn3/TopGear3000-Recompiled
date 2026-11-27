@@ -109,7 +109,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `$045F` (port `$01` as `race_sound` writes it, bench `$FF`). Is `$FF` written by something on
   the console side (the sound handshake) that the C leaves to the platform?
 
-- **Q. Leaving a shop item screen does not return in the C** (2026-11-27; port movies
+- **Q — CONFIRMED by the decomp (2026-11-27): the fix (`if (shop_item_down(dp)) return;`, the same for up) comes as its next unit; `shop_buy_dispatch` has no leave path (every buy handler checked). Leaving a shop item screen does not return in the C** (2026-11-27; port movies
   `notes/movies/shop_buy_*.txt`, DECISIONS "Closing the unmeasured stops"). Observed: the bench
   goes back to the list after Down on an item, the port never does. Inferred from the C (not
   traced): `shop_item_screen`
