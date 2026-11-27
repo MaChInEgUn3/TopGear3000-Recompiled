@@ -23,7 +23,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   (`road_rows_project2`, `$85:B962`), `$08` (`road_rows_stream`, `$81:861D`), `$09`, `$06`, and
   `$0D` for VS. `$07` native too (decomp `0e2a6af`). The port stops at every
   `dsp4_port_*` call, products included; the decomp agreed to route the products through the
-  native multiply. Count of `dsp4_port_*` calls left in `src/`: **191** (2026-11-26), all in
+  native multiply. Count of `dsp4_port_*` calls left in `src/`: **155** after `$08` (dsp4-08g; was 191), all in
   `misc.c` (sprite streams, `$06`, `$08`, the VS road, small product/row helpers).
 - **B (request 4) — steps 1-3 (driver start-up, set loader, its race/VS/menu callers) DONE in decomp `e966da4`/`2d72646`/`b67f44e`, adopted; the intro's call $80:89E7 waits on C.** Sound loading in C on three new `platform.h` calls** (design:
   `docs/proposals/sound.md`, Part A): `sound_driver_boot(src)` for the IPL upload `$86:E096`;
@@ -57,7 +57,7 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `video_note_meter(vram_word, value)` or the words' WRAM source, so the port stops recognising
   them by call pattern (recorded as a bend in DECISIONS, pre-race screen).
 
-- **L. Question (not a change request): the championship tasks' phase after the load**
+- **L — ANSWERED by the decomp (2026-11-26): only the 65816's time slices (the decompression spans ~10 slices per task; task 1's share is shortened by the NMI's DMA); no head start, no new contract rule. The port leaves the 1 frame.** Question (not a change request): the championship tasks' phase after the load**
   (2026-11-26; DECISIONS, "The championship's halves, each as its interrupt sends it"). During
   the championship's load (`champ_task`: five `queue_unpacked_upload`, then `champ_slot_wait`),
   the first four uploads come out at the same bench steps for both tasks (3315, 3316, 3321,
