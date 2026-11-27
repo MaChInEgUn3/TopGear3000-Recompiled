@@ -1458,7 +1458,8 @@ recipes below and in each file's header; the scripts that made and compared them
   `shop_buy_attractor.txt`, `shop_buy_warp.txt`, `shop_buy_infrared.txt` (OPTIONS, DIFFICULTY
   once, PASSWORD, KRAZ, 1 PLAYER FULL, RACE, the track description; in the shop Down to the
   list, A, B: one item each, see request P); probes `kraz_probe.txt`, `kraz_probe2.txt`,
-  `hard_probe.txt`, `two_probe.txt`, `split_probe.txt`.
+  `hard_probe.txt`, `two_probe.txt` (2 PLAYERS; also a test movie), `split_probe.txt`. The bench
+  pictures named below are kept in `notes/movies/ref/` (renamed by test).
 
 **Closed, pixel for pixel against the bench (0 of 57,344 pixels):**
 
@@ -1481,18 +1482,28 @@ recipes below and in each file's header; the scripts that made and compared them
   each item's picture (`+$1F20`/`$E60` Jump, `+$0E60`/`$10C0` Attractor, `+$0000`/`$E60` Warp,
   `+$2D80`/`$EA0` Infra-Red; first object drawing 276, sent as `$840` bytes and the rest) and,
   once bought, its level picture (`+$4C80`, `+$4A40`, `+$47C0`, `+$4F00`, `$280` bytes, drawing
-  256). Added as rows of the measured table; the item-picture cap rose to 134 drawings
-  (Attractor's). Compared: port 9296 = bench `frame_09475.png` for each (bought); Jump also at
-  port 8984 (typed) and Warp at 9056. Between such frames the item screens differ only where an
-  animation's phase comes from the console's longer loads (the caret's blink, x 92..98; the
-  turning icon): the same cause as the cursor glow in the championship, not the drawing.
+  256). Lists 6-8's rows added to the measured table (list 9's left out: never compared, see
+  below; its picture still stops the port, at `$7F:3680`); the item-picture cap rose to 134
+  drawings (Attractor's). Compared: port 9296 = bench `frame_09475.png` for each (bought); Jump
+  also at port 8984 (typed) and Warp at 9056. Other frames of the item screens match only in
+  part (every 4th port frame 8600..9440 against every bench frame at lags 130..200: 36-46 of 211
+  exact per list); the rest differ in small boxes (x 92..98, the caret's place; the turning icon
+  at x 25..72, y 58..85; up to ~400 pixels while the text types). Not isolated; the console's
+  longer loads put those animations in another phase is the likely cause (the item screens run
+  at lag 152 before the text and 178..181 after it).
+- **The two-player championship's opening, both halves lit** (2 PLAYERS, `two_probe.txt`): port
+  frames 3248..3332 match the bench half by half (top at lag 170..177, bottom at 170..180,
+  each half exact at every frame), with the bottom half's noise panels and fire band; whole
+  frames port 3278 = `frame_03454.png` and 3320 = `frame_03497.png`, 0 pixels. No change was
+  needed in `champ_screen.c` (its bottom-half path is the one-player one).
 
 **Tests** (skipped where the movie is absent; a missing `--movie` file now exits 77 when
 `--frames` is given): `game_picture_racestart_kraz_moving` (6340 = `frame_06505.png`),
 `game_picture_racestart_kraz` (6600 = `frame_06765.png`), `game_picture_racestart_vega5` (6500 =
 `frame_06665.png`), `game_picture_shop_jump`, `game_picture_shop_attractor`,
-`game_picture_shop_warp` (9296 = `frame_09475.png`). Test option `--shots FIRST LAST EVERY DIR`
-writes the pictures of a range of frames (comparisons only).
+`game_picture_shop_warp` (9296 = `frame_09475.png`), `game_picture_champ_two_players` (3278 =
+`frame_03454.png`). Test option `--shots FIRST LAST EVERY DIR` writes the pictures of a range of
+frames (comparisons only).
 
 **Out of reach, and why:**
 
@@ -1500,17 +1511,21 @@ writes the pictures of a range of frames (comparisons only).
   measured slices, but the C has no case for its view (`$80:AFE1`): no objects, no price, the
   view state differs from the bench's (decomp request Q). List 10 ('P'): its count stays 0 in
   every variant (ROM tally tables `$85:D501`/`D530`/`D55F`), it never opens.
-- **Back from an item screen to the list:** the C's `shop_item_screen` never returns (request P);
-  the port stays on the item. So each movie sees one item.
-- **Two players:** the main menu's 2 PLAYERS lights both halves of the championship (bench:
-  both menus over the noise panels from step 3502), but the bench and the port drive controller 1
-  only, and player 2's half waits for its own RACE (the bench's top bar stays closed from 4600 on),
-  so the two-player shop and pre-race are not reachable with these movies. The port stops at
-  port frame 3350 on the bottom half's sprite table at the line interrupt (sprite 7, drawing 157,
-  at 136,148), a drawing the championship's load never sends (port upload trace: nothing covers
-  it); what the original shows there was not isolated. Not closed (a second controller in both
-  movie readers, then a measurement of the two-player opening). 1 PLAYER SPLIT runs as 1 PLAYER
-  FULL up to the shop (bottom half dark), no stop.
+- **Back from an item screen to the list (blocks ordinary shop play):** observed: after Down on
+  an item (row 0) the bench goes back to the list (`$014A` = `$E800`, the list slides in), the
+  port stays on the item with its panel blank, for good. Inferred from the C: `shop_item_screen`
+  loops for good and drops `shop_item_leave`'s result (request P). So each movie sees one item.
+- **The two-player championship's menus:** from port 3338 (bench ~3514) the menu text of both
+  halves differs; the port stops at 3350 on the bottom half's sprite 7 (drawing 157, at
+  136,148). Game memory differs there, not the drawing: port 3350 against bench 3526, task 2's
+  table at `$1100` holds the four letters of NAME at the bench's places (x `$70..$88`, y `$94`)
+  but with drawings `$A6`, `$99`, `$A5`, `$9D` and attribute 0 (the bench: `$127`, `$11A`, `$126`,
+  `$11E`, attribute 3, in its table at `$1500`); task 2's D+`$14`/`$16` are `$0100`/`$0000` (bench
+  `$7FF0`/`$B5A0`), and D+`$1E`, `$0270`-`$0278` differ. Decomp request R; out of reach.
+- **The two-player shop and pre-race: not attempted.** Player 2's half waits for its own RACE
+  (the bench's top bar stays closed from 4600 on) and both movie readers drive controller 1 only:
+  a controller-2 column in both readers is needed first. `shop_screen.c`'s lit-bottom stop stays.
+- **1 PLAYER SPLIT** ran without a stop up to the shop (bottom half dark); not compared.
 - **The ticker's and the championship's lit bottom half after a race, the zoom-in ticker:**
   only after a race, which the port cannot run (DSP-4 sprite commands, request A).
 - **Pre-race and shop states after a race** (later tracks of a championship played through):

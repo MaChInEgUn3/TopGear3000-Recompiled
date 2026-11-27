@@ -451,7 +451,16 @@ add_test(NAME game_picture_shop_warp
 set_tests_properties(game_picture_shop_warp PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 9296 picture hash e99f8b4174e01215 brightness 15 drawn shop"
 )
-set_tests_properties(game_picture_racestart_kraz_moving game_picture_racestart_kraz game_picture_racestart_vega5 game_picture_shop_jump game_picture_shop_attractor game_picture_shop_warp PROPERTIES
+# The two-player championship's opening, both halves lit (2 PLAYERS): port 3278 = bench
+# frame_03454.png.
+add_test(NAME game_picture_champ_two_players
+  COMMAND tg3000 --movie notes/movies/two_probe.txt --movie-offset 150 --fast --frames 3279 --shot 3278 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_champ_two_players PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 3278 picture hash 0706ae273b40816d brightness 15 drawn champ"
+)
+set_tests_properties(game_picture_racestart_kraz_moving game_picture_racestart_kraz game_picture_racestart_vega5 game_picture_shop_jump game_picture_shop_attractor game_picture_shop_warp game_picture_champ_two_players PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

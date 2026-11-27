@@ -106,7 +106,9 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   the console side (the sound handshake) that the C leaves to the platform?
 
 - **P. Leaving a shop item screen does not return in the C** (2026-11-27; port movies
-  `notes/movies/shop_buy_*.txt`, DECISIONS "Closing the unmeasured stops"). `shop_item_screen`
+  `notes/movies/shop_buy_*.txt`, DECISIONS "Closing the unmeasured stops"). Observed: the bench
+  goes back to the list after Down on an item, the port never does. Inferred from the C (not
+  traced): `shop_item_screen`
   (`$80:8EB4`) loops for good and drops `shop_item_up`/`shop_item_down`'s result; their leave
   (`shop_item_leave`, "the original drops its return address and returns from its caller")
   returns true, but nothing ends the loop. In the port, Down at row 0 (or Up/Right at the last
@@ -124,6 +126,16 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   against bench 9358 in `shop_buy_infrared.txt`: D+`$3E`/`$40`, the sprite table differ; 1,180
   pixels in the picture area). The port draws what the C leaves, so list 9 is out of reach until
   `$80:AFE1` is in C; list 10 never opens (its count stays 0 in every variant).
+
+- **R. The two-player championship's menu: task 2's state differs from the original**
+  (2026-11-27; port movie `notes/movies/two_probe.txt`: 2 PLAYERS, offset 150). The opening
+  matches (port 3248..3332, both halves); from port 3338 / bench ~3514 the menus' text differs.
+  At port 3350 against bench 3526: task 2's sprite table holds NAME's four letters at the
+  bench's places with drawings `$A6 $99 $A5 $9D` and attribute 0 where the bench has `$127 $11A
+  $126 $11E`, attribute 3 (palette 1, the drawings' ninth bit); task 2's D+`$14`/`$16` are
+  `$0100`/`$0000` (bench `$7FF0`/`$B5A0`); D+`$1E` (`$01A0`/`$06C0`) and `$0270`-`$0278` differ
+  too. One-player runs never drew task 2's menu text. Is a path of player 2's menu reading or
+  writing task 1's direct page (or a fixed `$01xx`)?
 
 ## Low (enhancements)
 

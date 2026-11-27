@@ -139,18 +139,18 @@ static const shop_picture_slice g_shop_slices[] = {
     {ASSET_SHOP_LIST_BOOST, 0x0980u, 0x0580u, 308u},
     {ASSET_SHOP_LIST_BOOST, 0x0F00u, 0x0580u, 308u},
     {ASSET_SHOP_LIST_BOOST, 0x2600u, 0x0280u, 256u},
-    /* Lists 6-9 (Jump, Attractor, Warp, Infra-Red): the bench's upload queue in the port's
-       notes/movies/shop_specials.txt (docs/DECISIONS.md, "Closing the unmeasured stops"): each
+    /* Lists 6-8 (Jump, Attractor, Warp): the bench's upload queue in the port's movies
+       notes/movies/shop_buy_*.txt (docs/DECISIONS.md, "Closing the unmeasured stops"): each
        item's picture (sent in two parts, $840 bytes and the rest) and, once bought, its level
-       picture. List 10 ('P') never opens (its count stays 0 in every variant): not measured. */
+       picture. List 9's (Infra-Red: +$2D80/$EA0, bought +$4F00/$280) were measured too but are
+       left out: the C draws no view for that list (decomp request Q), so its screen was never
+       compared and stops here. List 10 ('P') never opens. */
     {ASSET_SHOP_LIST_SPECIAL, 0x0000u, 0x0E60u, 276u},  /* list 8, Warp */
     {ASSET_SHOP_LIST_SPECIAL, 0x0E60u, 0x10C0u, 276u},  /* list 7, Attractor */
     {ASSET_SHOP_LIST_SPECIAL, 0x1F20u, 0x0E60u, 276u},  /* list 6, Jump */
-    {ASSET_SHOP_LIST_SPECIAL, 0x2D80u, 0x0EA0u, 276u},  /* list 9, Infra-Red */
     {ASSET_SHOP_LIST_SPECIAL, 0x47C0u, 0x0280u, 256u},  /* list 8 bought */
     {ASSET_SHOP_LIST_SPECIAL, 0x4A40u, 0x0280u, 256u},  /* list 7 bought */
     {ASSET_SHOP_LIST_SPECIAL, 0x4C80u, 0x0280u, 256u},  /* list 6 bought */
-    {ASSET_SHOP_LIST_SPECIAL, 0x4F00u, 0x0280u, 256u},  /* list 9 bought */
 };
 #define SHOP_SLICE_COUNT ((int)(sizeof(g_shop_slices) / sizeof(g_shop_slices[0])))
 
