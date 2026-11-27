@@ -44,6 +44,10 @@ static volatile bool g_screen_returned = false;  /* read after longjmp */
 static unsigned long g_shot_frame = 0;
 static const char* g_start_wram_path = NULL;
 static const char* g_shot_path = NULL;
+static unsigned long g_shots_first = 0;
+static unsigned long g_shots_last = 0;
+static const char* g_shots_dir = NULL;
+static unsigned long g_shots_every = 1;
 static unsigned long g_wram_out_frame = 0;
 static const char* g_wram_out_path = NULL;
 static bool g_fast = false;
@@ -370,6 +374,51 @@ int port_current_task_half(void) {
     return 0;
 }
 
+/* The picture as a 24-bit BMP (tests). */
+static void write_picture_bmp(const char* path) {
+    FILE* f = fopen(path, "wb");
+    if (f == NULL) {
+        port_fatal("failed to open screenshot path for writing");
+    }
+    const uint32_t width = SCREEN_WIDTH;
+    const uint32_t height = SCREEN_HEIGHT;
+    const uint32_t image_size = width * height * 3u;
+    const uint32_t file_size = 54u + image_size;
+    uint8_t hdr[54];
+    memset(hdr, 0, sizeof(hdr));
+    hdr[0] = 'B';
+    hdr[1] = 'M';
+    hdr[2] = (uint8_t)(file_size & 0xFFu);
+    hdr[3] = (uint8_t)((file_size >> 8) & 0xFFu);
+    hdr[4] = (uint8_t)((file_size >> 16) & 0xFFu);
+    hdr[5] = (uint8_t)((file_size >> 24) & 0xFFu);
+    hdr[10] = 54u;
+    hdr[14] = 40u;
+    hdr[18] = (uint8_t)(width & 0xFFu);
+    hdr[19] = (uint8_t)((width >> 8) & 0xFFu);
+    hdr[22] = (uint8_t)(height & 0xFFu);
+    hdr[23] = (uint8_t)((height >> 8) & 0xFFu);
+    hdr[26] = 1u;
+    hdr[28] = 24u;
+    hdr[34] = (uint8_t)(image_size & 0xFFu);
+    hdr[35] = (uint8_t)((image_size >> 8) & 0xFFu);
+    hdr[36] = (uint8_t)((image_size >> 16) & 0xFFu);
+    hdr[37] = (uint8_t)((image_size >> 24) & 0xFFu);
+    fwrite(hdr, 1, sizeof(hdr), f);
+    uint8_t row[SCREEN_WIDTH * 3];
+    for (int y = SCREEN_HEIGHT - 1; y >= 0; --y) {
+        const uint32_t* src = &g_fb[y * SCREEN_WIDTH];
+        for (int x = 0; x < SCREEN_WIDTH; ++x) {
+            uint32_t px = src[x];
+            row[x * 3 + 0] = (uint8_t)(px & 0xFFu);
+            row[x * 3 + 1] = (uint8_t)((px >> 8) & 0xFFu);
+            row[x * 3 + 2] = (uint8_t)((px >> 16) & 0xFFu);
+        }
+        fwrite(row, 1, sizeof(row), f);
+    }
+    fclose(f);
+}
+
 static void present_frame(bool before_nmi) {
     /* The pre-race screen alone is drawn before the NMI (race_start_screen_note_nmi); the
        others after it. */
@@ -508,49 +557,16 @@ static void present_frame(bool before_nmi) {
         fflush(stdout);
 
         if (strcmp(g_shot_path, "-") != 0) {
-            FILE* f = fopen(g_shot_path, "wb");
-            if (f == NULL) {
-                port_fatal("failed to open screenshot path for writing");
-            }
-            const uint32_t width = SCREEN_WIDTH;
-            const uint32_t height = SCREEN_HEIGHT;
-            const uint32_t image_size = width * height * 3u;
-            const uint32_t file_size = 54u + image_size;
-            uint8_t hdr[54];
-            memset(hdr, 0, sizeof(hdr));
-            hdr[0] = 'B';
-            hdr[1] = 'M';
-            hdr[2] = (uint8_t)(file_size & 0xFFu);
-            hdr[3] = (uint8_t)((file_size >> 8) & 0xFFu);
-            hdr[4] = (uint8_t)((file_size >> 16) & 0xFFu);
-            hdr[5] = (uint8_t)((file_size >> 24) & 0xFFu);
-            hdr[10] = 54u;
-            hdr[14] = 40u;
-            hdr[18] = (uint8_t)(width & 0xFFu);
-            hdr[19] = (uint8_t)((width >> 8) & 0xFFu);
-            hdr[22] = (uint8_t)(height & 0xFFu);
-            hdr[23] = (uint8_t)((height >> 8) & 0xFFu);
-            hdr[26] = 1u;
-            hdr[28] = 24u;
-            hdr[34] = (uint8_t)(image_size & 0xFFu);
-            hdr[35] = (uint8_t)((image_size >> 8) & 0xFFu);
-            hdr[36] = (uint8_t)((image_size >> 16) & 0xFFu);
-            hdr[37] = (uint8_t)((image_size >> 24) & 0xFFu);
-            fwrite(hdr, 1, sizeof(hdr), f);
-            uint8_t row[SCREEN_WIDTH * 3];
-            for (int y = SCREEN_HEIGHT - 1; y >= 0; --y) {
-                const uint32_t* src = &g_fb[y * SCREEN_WIDTH];
-                for (int x = 0; x < SCREEN_WIDTH; ++x) {
-                    uint32_t px = src[x];
-                    row[x * 3 + 0] = (uint8_t)(px & 0xFFu);
-                    row[x * 3 + 1] = (uint8_t)((px >> 8) & 0xFFu);
-                    row[x * 3 + 2] = (uint8_t)((px >> 16) & 0xFFu);
-                }
-                fwrite(row, 1, sizeof(row), f);
-            }
-            fclose(f);
+            write_picture_bmp(g_shot_path);
         }
         g_shot_path = NULL;
+    }
+    /* Test only (--shots): every picture of a range of frames, for comparing with the bench. */
+    if (g_shots_dir != NULL && g_frame_count >= g_shots_first && g_frame_count <= g_shots_last
+        && (g_frame_count - g_shots_first) % g_shots_every == 0u) {
+        char path[1024];
+        snprintf(path, sizeof(path), "%s/port_%05lu.bmp", g_shots_dir, g_frame_count);
+        write_picture_bmp(path);
     }
 
     SDL_RenderPresent(g_renderer);
@@ -732,6 +748,13 @@ void port_set_start_wram(const char* path) {
 void port_set_shot(unsigned long frame, const char* path) {
     g_shot_frame = frame;
     g_shot_path = path;
+}
+
+void port_set_shots(unsigned long first, unsigned long last, unsigned long every, const char* dir) {
+    g_shots_first = first;
+    g_shots_last = last;
+    g_shots_every = every ? every : 1u;
+    g_shots_dir = dir;
 }
 
 void port_set_wram_out(unsigned long frame, const char* path) {

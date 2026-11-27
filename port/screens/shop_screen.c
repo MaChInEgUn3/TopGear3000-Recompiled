@@ -76,7 +76,7 @@ static uint8_t g_blank_tile[64];
 static uint16_t g_bg2_map[32 * SHOP_BG2_ROWS];
 
 #define SHOP_MAX_SLICE_ROWS 48
-#define SHOP_MAX_SLICE_TILES 52u
+#define SHOP_MAX_SLICE_TILES 134u /* the largest measured slice: Attractor, $10C0 bytes */
 static uint8_t g_slice_px[SHOP_MAX_SLICE_ROWS][SHOP_MAX_SLICE_TILES * 64u];
 static bool g_slice_built[SHOP_MAX_SLICE_ROWS];
 

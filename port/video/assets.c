@@ -80,6 +80,7 @@ static asset_entry g_assets[ASSET_COUNT] = {
     [ASSET_SHOP_LIST_GEARBOX] = {"SHOP_LIST_GEARBOX", 0x9C8040u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_SHOP_LIST_ARMOR] = {"SHOP_LIST_ARMOR", 0x9E8000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_SHOP_LIST_BOOST] = {"SHOP_LIST_BOOST", 0x9D8F55u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_SHOP_LIST_SPECIAL] = {"SHOP_LIST_SPECIAL", 0x978000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_TICKER_M7_TILES] = {"TICKER_M7_TILES", 0x888C7Du, ASSET_KIND_TILES_8BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_TICKER_M7_MAP] = {"TICKER_M7_MAP", 0x958000u, ASSET_KIND_MAP_16, ROLE_NONE, 0, NULL, 0, 0, 0},
 };
@@ -138,6 +139,18 @@ static const shop_picture_slice g_shop_slices[] = {
     {ASSET_SHOP_LIST_BOOST, 0x0980u, 0x0580u, 308u},
     {ASSET_SHOP_LIST_BOOST, 0x0F00u, 0x0580u, 308u},
     {ASSET_SHOP_LIST_BOOST, 0x2600u, 0x0280u, 256u},
+    /* Lists 6-8 (Jump, Attractor, Warp): the bench's upload queue in the port's movies
+       notes/movies/shop_buy_*.txt (docs/DECISIONS.md, "Closing the unmeasured stops"): each
+       item's picture (sent in two parts, $840 bytes and the rest) and, once bought, its level
+       picture. List 9's (Infra-Red: +$2D80/$EA0, bought +$4F00/$280) were measured too but are
+       left out: the C draws no view for that list (decomp request R), so its screen was never
+       compared and stops here. List 10 ('P') never opens. */
+    {ASSET_SHOP_LIST_SPECIAL, 0x0000u, 0x0E60u, 276u},  /* list 8, Warp */
+    {ASSET_SHOP_LIST_SPECIAL, 0x0E60u, 0x10C0u, 276u},  /* list 7, Attractor */
+    {ASSET_SHOP_LIST_SPECIAL, 0x1F20u, 0x0E60u, 276u},  /* list 6, Jump */
+    {ASSET_SHOP_LIST_SPECIAL, 0x47C0u, 0x0280u, 256u},  /* list 8 bought */
+    {ASSET_SHOP_LIST_SPECIAL, 0x4A40u, 0x0280u, 256u},  /* list 7 bought */
+    {ASSET_SHOP_LIST_SPECIAL, 0x4C80u, 0x0280u, 256u},  /* list 6 bought */
 };
 #define SHOP_SLICE_COUNT ((int)(sizeof(g_shop_slices) / sizeof(g_shop_slices[0])))
 
@@ -416,7 +429,13 @@ void assets_note_word(uint16_t value) {
 
 /* Streamed uploads while the pre-race course view is in (race_start_frame_draw, $80:D475):
    each planet's shadow frame, 128 bytes from $7E:8000 + n*$800 + frame*$80, kept by planet;
-   the sun's frames ($7F:6640 + k*$480, $480 bytes) are not taken (never compared). */
+   the animated sun's frame, $480 bytes from $7F:6640 + k*$480 (the unpacked $92:80B2 at
+   $7F:2700, offset $3F40 + k*$480: the source names frame k of the 16; its bytes checked against
+   the converted block, the drawings taken from the block). Compared with the original:
+   docs/DECISIONS.md, "Closing the unmeasured stops". */
+#define RACESTART_SUN_SRC 0x7F6640u
+#define RACESTART_SUN_FRAME_BYTES 0x0480u
+#define RACESTART_SUN_FRAMES 16u
 /* The ticker's three streams, in their order (ticker_screen_load): the Mode 7 drawings (the
    unpacked $88:8C7D, by size and content), the map cleared with the fixed byte at $81:CBF8,
    then the map's 7 rows of 17 tiles (each the unpacked $95:8000's row, by content). Anything
@@ -459,6 +478,20 @@ static void ticker_note_stream(uint32_t src, uint32_t size) {
 
 void assets_note_stream(uint32_t src, uint32_t size) {
     ticker_note_stream(src, size);
+    if (g_racestart.has_bg3_left && size == RACESTART_SUN_FRAME_BYTES && src >= RACESTART_SUN_SRC
+        && src < RACESTART_SUN_SRC + RACESTART_SUN_FRAMES * RACESTART_SUN_FRAME_BYTES
+        && (src - RACESTART_SUN_SRC) % RACESTART_SUN_FRAME_BYTES == 0u) {
+        uint32_t k = (src - RACESTART_SUN_SRC) / RACESTART_SUN_FRAME_BYTES;
+        const asset_entry* sun = &g_assets[ASSET_RACESTART_SUN_FRAMES];
+        if (sun->data == NULL || sun->size != RACESTART_SUN_FRAMES * RACESTART_SUN_FRAME_BYTES
+            || memcmp(&g_ram[0x10000u + (src & 0xFFFFu)], &sun->data[k * RACESTART_SUN_FRAME_BYTES],
+                      RACESTART_SUN_FRAME_BYTES) != 0) {
+            port_fatal("race_start: a sun frame streamed that is not $92:80B2's (not measured)");
+        }
+        g_racestart.sun_frame = (uint8_t)k;
+        g_racestart.has_sun = true;
+        return;
+    }
     if (!g_racestart.has_bg3_left || (src >> 16) != 0x7Eu || size != RACESTART_SHADOW_BYTES) {
         return;
     }

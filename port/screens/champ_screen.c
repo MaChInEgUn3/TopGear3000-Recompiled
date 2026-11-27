@@ -560,10 +560,11 @@ static void draw_half_objects(int half, uint32_t* fb, const uint32_t pal_rgba[25
                 && (champ_obj_tile_pixels(half, (uint16_t)(tile + 17u)) != NULL);
         }
         if (!tiles_ok || pal > 2u || (prio != 0u && prio != 2u && prio != 3u)) {
-            char msg[96];
+            char msg[128];
             snprintf(msg, sizeof(msg),
-                     "champ: unexpected OAM sprite %d in half %d (tile %u attr 0x%02X hi %u)",
-                     i, half, (unsigned)tile, (unsigned)attr, (unsigned)hi);
+                     "champ: unexpected OAM sprite %d in half %d (tile %u attr 0x%02X hi %u at %u,%u)",
+                     i, half, (unsigned)tile, (unsigned)attr, (unsigned)hi, (unsigned)x_lo,
+                     (unsigned)y_raw);
             port_fatal(msg);
         }
 

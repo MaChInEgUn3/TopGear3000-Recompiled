@@ -109,6 +109,38 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `$045F` (port `$01` as `race_sound` writes it, bench `$FF`). Is `$FF` written by something on
   the console side (the sound handshake) that the C leaves to the platform?
 
+- **Q. Leaving a shop item screen does not return in the C** (2026-11-27; port movies
+  `notes/movies/shop_buy_*.txt`, DECISIONS "Closing the unmeasured stops"). Observed: the bench
+  goes back to the list after Down on an item, the port never does. Inferred from the C (not
+  traced): `shop_item_screen`
+  (`$80:8EB4`) loops for good and drops `shop_item_up`/`shop_item_down`'s result; their leave
+  (`shop_item_leave`, "the original drops its return address and returns from its caller")
+  returns true, but nothing ends the loop. In the port, Down at row 0 (or Up/Right at the last
+  row) blanks the panel, `shop_panel_clear` waits, and the item screen stays on (every frame the
+  loop's `shop_item_frame_tail` queues the panel again, so the wait ends and the loop goes on);
+  the original goes back to the list (bench: `$014A` = `$E800`, the list slides in). Ordinary play
+  cannot leave an item for the list in the port, so the movies see one item each. Please end
+  `shop_item_screen` when the leave runs (as the original's stack drop does).
+
+- **R. The item views of lists 9 and 10 are missing** (2026-11-27). `shop_item_dispatch_view`
+  has no case for `$80:AFE1` (list 9, Infra-Red) and `$80:B048` (list 10, 'P'), the words the
+  table `$81:A897` holds for them (`default: break`, commented "no other view for lists 0-8").
+  List 9 opens in ordinary play (difficulty variant 2, from track `$2A` on: `result_tally`), and
+  its item screen in the port then has no picture objects, no price, no view state (port 9200
+  against bench 9358 in `shop_buy_infrared.txt`: D+`$3E`/`$40`, the sprite table differ; 1,180
+  pixels in the picture area). The port draws what the C leaves, so list 9 is out of reach until
+  `$80:AFE1` is in C; list 10 never opens (its count stays 0 in every variant).
+
+- **S. The two-player championship's menu: task 2's state differs from the original**
+  (2026-11-27; port movie `notes/movies/two_probe.txt`: 2 PLAYERS, offset 150). The opening
+  matches (port 3248..3332, both halves); from port 3338 / bench ~3514 the menus' text differs.
+  At port 3350 against bench 3526: task 2's sprite table holds NAME's four letters at the
+  bench's places with drawings `$A6 $99 $A5 $9D` and attribute 0 where the bench has `$127 $11A
+  $126 $11E`, attribute 3 (palette 1, the drawings' ninth bit); task 2's D+`$14`/`$16` are
+  `$0100`/`$0000` (bench `$7FF0`/`$B5A0`); D+`$1E` (`$01A0`/`$06C0`) and `$0270`-`$0278` differ
+  too. One-player runs never drew task 2's menu text. Is a path of player 2's menu reading or
+  writing task 1's direct page (or a fixed `$01xx`)?
+
 ## Low (enhancements)
 
 - **I (request 3) — DONE in decomp `d0eaf01` (`video_note_source`), adopted (ignored for now; content recognition kept).** Name the ROM source of decompressed uploads (e.g.
