@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-late
 #
-# Regenerate the six local 131072-byte WRAM snapshots used by the ctest picture tests:
+# Regenerate the seven local 131072-byte WRAM snapshots used by the ctest picture tests:
 #   - wram_before_tick.bin         (notes/tick/wram_before_tick.bin) -> ticker_screen
 #       autopilot_60k.txt, WRAM at the end of step 15857
 #   - wram_before_res.bin          (notes/res/wram_before_res.bin)   -> game_picture_results
@@ -14,11 +14,18 @@
 #       explore_options.txt, WRAM at the end of step 2955
 #   - wram_before_title.bin        (notes/opt/wram_before_title.bin)-> game_picture_vs
 #       explore_options.txt, WRAM at the end of step 367
+#   - wram_before_race.bin         (notes/race/wram_before_race.bin) -> game_race_load_runs
+#       autopilot_60k.txt, WRAM at the first instruction of race_wrapper ($82:8342, step 7903,
+#       line 10). No step end lands at a clean point there (the end of step 7902 is between the
+#       shop's last NMI and race_wrapper: $0005, $0008, $0024 and $03E0 still change), so the
+#       bench is patched for one run (a WRAM write at that PC), then restored with git checkout
+#       and rebuilt. Needs a clean tools/bench in the bench tree.
 #
 # WARNING: The generated .bin files contain game memory data and MUST stay out of git.
 #
 # Usage:
 #   tools/make_reference_memory.sh <tg3000-decomp-dir> <rom-path> <output-dir>
+# (the files go into <output-dir>; the ctests read them from notes/<screen>/, as listed above)
 
 set -euo pipefail
 
@@ -90,6 +97,52 @@ PY
   wait "$rpid"
 }
 
+# WRAM at the first execution of a PC (bank:address as 6 hex digits), from a one-run patch of the
+# bench (restored afterwards). Args: movie steps pc out
+dump_at_pc() {
+  local movie="$1" steps="$2" pc="$3" out="$4"
+  if [ -n "$(git -C "$DECOMP_DIR" status --porcelain -- tools/bench)" ]; then
+    echo "Error: $DECOMP_DIR/tools/bench has local changes; refusing to patch it" >&2
+    exit 1
+  fi
+  python3 - "$DECOMP_DIR/tools/bench/bench.c" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+hook = r'''static void benchTrace(Cpu* cpu) {
+  {
+    static int done;
+    const char* want = getenv("TG3000_DUMP_PC");
+    if(!done && want && (((uint32_t)cpu->k << 16) | cpu->pc) == (uint32_t)strtoul(want, NULL, 16)) {
+      FILE* f = fopen(getenv("TG3000_DUMP_FILE"), "wb");
+      if(f) { fwrite(snes->ram, 1, sizeof snes->ram, f); fclose(f); }
+      done = 1;
+    }
+  }
+'''
+for old, new in [
+    ("static void benchTrace(Cpu* cpu) {\n", hook),
+    ("  if(coverageOn || difftestOn || censusOn || hdmaOn || apuOn) cpu_traceHook = benchTrace;\n",
+     "  cpu_traceHook = benchTrace;\n"),
+]:
+    if old not in s:
+        raise SystemExit("bench.c has changed; update dump_at_pc in make_reference_memory.sh")
+    s = s.replace(old, new, 1)
+open(p, "w").write(s)
+PY
+  rm -f "$out"
+  make -C "$DECOMP_DIR/tools/bench" >/dev/null
+  TG3000_DUMP_PC="$pc" TG3000_DUMP_FILE="$out" "$BENCH" "$ROM_PATH" "$steps" --movie "$movie" >/dev/null || true
+  git -C "$DECOMP_DIR" checkout -- tools/bench/bench.c
+  make -C "$DECOMP_DIR/tools/bench" >/dev/null
+  if [ ! -s "$out" ]; then
+    echo "Error: PC $pc was not reached in $steps steps of $movie" >&2
+    exit 1
+  fi
+}
+
+dump_at_pc "$MOVIES_DIR/autopilot_60k.txt" 7904 828342 "$OUT_DIR/wram_before_race.bin"
+
 extract_chunks "$MOVIES_DIR/autopilot_60k.txt" 41071 \
   15857 "$OUT_DIR/wram_before_tick.bin" \
   16489 "$OUT_DIR/wram_before_res.bin" \
@@ -101,4 +154,4 @@ extract_chunks "$MOVIES_DIR/explore_options.txt" 2956 \
   2955 "$OUT_DIR/wram_before_opt.bin"
 
 echo "Generated reference memories in $OUT_DIR:"
-ls -la "$OUT_DIR/wram_before_tick.bin" "$OUT_DIR/wram_before_res.bin" "$OUT_DIR/wram_before_title_screen.bin" "$OUT_DIR/wram_before_pw.bin" "$OUT_DIR/wram_before_opt.bin" "$OUT_DIR/wram_before_title.bin"
+ls -la "$OUT_DIR/wram_before_race.bin" "$OUT_DIR/wram_before_tick.bin" "$OUT_DIR/wram_before_res.bin" "$OUT_DIR/wram_before_title_screen.bin" "$OUT_DIR/wram_before_pw.bin" "$OUT_DIR/wram_before_opt.bin" "$OUT_DIR/wram_before_title.bin"

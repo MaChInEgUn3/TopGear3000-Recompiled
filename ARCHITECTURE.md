@@ -62,8 +62,11 @@ The game owns the loop; the port lives at the frame boundary (docs/proposals/vid
 CLI modes:
 - `--selftest`: runs SHA-1 test vectors without initializing SDL video (used by `ctest` target `rom_sha1_selftest`).
 - `--check-rom [path]`: verifies ROM size and SHA-1 without opening a window.
-- `--screen NAME` (`title_card`, `password_show`, `vs`, `options`, `results`; default `title_card`):
-  which game screen to run, until the decomp has its boot and dispatcher in C.
+- `--screen NAME` (`game` by default; test scaffolds such as `title_card`, `password_show`, `vs`,
+  `options`, `results`, `ticker`, `race`): which game code to run. `race` runs `race_wrapper()`
+  (with `--wram notes/race/wram_before_race.bin`); the race NMI (`$85:8377`: `$838A` tail,
+  `$83CE` full frame) is dispatched, nothing of the race is drawn yet, and it stops at the first
+  DSP-4 sprite command.
 - `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
 - `--expect-return` (tests): exit 2 if the screen function has not returned by then.
 - `--press F` (tests): hold A+B for 6 frames from frame F.

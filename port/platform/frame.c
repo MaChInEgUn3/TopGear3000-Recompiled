@@ -15,6 +15,7 @@
 #include "misc.h"
 #include "mixer.h"
 #include "password.h"
+#include "race_frame.h"
 #include "platform.h"
 #include "port.h"
 #include "screens.h"
@@ -243,7 +244,21 @@ static void run_nmi_dispatch(void) {
             }
         }
     } else if (target == 0x858377u) {
-        port_fatal("the race is not supported yet");
+        /* The race NMI (set by race_load, $82:8428): its prologue, then its two targets
+           (measured on the bench, autopilot_60k.txt: $838A on the two frames before the road's
+           first frame, $83CE on every race frame after). Nothing is drawn for the race yet. */
+        uint16_t sub = rd16(0x0008);
+        nmi_race_prologue();
+        switch (sub) {
+            case 0x838A: nmi_race_tail(); break;
+            case 0x83CE: nmi_race_full(); break;
+            default: {
+                char msg[128];
+                snprintf(msg, sizeof(msg), "unknown race NMI target 0x%04X", sub);
+                port_fatal(msg);
+                break;
+            }
+        }
     } else {
         char msg[128];
         snprintf(msg, sizeof(msg), "unknown NMI vector target 0x%06X", (unsigned int)target);
@@ -779,6 +794,11 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
             results_screen_run();
         } else if (strcmp(name, "ticker") == 0) {
             ticker_screen();
+        } else if (strcmp(name, "race") == 0) {
+            /* The one-player race from its wrapper (with --wram notes/race/wram_before_race.bin,
+               the original's memory at $82:8342, dumped on the decomp's bench by
+               tools/make_reference_memory.sh) */
+            race_wrapper();
         } else if (strcmp(name, "sound_menu") == 0) {
             /* The menus' set as the game loads it after a race: the driver's start-up first
                (the native player reads its balance table), then the set and its song request,

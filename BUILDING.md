@@ -99,7 +99,8 @@ git submodule update --init --recursive
   (a scripted button press must end the password display). Without a ROM in `input/` they are
   reported as skipped.
 * `tg3000 --screen NAME --frames N`: run one of the game's screens (`title_card`,
-  `password_show`, `vs`, `options`) and quit after N frames (0 = until the window closes).
+  `password_show`, `vs`, `options`, `race` with its saved memory, ...; `game`, the default, runs
+  the whole game) and quit after N frames (0 = until the window closes).
   `TG3000_HEADLESS=1` turns error message boxes off.
 * Controls: arrows = D-pad, Z = B, X = A, A = Y, S = X, Q = L, W = R, Enter = Start,
   Right Shift = Select, Esc = quit; or the first connected gamepad (SNES button positions).
@@ -116,4 +117,10 @@ bash tools/make_reference_memory.sh /path/to/tg3000-decomp input/TG3000.sfc /tmp
 cp /tmp/tg3000-ref-wram/wram_before_pw.bin notes/pw/wram_before_pw.bin
 cp /tmp/tg3000-ref-wram/wram_before_opt.bin notes/opt/wram_before_opt.bin
 cp /tmp/tg3000-ref-wram/wram_before_title.bin notes/opt/wram_before_title.bin
+cp /tmp/tg3000-ref-wram/wram_before_race.bin notes/race/wram_before_race.bin
 ```
+
+The script also writes `wram_before_tick.bin`, `wram_before_res.bin` and
+`wram_before_title_screen.bin` (see its header for each one's test). `wram_before_race.bin`
+(`game_race_load_runs`) is taken at a PC rather than a frame end: the script patches the bench's
+`tools/bench/bench.c` for one run and restores it, so that file must have no local changes.

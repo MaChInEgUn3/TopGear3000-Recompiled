@@ -1287,6 +1287,55 @@ and checked on the decomp's bench).
 - **Tests:** all 35 earlier tests pass with their hashes unchanged, so nothing was re-pinned.
   The new `game_picture_ticker_fade` pins a fade frame at brightness 11.
 
+## The race: measured (2026-11-26)
+
+Measure only: nothing of the race is drawn. Full report in `notes/probe/RACE.md` (local); bench
+with the firmware DSP-4 (`--dsp4-firmware`; bsnes v087 fetched by the decomp's
+`tools/refbench/fetch.sh`), `autopilot_60k.txt` and `race1.txt`.
+
+- **Pacing (for the owner; not decided here).** The race loop waits until the NMI has taken its
+  last picture (`$00B8` bit 0), not a fixed number of vblanks. On the bench every loop step took
+  2, 3 or 4 vblanks, never 1: `autopilot_60k.txt`'s first race, 3045 steps over 8151 NMIs (995
+  of 2, 2042 of 3, 7 of 4; about 22 pictures a second); `race1.txt`, 1027 steps (692 of 2, 334 of
+  3). The body alone takes 368-691 scan lines. The bench's firmware DSP-4 answers at once, so a
+  console lags at least this much. Motion is scaled by the vblanks the step took (`$1E9E`); a
+  few things are per step (the nitro shake's random draws, the automatic gear index). The HUD
+  (`race_hud_draw`) is drawn only by NMIs that do not take a picture (3033 of them; 0 of 3045
+  taking ones), so a port running one step per vblank would never redraw it. Whether the port
+  runs one step per vblank or keeps 2-3, and how the HUD then gets drawn, is the owner's
+  game-speed question.
+- **Entry: `--screen race`** runs `race_wrapper()` from the original's WRAM at its first
+  instruction (`$82:8342`, step 7903 line 10), `notes/race/wram_before_race.bin`. No step end is
+  clean there (the end of step 7902 is before `top_race_prep`: `$0005`, `$0008`, `$0024`,
+  `$03E0` still change), so `tools/make_reference_memory.sh` patches the bench for one run (a WRAM
+  write at that PC) and restores it.
+- **The race NMI in the port:** target `$85:8377` → `nmi_race_prologue`, then `$0008` = `$838A`
+  (`nmi_race_tail`, during the load) or `$83CE` (`nmi_race_full`), as measured; anything else
+  stops. The band IRQ `$85:87BA` is not run (it only sends the chip the band streams; its one
+  WRAM word `$00BC` is the band cursor).
+- **The load gets through:** `race_load`, `race_sound`, the track, the road's first frame; the
+  port stops at port frame 89 at the first DSP-4 sprite command (`object_sprites_stream`, `$09`)
+  in the first `race_frame_draw` (test `game_race_load_runs`).
+- **`$8D:8B70` is not track-dependent** (the premise was wrong): `race_load` always sends those
+  32 colours. Added to the palette catalogue as "race colours 0-31".
+- **Track-dependent blocks: the game's own tables, enumerated at start-up.** The race's track
+  pictures are unpacked by the game from tables indexed by the track (`$83:8410` → `$83:8447` →
+  `$83:8585`/`$8597`: 9 packed tile sets; `$84:FD33`, `$84:FDA1`/`$FE0F`, `$84:FE7D`; the sky row
+  `$83:A484`; the objects' table `$86:AE36` → `$86:0000`). Chosen: the drawing run converts every
+  entry these tables name at start-up (as the other screens' named blocks) and recognises each
+  upload against that catalogue by WRAM source, size and content; the port never reads `$047B`
+  to pick a block (that would retype the game's choice). Not cataloguing only the tracks the movies
+  reach. Checked: from each race's wrapper memory, the port's WRAM after its own load (the C
+  reading the same tables) equals the bench's at `race_track_start` for tracks `$00`, `$22` and
+  `$0C`, except the pads and counters (`$000C-$0024`, `$00BA`), the stack, and `$045F` on track
+  0 (a sound flag; port `$01`, bench `$FF`, not investigated).
+- **Draw point: after the NMI** (the usual one, not the pre-race screen's). At three anchors no
+  byte of a live table (windows, both scroll tables and their data, the band streams, band list,
+  mode bytes, the live sprite table) changes between the picture's first band IRQ and the next
+  NMI; the bench's HDMA report lists mid-picture writes into enabled tables only at
+  `$0200-$0203` (134 of about 6,900 frames) and `$11B2-$11B5` (8), besides the first frame.
+- **Not done here:** the sky/road/HUD band rows against pictures, the catalogue code, any drawing.
+
 ## Steps (2026-11-24)
 
 1. **Skeleton (current):** CMake build, SDL3 dependency fetch, SHA-1 ROM verification, empty 768x672 SDL3 window, CI for Linux and Windows.

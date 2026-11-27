@@ -30,6 +30,9 @@ static const palette_entry g_palette_catalogue[] = {
     {0x8A9D2Du, 0x20u,  PAL_SRC_RESULTS_PAL_1,     "results palette 1 colours"},
     {0x8C95C3u, 0x20u,  PAL_SRC_RESULTS_STARS_OBJ, "results stars object colours"},
     {0x86F44Bu, 0x20u,  PAL_SRC_RESULTS_TEXT_0,    "results text palette 0 colours"},
+    /* race_load's last colours, the same for every track and car (a constant source in
+       race_load, $82:8428): colours 0-31 */
+    {0x8D8B70u, 0x40u,  PAL_SRC_RACE_COLOURS_0_31, "race colours 0-31"},
 };
 
 void palette_set(uint8_t index, uint16_t bgr) {

@@ -25,6 +25,15 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `dsp4_port_*` call, products included; the decomp agreed to route the products through the
   native multiply. Count of `dsp4_port_*` calls left in `src/`: **155** after `$08` (dsp4-08g; was 191), all in
   `misc.c` (sprite streams, `$06`, `$08`, the VS road, small product/row helpers).
+  **Measured in the port (2026-11-26, `--screen race` from the original's memory at
+  `race_wrapper`):** the one-player setup runs through; the first stop is `object_sprites_stream`
+  (`$09`) in the first `race_frame_draw`. Left for the one-player race, by function (calls):
+  `rival_car_sprites` 21, `player_car_sprites` 14, `car_sprite_head` 10, `sprite_parts_list` 8,
+  `sprite_parts_list_at` 8, `sprite_bar_put` 8, `sprite_parts_at` 7, `sprite_part_put` 6,
+  `object_sprites_stream` 6, `sprite_parts_drain` 4, `oam_high_load` 2 (94 in all); VS only:
+  `vs_sprites` 31, `vs_proj_pass` 22 with `road_port_product32` 5, `oam_high_load2` 2,
+  `vs_proj_tail` 1. Please keep the results in the sprite tables in WRAM as now (`$1576`/`$1796`,
+  high table at `$1776` + `D+$8E`): the port draws from them.
 - **B (request 4) — steps 1-3 (driver start-up, set loader, its race/VS/menu callers) DONE in decomp `e966da4`/`2d72646`/`b67f44e`, adopted; the intro's call $80:89E7 waits on C.** Sound loading in C on three new `platform.h` calls** (design:
   `docs/proposals/sound.md`, Part A): `sound_driver_boot(src)` for the IPL upload `$86:E096`;
   `sound_upload_block(spc_dest, src, size)` once per `[size][dest][data]` block walked by
@@ -68,6 +77,24 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   shortened by the NMI's work), or does the original give task 2 a head start somewhere (the IRQ
   trampoline at `$0005`, the first `nmi_menu_frame`, `split_screen_setup`) that the
   `platform_task_split` contract should state?
+
+- **M. The race NMI's BG mode as game state** (2026-11-26). `race_bands_start` (in
+  `nmi_race_full`, and `vs_bands_start`) writes BG mode `$09` or `$29` straight to the register,
+  chosen from the first band line (`$0486` + `$00BE`, `$002E`); nothing in WRAM records the
+  choice. A WRAM copy (or a named note) would let the race's drawing read it instead of
+  re-deriving the game's test.
+
+- **N. The race wrapper's mode 1 runs in `autopilot_60k.txt`** (observation, 2026-11-26; firmware
+  bench). `race_wrapper` is entered with `$03DC & 3` = 1 (`$03DC` = `$2001`, `$047C` bit 15) at
+  step 44736 (track `$14`, wrapper tail at 52506) and step 57099 (track `$13`). The C has
+  `tg3000_unported("$82:89B5 ...")` there ("never ran"). Inferred from `$03DC` at the wrapper's
+  entry (`race_wrapper_head` does not write it); `$82:89B5` itself was not hooked. The port's
+  whole-game run would stop there.
+
+- **O. Question: `$045F` after the race's load** (2026-11-26). From the same wrapper memory, the
+  port's WRAM at `race_track_start` equals the bench's except pads/counters and, on track 0,
+  `$045F` (port `$01` as `race_sound` writes it, bench `$FF`). Is `$FF` written by something on
+  the console side (the sound handshake) that the C leaves to the platform?
 
 ## Low (enhancements)
 

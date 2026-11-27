@@ -510,6 +510,20 @@ foreach(race "3;8094;7740;7861 3af30fc4a9a95e42" "4;17574;10990;11562 3cf9b22e9c
     SKIP_RETURN_CODE 77
   )
 endforeach()
+# The one-player race from the original's own game memory at race_wrapper ($82:8342, dumped on the
+# decomp's bench by tools/make_reference_memory.sh; a local file under notes/, never in git): the
+# setup (race_load, race_sound, the track, the road's first frame) runs through, and the port
+# stops at the first DSP-4 sprite command ($09, object_sprites_stream in the first
+# race_frame_draw), not native yet (docs/decomp-requests.md, A). Skipped where the file is absent.
+add_test(NAME game_race_load_runs
+  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 300
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_race_load_runs PROPERTIES
+  PASS_REGULAR_EXPRESSION "FATAL \\(frame 89\\): the race's DSP-4 commands are not native yet"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 # Two-task kernel (decomp request D, step 1): the ticker screen runs from saved game memory
 # (a local file under notes/, never in git) and returns by itself. Skipped where absent.
 add_test(NAME game_ticker_runs
