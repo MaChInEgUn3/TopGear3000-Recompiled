@@ -376,6 +376,23 @@ add_test(NAME game_picture_shop_list
 set_tests_properties(game_picture_shop_list PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 6333 picture hash 07e5bd796ae4e4b9 brightness 15 drawn shop"
 )
+# Leaving an item screen (decomp request Q, fixed in 6c6bd22): list 6's item viewed, Up leaves to
+# the list at bench step 9100, A opens the item again at 9500 (notes/movies/shop_leave_jump.txt,
+# local; skipped where absent). Before the fix the port stayed on the item for good. The screen
+# changes at the bench's steps (lag 151 both times); the pictures differ from the bench's by
+# 32-250 pixels at the caret and the turning icon, as on the other item screens. The hash is the
+# port's own picture of the list at port 9200 (84 pixels off bench 9351's): it pins the return
+# (with decomp 6ec8da5, before the fix, the same frame hashes c8d9e347da58db0d, the item).
+add_test(NAME game_shop_leave_runs
+  COMMAND tg3000 --movie notes/movies/shop_leave_jump.txt --movie-offset 150 --fast --frames 9800 --shot 9200 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_shop_leave_runs PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 9200 picture hash feb86b14271e3922 brightness 15 drawn shop"
+  FAIL_REGULAR_EXPRESSION "FATAL|unported"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
 add_test(NAME game_picture_shop_fade
   COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_shop.txt --movie-offset 150 --fast --frames 5752 --shot 5750 -
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -654,6 +671,10 @@ set_tests_properties(game_race_tape_wrapper_stop PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# Disabled since decomp c38d5ee (2026-11-27): the high table ($06) and the sprite list's opening
+# are native, the $09 stream not yet, so the native $06 lacks the stream's entries (the decomp's
+# words) and no recording can match the bench in this half-wired state. Back on, re-recorded,
+# or deleted with the tape, when the $09 stream lands.
 # From the race loop's first head (notes/race/wram_race_loop.bin, the same bench run), with the
 # tape's recorded NMIs where the bench ran them (--dsp4-tape-nmis, listed apart for the owner's
 # veto) and the movie's pads (port frame F = bench step F + 8113): 900 refreshes (loop steps 1-386,
@@ -665,6 +686,7 @@ add_test(NAME game_race_tape_runs
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 set_tests_properties(game_race_tape_runs PROPERTIES
+  DISABLED TRUE
   PASS_REGULAR_EXPRESSION "dsp4 tape: 530261 of 4727876 calls matched \\(up to bench step 9012\\)"
   FAIL_REGULAR_EXPRESSION "FATAL|bench step - port frame"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
@@ -680,6 +702,7 @@ add_test(NAME game_race_tape_stop
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 set_tests_properties(game_race_tape_stop PROPERTIES
+  DISABLED TRUE
   PASS_REGULAR_EXPRESSION "FATAL \\(frame 911\\): DSP-4 tape: call 538280 \\(bench step 9023\\): another value: expected W FFC0, got W FFC1"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
