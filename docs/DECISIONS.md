@@ -1841,11 +1841,12 @@ fade frames.
   `frame_N.png` pictures of the same run (`notes/race/sync/bench_dumps.sh` and `bench_pics.sh`
   make them).
 - **Tests:** `game_picture_race_{fade,lit,lit_later,hill,sky_long,crest}` (skipped where the
-  local files are absent); `game_race_runs*` run the whole race with the draw (no stop). The
+  local files are absent; re-pinned with the road and two of them moved to other frames on
+  2026-11-28, "The race's road drawn"); `game_race_runs*` run the whole race with the draw (no stop). The
   whole-game movies draw their first race and stop where they did before (`race1` 19137,
   `explore_buy` 16809, `autopilot_60k` 20214); `autopilot_60k`'s first race from its wrapper runs
   to its end at 2 and 3 refreshes a step and with the recorded counts.
-- **Open:** the road (slice 2) and the cars and objects (slice 3); M for the road; T until the
+- **Open:** the road (slice 2; drawn since 2026-11-28, below) and the cars and objects (slice 3); M for the road; T until the
   decomp names the words; the pause and a lit `$29` never measured (they stop); a sky of exactly
   127 rows (no continuation entry) is drawn but was not met at a compared frame; measured on
   track `$00` only.
@@ -1954,6 +1955,118 @@ memory at every step, `bench_window_any.sh` dumps a window of any movie, both ta
   in `notes/movies/ref/` (renamed by test).
 - **The bench** was only run here (`~/tg3000-decomp-bench`, HEAD `17dab56`, its binary built
   after its sources), not rebuilt; its working tree was not checked with git from this session.
+
+## The race's road drawn (step 4, 2026-11-28)
+
+**Identical to the bench's pictures where drawn (the bench's stand-in DSP-4, not the console):**
+the road of the one-player race on track `$00`, `port/screens/race_screen.c`, drawn after the NMI
+with the first slice: BG1's road rows with the band colours and the band's tile size, and the
+second road (BG2) where the windows show it. **The cars and the objects are still not drawn**
+(left black, marked not drawn, as before). Measured on the bench at the pin, `notes/probe/RACE.md`
+§24 (local).
+
+- **References re-made at the pin.** The bench (`~/tg3000-decomp-bench`) checked out at
+  `8d66b47`, rebuilt, left clean there. Its pictures of bench steps 8100-15770 (default DSP-4,
+  `autopilot_60k.txt`) and its memory at every loop wait of the race: pictures 8100-10400 are
+  byte-equal to the `17dab56` ones; the refresh counts, the waits' bench steps and the hand-over
+  memories of steps 2, 600, 612 and 700 are byte-equal; of the 106 older wait dumps 102 are
+  equal and steps 5-8 differ in `$0E3E` only (as at `17ee1d6`).
+- **Checked over the whole race** (one hand-over at step 2, the race run as the console ran it:
+  RACE.md §23's run d, the bench's refresh counts, every picture from port frame 89 to 7734
+  against the bench's, the port's layer per pixel from a scratch relink): frames 89-1200, 1,110
+  pictures: 630 equal where drawn, 480 differ only in the HUD's cells (one HUD draw behind) or
+  under objects of the bench's sprite table (the port's sprite list is its own), **0 in the
+  road**. Frames 1200-7734: 274 pictures (from step 589 on) also differ, every one only in BG2
+  pixels, the second road's colours (below). With the bench's memory handed over again at every
+  wait whose first refresh takes the frame (scratch): 7,644 pictures, 1,947 equal where drawn,
+  5,528 with HUD or object residue only, 169 with BG2 pixels different (tallied over all of
+  them: only BG2, and every one at a step the console took in its head, not handed over again); hand-overs at steps 601, 663, 666 and 1171 give 0 road
+  differences in the next 3 pictures. No stop in the whole race at 2 and 3 refreshes a step, with
+  the recorded counts, in run d, and in every whole-game movie's race (`race1_again`'s race 2
+  included).
+- **New, for the owner: the second road's colours can be one step of their cycle off, in the
+  shipped game too.** `road_rows_project2` copies each BG2 band's 8 colour bytes into
+  `$284C-$2924` / `$294C-$2A24` (the stream-3 sets, `$7E:(00CC)`) from sources named at `$3FEC..`;
+  on this track those point into the blocks `race_cycle_blocks` rotates every fourth NMI
+  (`$2000-$213F`, by `$0024`: sources `$2007`, `$200F`, `$2014`.. seen). Inferred, not traced: on
+  the console an NMI can rotate the blocks inside the body before the copy; in the port every NMI
+  comes at the wait, so at some steps the port copies another phase of the same cycle (checked at
+  port frame 1607: BG1's sets equal the bench's, BG2's shifted by one 4-colour group). It is the
+  same cause as the three decided differences ("To the race's end": where an NMI falls in the
+  console's CPU time) but a new, visible one: the second road's stripes, not a counter. Not
+  placed in the port (that would be a CPU-time model); the draw reads WRAM, and with the bench's
+  memory the pixels are equal. (RACE.md §23 called `$2840-$2A2B` "the road-object list": its
+  `$284C-$2A24` part is these colour sets.)
+- **How, under the rule:**
+  - The road's block, unpacked at start-up: `$98:9FEB` whole (52,672 bytes: every track's road
+    tiles and map rows, sliced by track through `$84:A66C`/`$85:A346..`, never read by the port).
+    `track_backdrop_load`'s five uploads, the next after the HUD map, recognised by source and
+    content in its order: the road's tiles (an upload from `$7F` equal to the block at that
+    offset), BG1's map rows 0-23 left and right (equal to the block), BG2's two (the same words
+    with priority cleared and palette + 1, the routine's own rewrite: checked word for word),
+    kept as sent. On track `$00`: tiles `$9F00` (`$2EC0` bytes, BG tiles `$080-$1F5`), maps
+    `$1800`/`$1E00`; every map word palette 2, priority 1; every road pixel colour 1-4.
+  - Read from WRAM at draw time: the band list from `$00BE` (`$0486` lines, `$0596` masks), each
+    band's 8 bytes of `$7E:(00C8)` (colours `$21-$24`) and of `$7E:(00CC)` (`$31-$34`), the mode
+    byte (`$047E` or `$0480` by `$00B4`), the windows' rows (`$7E:4CCC`'s two pointers), both
+    scroll tables, `$003A` (colour `$21` above the first band).
+  - Per row: the table entry's H and V; above the first band 8x8 tiles (map rows 24-31 on the sky
+    and horizon rows, map rows 0-23 on the `$A968` rows), from the first band the mode byte's
+    16x16 tiles on the road entry's rows (map rows 0-23). Inside a road row's window span BG2
+    from its own table row and maps, BG1 elsewhere. The band a row lies in gives its colours.
+  - **Stops** (`port_fatal`) on anything not seen: a band mask other than `$8E` (first) / `$0E`
+    (the rest; the two roads' line lists were equal at every wait of the race), a mode byte other
+    than `$39`, bands out of line order; a horizon or sky row from the first band on (RACE.md
+    §22 reported one at bench step 9652, from the bench's memory after the step, likely already
+    the next picture's table; the port never met one at its draw point in four whole races); a
+    16x16 row on map rows 24-31; window 1 above the first band or not equal to window 2; a road
+    colour `$22-$24` above the first band (the last picture's); a road tile colour outside 1-4 or
+    a palette other than 2 (BG1) / 3 (BG2); a see-through road pixel; rows 220-223 not covered by
+    the HUD's frame; road tiles beyond the block or reaching the track's (`$2FE`).
+- **For the owner's veto, the per-line effects the road adds** (no Mode 7: the race has none):
+  1. BG1's scroll per row on the road rows: HDMA 5's road entry (WRAM rows the body writes) and
+     its `$A968` rows (ROM `$83:A968..`, the road's map rows drawn with 8x8 tiles above the first
+     band), in `scroll_tables_build`'s layout.
+  2. BG2's scroll per row (HDMA 6's table, the same layout), used inside the windows.
+  3. The windows per row on the road rows (HDMA 4's 216 rows from `$7E:(1E4E)`): a span where
+     window 1 = window 2 masks BG1 and shows BG2. Colour maths: never (the colour window is the
+     whole line with these windows); `$01B3-$01B5` not read.
+  4. **Band (line-interrupt) effects:** the band lines (`$0486`); stream 1: 4 colours to
+     `$21-$24` per band; stream 2: the fixed address `$31` (ROM `$83:8D35`), so stream 3: 4
+     colours to `$31-$34` per band; stream 7: the BG mode byte at the first band (`$39`: BG1 and
+     BG2 16x16 from the first band down). Each read in `bands_merge`'s layout, only the masks
+     seen.
+- **Also for the veto (bends and constants):** one pixel routine for both roads
+  (`race_road_layer_pixel`, with `race_bg_word` and `race_bg_colour`) takes which road (BG1, the
+  first; BG2, the second, inside the windows) and the row's tile size (8x8 above the first band,
+  16x16 from it) as arguments: internal to this one screen and only over its named pieces (the
+  road block's slices, the track's slices, the band sets), but a layer parameter all the same,
+  against answer 2's "no mode or layer parameters" if read strictly (the alternative is two
+  copies of the same routine); the 16x16 tiles drawn as the block's tiles `t`,
+  `t+1`, `t+16`, `t+17` (how the road's map words name 16x16 tiles; checked by the pictures); the
+  road's tiles placed at BG tile `$080` (VRAM `$3800`, `track_backdrop_load`'s fixed destination:
+  a fact of its routine, not read at run time); the 8x8 reading of the road's map rows on the
+  `$A968` rows. No new register-shaped call is read; no new request (the road's state all has
+  WRAM homes; M stays a guard above the first band only). Request T and the objects' mask bend
+  are unchanged.
+- **Test only (unchanged flags):** `--wram-at` and `--compare`; new local hand-over memories
+  (`notes/race/handover/wram_step{621,640,744,847,1644,2738}_wait.bin`, the bench's at the pin)
+  and pictures. The scratch relinks and scans are in `notes/race/road/` (never shipped).
+- **Tests:** `game_picture_race_*`, 0 differing pixels each, the drawn count pinned: `fade` 145
+  (52,947 pixels, brightness 6), `lit` 400 (50,082), `lit_later` 800 (51,627: the second road's
+  first row), `hill` 2009 (50,407: first band at 110, 28 bands, `$A968` rows; hand-over step
+  744), `sky_long` 1677 (50,979: sky past 127 rows, no horizon, the second road; step 621),
+  `crest` 1885 (52,468: `$A968` rows), and new `straight` 4506 (51,093: H 384 on every road row;
+  step 1644), `curve` 2291 (52,135: road rows' H 144-369; step 847), `second_road` 7515
+  (55,190: 23 whole rows of BG2; step 2738), `few_bands` 1722 (51,819: 4 bands from 186, a 19-row
+  horizon under a long sky; step 640). The first slice's `hill` (1616) and `sky_long` (1651)
+  frames now show residue on the road rows (16 pixels of a bench object; BG2 colours of another
+  phase) and were moved to the frames above.
+- **A second track: not reached cheaply.** `race1_again`'s race 2 is track `$00` again (drawn to
+  its end, no stop); the title's demo race (track 6) is a VS race, not drawn. The road block's
+  other slices (`$84:A66C` variants 0 and 1) and other track sets are not measured.
+- **Open:** the cars and objects (slice 3); the pause and a lit `$29` (stop); M and T as before;
+  tracks other than `$00`.
 
 ## Steps (2026-11-24)
 

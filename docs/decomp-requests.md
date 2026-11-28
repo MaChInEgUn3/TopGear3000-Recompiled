@@ -3,7 +3,7 @@
 The port (this repository) consumes [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp)
 read-only. What it needs from the decomp is listed here, by priority. This file is the source
 of truth for the requests (an earlier copy went to a claude-mem list the decomp session did not
-read). Updated 2026-11-28; the port pins the decomp at the commit recorded in `docs/DECISIONS.md`.
+read). Updated 2026-11-28 (the race's road: no new request); the port pins the decomp at the commit recorded in `docs/DECISIONS.md`.
 
 ## High
 
@@ -95,7 +95,11 @@ read). Updated 2026-11-28; the port pins the decomp at the commit recorded in `d
   (bit 5); BG2 is a hidden copy of BG1 above the first band only with 8x8 tiles. Over three whole
   races in the port (`autopilot_60k.txt`, no pads at 2 and 3 refreshes a step) the first band line
   of every lit picture lay within 109-188 (never 0 or 220 and lower, where `$29` is written); the
-  port stops outside that range. Still wanted for the road slice.
+  port stops outside that range. **Since the road is drawn (2026-11-28):** from the first band
+  down the BG mode comes from the band's stream (`$047E`/`$0480` by `$00B4`, WRAM: `$39` at every
+  wait of the race), so the road needs nothing more; M only concerns the rows above the first band,
+  where BG1 has 8x8 tiles in both `$09` and `$29` and BG2 stays a hidden copy under the guard.
+  Still wanted, low priority (it would replace the guard).
 
 - **N — CONFIRMED by the decomp (2026-11-27): mode 1 runs with the firmware DSP-4 (its coverage map came from the bench's own chip, whose answers take another path); likely a demo race mode (bit 13 of `$03DC`); being ported.** The race wrapper's mode 1 runs in `autopilot_60k.txt` (observation, 2026-11-26; firmware
   bench). `race_wrapper` is entered with `$03DC & 3` = 1 (`$03DC` = `$2001`, `$047C` bit 15) at

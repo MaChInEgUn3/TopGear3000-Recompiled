@@ -14,47 +14,62 @@
 #include "port.h"
 #include "tg3000.h"
 
-/* The one-player race, first slice: the sky, the horizon and the HUD (notes/probe/RACE.md
-   §12-21; docs/DECISIONS.md, "The race's sky and HUD drawn"). The road and the cars are not
-   drawn yet: their pixels are left black and marked not drawn (race_screen_drawn_mask), so a
-   test compares only what this function draws. Measured facts:
+/* The one-player race: the sky, the horizon and the HUD (first slice), and the road (second
+   slice) (notes/probe/RACE.md §12-24; docs/DECISIONS.md, "The race's sky and HUD drawn" and
+   "The race's road drawn"). The cars and the objects are not drawn yet: their pixels are left
+   black and marked not drawn (race_screen_drawn_mask), so a test compares only what this
+   function draws. Measured facts:
    - Active while the race NMI is the vector ($85:8377) and the race's pieces are in (assets.c).
      Drawn after the NMI. A lit picture needs the frame taken at least once in this race (the
      scroll tables are named by the taking NMI) and the full NMI ($83CE) last run; the pause
      ($0026 bit 4) was never measured: all three stop.
    - Brightness: $014B as nmi_race_tail sends it (0 or bit 7: forced blank).
    - Static for the race (the load's screen image, ROM $83:96DD): mode 1 with BG3 in front, BG1
-     and BG2 tiles at BG tile 0 = $3000 (the track's from $2FE), maps 64x32; BG3 tiles $5000,
-     map 32x32, scroll (0, -1): screen cell = map cell; objects 8x8/16x16; windows on BG1, BG2
-     and objects; colour maths (subtract) on BG1 and the backdrop, prevented inside the colour
-     window. Per NMI from WRAM: $01B0 (W12SEL) $C2, $01B1 (WOBJSEL) $B0, $01B2 (CGADSUB) $A1,
-     checked.
-   - Rows 0-3: the HUD's opaque frame (BG3) covers them (checked: every pixel).
-   - BG1, rows 4 on: the game's scroll table for HDMA 5 at $83:(1E46), in the layout
+     and BG2 tiles at BG tile 0 = $3000 (the road's from $080, the track's from $2FE), maps
+     64x32; BG3 tiles $5000, map 32x32, scroll (0, -1): screen cell = map cell; objects
+     8x8/16x16; windows on BG1, BG2 and objects; colour maths (subtract) on BG1 and the backdrop,
+     prevented inside the colour window. Per NMI from WRAM: $01B0 (W12SEL) $C2, $01B1 (WOBJSEL)
+     $B0, $01B2 (CGADSUB) $A1, checked.
+   - Rows 0-3 and 220-223: the HUD's opaque frame (BG3) covers them (checked: every pixel).
+   - BG1, rows 4-219: the game's scroll table for HDMA 5 at $83:(1E46), in the layout
      scroll_tables_build writes, only the entries the measured frames showed, in their order: 4
      rows (the pointer's high byte left over: unchecked, under the frame), the sky (repeat, ROM
      $83:A5DC, past 127 rows continued from $83:A7D8: every row shows BG pixel line 192), the
      horizon if any (one entry from WRAM $1536 or $153A: H, V), rows from ROM $83:A968.. if any
-     (the road's map rows: not drawn), the road (repeat, WRAM rows), the end; 216 rows after the
-     first 4. Any other layout stops. BG2's table ($1E48)
-     must give the same rows ($1556/$155A) and BG2 the same map rows: then BG2 is a copy behind
-     BG1 and never shows (mode $09, 8x8 tiles: request M; guard below).
-   - The horizon is BG1 map rows 24-31 (lines 192-255), the track's tile set's slices; tiles
-     from $2FE, palette 7 (colours $71-$7F, sent from $7E:6A35 each NMI). A line outside
-     192..255 or another palette stops. The road rows (from the table's road entry or the first
-     band's line, whichever is higher, to the bottom) are not drawn but where the HUD is opaque:
-     from the first band the band interrupt changes BG1's tile size and the road's colours.
-   - Windows: HDMA 4's table at $7E:4CCC (04 $7E:8AB7, 108 rows twice from $7E:(1E4E)); on every
-     drawn row window 1 must be empty (it masks BG1; the colour window is then the whole line,
-     so no colour maths): any masking stops.
+     (repeat: H $FFF0, one fixed line of the road's map rows), the road (repeat, rows the
+     body wrote in low WRAM), the end; 216 rows after the first 4. Any other layout stops. BG2's table
+     ($1E48) must give the same sky and horizon rows ($1556/$155A) and BG2 the same map rows:
+     then BG2 is a copy behind BG1 where BG1 can be see-through (mode $09, 8x8 tiles: request M;
+     guard below). Everywhere else BG1 is opaque (the road's tiles use colours 1-4 only).
+   - The band list ($0486 + $00BE, masks $0596 + $00BE; bands_merge's layout): from a band's
+     line on (the line it starts on is the first screen row it applies to) the band interrupt
+     sends 4 colours to $21-$24 (8 bytes a band from $7E:(00C8), mask bit 1) and 4 to $31-$34
+     (from $7E:(00CC), bits 2-3: BG2's, the second road), the first band also the BG mode byte
+     ($7E:047E or $0480 by $00B4, bit 7): $39, BG1 and BG2 16x16 from the first band down. Masks
+     seen: $8E for the first band, $0E for the rest; any other stops. Above the first band BG1
+     has 8x8 tiles (both $09 and $29: request M only touches BG2), colour $21 is $003A (set by
+     the NMI) and $22-$24 still hold the last picture's last band: a pixel needing them stops.
+   - BG1's map: rows 0-23 the road's (track_backdrop_load's two slices of $98:9FEB, palette 2,
+     tiles from $080), rows 24-31 the horizon's (the track's tile set's slices, palette 7, tiles
+     from $2FE, colours $71-$7F from $7E:6A35 each NMI). Measured per row kind: above the first
+     band, the sky and horizon rows show map rows 24-31 (8x8), the $A968 rows map rows 0-23
+     (8x8); from the first band (16x16), the road entry's rows show map rows 0-23. Any other
+     row, line, tile or palette stops.
+   - Windows: HDMA 4's table at $7E:4CCC (04 $7E:8AB7, 108 rows twice from $7E:(1E4E)). Above the
+     first band window 1 must be empty (it masks BG1). From the first band on, a row's window 1
+     may cover a span, always with window 2 the same span (seen over a whole race on the bench):
+     BG1 is masked there and BG2 shows (BG2 is masked outside window 2), the second road ($07):
+     BG2's own scroll table row ($1E48, the same layout), its map rows 0-23 as sent (BG1's words,
+     priority 0, palette 3), colours $31-$34 from the bands. The colour window ((not W1) or W2)
+     is then the whole line: no colour maths. Any other window stops.
    - M guard: the band list's first line ($0486 + $00BE) within 109..188, the lines lit
      pictures showed over three whole races; outside it the BG mode above the first band was
      never seen lit (the register-only $29 would give BG2 16x16 tiles).
    - BG3 (the HUD): the load's map as sent, then the markers' 4 words, the 52 words of the last
      HUD draw (race_hud_draw's fixed order, request T) and its two strips (rows 15-16, columns
      9-21). Tiles: the font $8F:85F5 ($158..$1EF; $15C is the 8 words each HUD draw sends), the
-     minimap as the taking NMI sent it ($7E:230C, $0F4..$10C). Tile $157 was never sent in the race (left-over video memory): its
-     cells are not drawn. Priority 1 everywhere (checked): in front of every other layer, colour
+     minimap as the taking NMI sent it ($7E:230C, $0F4..$10C). Tile $157 was never sent in the
+     race (left-over video memory): its cells are not drawn. Priority 1 everywhere (checked): in front of every other layer, colour
      maths never on it. Colours 0-31: the cartridge's race colours, colour 7 from $00A0.
    - Objects (the minimap dots, the cars, the scenery) are not drawn: every point an object of
      the sent sprite table covers is not drawn unless the HUD is opaque there. */
@@ -68,6 +83,9 @@
 #define RACE_TILE_LEFT_OVER 0x157u
 #define RACE_TABLE_ROWS_END 220
 #define RACE_MAX_BG1_TILES 256u
+#define RACE_MAX_ROAD_TILES 0x200u
+#define RACE_MAX_BANDS 64
+#define RACE_BAND_MODE 0x39u
 
 /* race_hud_draw's 52 words in its order (decomp race_frame.c, race_hud_draw): the BG3 map cell
    (row * 32 + column) each goes to; -1: the 8 words to BG3 tile $15C. */
@@ -94,6 +112,7 @@ static uint16_t g_last_target;  /* the race NMI's last target */
 
 static uint32_t g_built_gen;
 static uint8_t g_bg1_tiles[RACE_MAX_BG1_TILES * 64u];
+static uint8_t g_road_tiles[RACE_MAX_ROAD_TILES * 64u];
 static uint8_t g_font[RACE_FONT_TILES * 64u];
 
 static void race_stop(const char* what, unsigned v) {
@@ -134,6 +153,13 @@ static void race_build(const race_pieces* rp) {
         race_stop("the track's tiles lie outside its set", rp->tile_offset);
     }
     convert_tiles_4bpp_packed(&set[rp->tile_offset], rp->tile_count, g_bg1_tiles);
+    const uint8_t* road = asset_bytes(ASSET_RACE_BACKDROP, &sz);
+    if (road == NULL || rp->road_tile_count > RACE_MAX_ROAD_TILES
+        || RACE_ROAD_FIRST_TILE + rp->road_tile_count > RACE_BG1_FIRST_TILE
+        || (size_t)rp->road_tile_offset + (size_t)rp->road_tile_count * 32u > sz) {
+        race_stop("the road's tiles lie outside $98:9FEB or reach the track's", rp->road_tile_offset);
+    }
+    convert_tiles_4bpp(&road[rp->road_tile_offset], rp->road_tile_count, g_road_tiles);
     const uint8_t* font = asset_bytes(ASSET_RACE_HUD_FONT, &sz);
     if (font == NULL || sz != RACE_FONT_TILES * 16u) {
         race_stop("unexpected size of $8F:85F5", (unsigned)sz);
@@ -142,12 +168,22 @@ static void race_build(const race_pieces* rp) {
     g_built_gen = rp->generation;
 }
 
-/* The scroll table's rows, read in the layout scroll_tables_build writes (see the header): only
-   the entries the measured frames showed, in their order. */
+/* The scroll table's entries, read in the layout scroll_tables_build writes (see the header):
+   only the entries the measured frames showed, in their order. Rows from 4 on. */
+typedef enum { ROWS_SKY, ROWS_HORIZON, ROWS_A968, ROWS_ROAD } race_row_kind;
 typedef struct {
-    int sky;             /* rows 4 .. 4+sky-1: ROM $83:A5DC (then $83:A7D8, its continuation) */
-    int horizon;         /* the next rows (0: none): one WRAM entry */
-    uint16_t horizon_at; /* its address (H, then V) */
+    race_row_kind kind;
+    int first;           /* the first screen row */
+    int count;
+    uint16_t at;         /* bank $83: the data of the first row (one entry: of every row) */
+    bool repeat;         /* a data entry per row */
+} race_entry;
+typedef struct {
+    race_entry e[6];
+    int n;
+    int sky;             /* sky rows */
+    int horizon;         /* horizon rows (0: none) */
+    uint16_t horizon_at; /* its data (H, then V) */
 } race_rows;
 
 static void race_table_stop(const char* which, uint16_t at, const uint8_t* b, int n) {
@@ -157,6 +193,15 @@ static void race_table_stop(const char* which, uint16_t at, const uint8_t* b, in
         len += snprintf(msg + len, sizeof(msg) - (size_t)len, " %02X", b[i]);
     }
     race_stop(msg, at);
+}
+
+static void race_rows_add(race_rows* r, race_row_kind kind, int count, uint16_t at, bool repeat) {
+    int first = 4;
+    if (r->n > 0) {
+        first = r->e[r->n - 1].first + r->e[r->n - 1].count;
+    }
+    race_entry e = {kind, first, count, at, repeat};
+    r->e[r->n++] = e;
 }
 
 static race_rows race_table(uint16_t at, uint16_t horizon_base, const char* which) {
@@ -169,7 +214,8 @@ static race_rows race_table(uint16_t at, uint16_t horizon_base, const char* whic
         b[i] = rd8((uint32_t)at + i);
     }
 #define RACE_PTR(i) ((uint16_t)(b[(i) + 1] | (b[(i) + 2] << 8)))
-    race_rows r = {0, 0, 0};
+    race_rows r;
+    memset(&r, 0, sizeof(r));
     int i = 0;
     /* 4 rows (its pointer's high byte is left over in memory: not checked, under the frame) */
     if (b[0] != 0x04u || b[1] != 0x00u) {
@@ -186,25 +232,29 @@ static race_rows race_table(uint16_t at, uint16_t horizon_base, const char* whic
         r.sky += b[i] & 0x7F;
         i += 3;
     }
+    race_rows_add(&r, ROWS_SKY, r.sky, 0xA5DCu, true);
     /* the horizon (may be absent): one entry from WRAM $1536/$153A (BG2: $1556/$155A) */
     if ((b[i] & 0x80u) == 0u && b[i] != 0u
         && (RACE_PTR(i) == horizon_base || RACE_PTR(i) == horizon_base + 4u)) {
         r.horizon = b[i];
         r.horizon_at = RACE_PTR(i);
+        race_rows_add(&r, ROWS_HORIZON, r.horizon, r.horizon_at, false);
         i += 3;
     }
-    /* rows from ROM $83:A968.. (may be absent): BG1's road map rows, not drawn */
+    /* rows from ROM $83:A968.. (may be absent) */
     int rest = 0;
     if ((b[i] & 0x80u) != 0u && RACE_PTR(i) >= 0xA968u && RACE_PTR(i) < 0xA968u + 4u * 0xD8u) {
         rest += b[i] & 0x7F;
+        race_rows_add(&r, ROWS_A968, b[i] & 0x7F, RACE_PTR(i), true);
         i += 3;
     }
     /* the road: WRAM rows, repeat; then the end */
-    if ((b[i] & 0x80u) == 0u || (b[i] & 0x7Fu) == 0u || RACE_PTR(i) >= 0x2000u
-        || b[i + 3] != 0x00u) {
+    if ((b[i] & 0x80u) == 0u || (b[i] & 0x7Fu) == 0u
+        || RACE_PTR(i) + 4u * (unsigned)(b[i] & 0x7F) > 0x2000u || b[i + 3] != 0x00u) {
         race_table_stop(which, at, b, MAX_BYTES);
     }
     rest += b[i] & 0x7F;
+    race_rows_add(&r, ROWS_ROAD, b[i] & 0x7F, RACE_PTR(i), true);
     if (r.sky + r.horizon + rest != RACE_TABLE_ROWS_END - 4) {
         race_table_stop(which, at, b, MAX_BYTES);
     }
@@ -275,6 +325,183 @@ static uint32_t race_colour(uint8_t index) {
     return convert_color(palette_get(index));
 }
 
+/* The road's bands, read in bands_merge's layout from the first band the taking NMI named
+   ($00BE): each band's line, and the 4 colours $21-$24 it sends (its chunk of $7E:(00C8)). */
+typedef struct {
+    int n;
+    uint8_t line[RACE_MAX_BANDS];
+    uint16_t c21[RACE_MAX_BANDS][4];   /* BG1's road colours (stream 1) */
+    uint16_t c31[RACE_MAX_BANDS][4];   /* BG2's (stream 3, after stream 2's fixed address $31) */
+} race_bands;
+
+static void race_bands_read(race_bands* bd) {
+    uint16_t first = rd16(0x00BEu);
+    uint16_t s1 = rd16(0x00C8u);
+    uint16_t s3 = rd16(0x00CCu);
+    int n = 0;
+    for (;;) {
+        uint8_t line = rd8(0x0486u + (uint32_t)first + (uint32_t)n);
+        if (line == 0u) {
+            break;
+        }
+        if (n >= RACE_MAX_BANDS) {
+            race_stop("more road bands than the port keeps", (unsigned)n);
+        }
+        uint8_t mask = rd8(0x0596u + (uint32_t)first + (uint32_t)n);
+        if (mask != (n == 0 ? 0x8Eu : 0x0Eu)) {
+            race_stop("a road band's streams not measured: mask", mask);
+        }
+        if (n > 0 && line <= bd->line[n - 1]) {
+            race_stop("road bands not in line order", line);
+        }
+        bd->line[n] = line;
+        for (unsigned k = 0; k < 4u; ++k) {
+            bd->c21[n][k] = rd16((uint16_t)(s1 + 2u * k));
+            bd->c31[n][k] = rd16((uint16_t)(s3 + 2u * k));
+        }
+        s1 = (uint16_t)(s1 + 8u);
+        s3 = (uint16_t)(s3 + 8u);
+        ++n;
+    }
+    bd->n = n;
+    uint8_t mode = rd8(rd16(0x00B4u) ? 0x047Eu : 0x0480u);
+    if (mode != RACE_BAND_MODE) {
+        race_stop("the first road band's BG mode byte not measured", mode);
+    }
+}
+
+/* A road layer's pixel colour from its tile's colour index c (1..15) and palette, in a row
+   whose last band is `band` (-1: above the first band). BG1's road tiles use palette 2 (colours
+   $21-$24 from the bands), BG2's palette 3 ($31-$34), the horizon's palette 7. */
+static uint32_t race_bg_colour(const race_pieces* rp, const race_bands* bd, int band, int layer,
+                               unsigned palette, uint8_t c, bool road_tile) {
+    if (road_tile) {
+        if (palette != (layer == 0 ? 2u : 3u) || c > 4u) {
+            race_stop("a road tile's colour not measured: layer, palette, colour",
+                      (unsigned)layer * 0x100u + palette * 16u + c);
+        }
+        if (band >= 0) {
+            return convert_color(layer == 0 ? bd->c21[band][c - 1u] : bd->c31[band][c - 1u]);
+        }
+        if (c != 1u || layer != 0) {
+            race_stop("a road colour above the first band other than $21 (the last picture's)", c);
+        }
+        return convert_color(rd16(0x003Au));
+    }
+    if (palette != 7u || layer != 0) {
+        race_stop("a horizon tile of a palette other than 7, or on BG2", palette);
+    }
+    unsigned k = (0x70u + c - 0x71u) * 2u;
+    return convert_color((uint16_t)(rp->colours[k] | (rp->colours[k + 1u] << 8)));
+}
+
+/* A road layer's map word (layer 0 BG1, 1 BG2) at map column col (0..63) and row (0..31): rows
+   0-23 the road's slices, 24-31 the horizon's (the track's tile set's), as each was sent. */
+static uint16_t race_bg_word(const race_pieces* rp, int layer, int col, int row) {
+    unsigned c = (unsigned)(col & 31);
+    unsigned slice = (unsigned)(2 * layer + (col >= 32 ? 1 : 0));
+    const uint8_t* m;
+    unsigned cell;
+    if (row < 24) {
+        m = rp->road_map[slice];
+        cell = (unsigned)row * 32u + c;
+    } else {
+        m = rp->map[slice];
+        cell = (unsigned)(row - 24) * 32u + c;
+    }
+    return (uint16_t)(m[2u * cell] | (m[2u * cell + 1u] << 8));
+}
+
+/* A tile's colour index at (px, py) of its 8x8 drawing, and whether it is one of the road's. */
+static uint8_t race_bg_tile_pixel(const race_pieces* rp, unsigned tile, int px, int py, bool* road) {
+    if (tile >= RACE_ROAD_FIRST_TILE && tile < RACE_ROAD_FIRST_TILE + rp->road_tile_count) {
+        *road = true;
+        return g_road_tiles[(tile - RACE_ROAD_FIRST_TILE) * 64u + (unsigned)(py * 8 + px)];
+    }
+    if (tile >= RACE_BG1_FIRST_TILE && tile < RACE_BG1_FIRST_TILE + rp->tile_count) {
+        *road = false;
+        return g_bg1_tiles[(tile - RACE_BG1_FIRST_TILE) * 64u + (unsigned)(py * 8 + px)];
+    }
+    race_stop("a BG1/BG2 tile never sent in the race", tile);
+    return 0;
+}
+
+/* A road layer's scroll on screen row y (4..219), from its table entry (H, V from bank $83),
+   with its tile size: 16x16 from the first band on (the band's mode byte $39), 8x8 above it. */
+typedef struct {
+    int h;
+    int line;   /* the BG pixel line: y + 1 + V */
+    bool big;
+} race_row;
+
+static race_row race_row_scroll(const race_rows* r, int y, bool big, const char* which) {
+    int k = 0;
+    while (y >= r->e[k].first + r->e[k].count) {
+        ++k;
+    }
+    const race_entry* e = &r->e[k];
+    uint32_t at = 0x830000u | (e->repeat ? (uint16_t)(e->at + 4u * (unsigned)(y - e->first)) : e->at);
+    uint16_t hv = bus_rd16(at);
+    uint16_t vv = bus_rd16(at + 2u);
+    race_row row;
+    row.big = big;
+    if (big) {
+        /* 16x16 tiles: the map is 1024x512 pixels; measured: the road entry's rows, on the
+           road's map rows (0-23). (The road entry starts at the first band: scroll_tables_build
+           and bands_merge read the same line list. A horizon or sky row from the first band on
+           was never seen at the draw point, in four whole races: it stops.) */
+        row.h = hv & 0x3FF;
+        row.line = (y + 1 + vv) & 0x1FF;
+        if (e->kind != ROWS_ROAD || row.line >= 24 * 16) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "%s: a row from the first band on not measured: kind, line", which);
+            race_stop(msg, (unsigned)e->kind * 0x1000u + (unsigned)row.line);
+        }
+    } else {
+        /* 8x8 tiles: the sky and horizon rows on the horizon's map rows (24-31), the $A968 rows
+           on the road's */
+        row.h = hv & 0x1FF;
+        row.line = (y + 1 + vv) & 0xFF;
+        if (e->kind == ROWS_ROAD || (e->kind == ROWS_A968 ? row.line >= 192 : row.line < 192)) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "%s: a row above the first band not measured: kind, line", which);
+            race_stop(msg, (unsigned)e->kind * 0x1000u + (unsigned)row.line);
+        }
+    }
+    return row;
+}
+
+/* A road layer's pixel (layer 0 BG1, 1 BG2) at x on a row. */
+static uint32_t race_road_layer_pixel(const race_pieces* rp, const race_bands* bd, int layer,
+                                      const race_row* row, int band, int x, uint32_t back) {
+    uint16_t w;
+    unsigned tile;
+    int px, py;
+    if (row->big) {
+        int bx = (x + row->h) & 1023;
+        w = race_bg_word(rp, layer, bx >> 4, row->line >> 4);
+        px = (w & 0x4000u) ? 15 - (bx & 15) : (bx & 15);
+        py = (w & 0x8000u) ? 15 - (row->line & 15) : (row->line & 15);
+        tile = ((w & 0x3FFu) + (unsigned)(px >> 3) + ((unsigned)(py >> 3) << 4)) & 0x3FFu;
+    } else {
+        int bx = (x + row->h) & 511;
+        w = race_bg_word(rp, layer, bx >> 3, row->line >> 3);
+        px = (w & 0x4000u) ? 7 - (bx & 7) : (bx & 7);
+        py = (w & 0x8000u) ? 7 - (row->line & 7) : (row->line & 7);
+        tile = w & 0x3FFu;
+    }
+    bool road = false;
+    uint8_t c = race_bg_tile_pixel(rp, tile, px & 7, py & 7, &road);
+    if (c == 0u) {
+        /* only the horizon's tiles are see-through: the backdrop (BG2, a copy, hides behind) */
+        if (road || row->big || layer != 0) {
+            race_stop("a see-through pixel on a road row: not measured", tile);
+        }
+        return back;
+    }
+    return race_bg_colour(rp, bd, band, layer, (w >> 10) & 7u, c, road);
+}
+
 void race_screen_draw(uint32_t* fb) {
     const race_pieces* rp = assets_race();
     uint8_t braw = rd8(0x014Bu);
@@ -308,8 +535,11 @@ void race_screen_draw(uint32_t* fb) {
         race_stop("the road's first band line outside the measured 109..188 (request M)", first_band);
     }
     race_build(rp);
+    static race_bands bd;
+    race_bands_read(&bd);
 
-    /* The rows: BG1's table and BG2's, which must give the same rows (BG2 hidden behind). */
+    /* The rows: BG1's table and BG2's, which must give the same sky and horizon rows (BG2
+       hidden behind). */
     race_rows r1 = race_table(rd16(0x1E46u), 0x1536u, "BG1");
     race_rows r2 = race_table(rd16(0x1E48u), 0x1556u, "BG2");
     if (r1.sky != r2.sky || r1.horizon != r2.horizon
@@ -319,13 +549,6 @@ void race_screen_draw(uint32_t* fb) {
         || memcmp(rp->map[0], rp->map[2], RACE_MAP_SLICE_BYTES) != 0
         || memcmp(rp->map[1], rp->map[3], RACE_MAP_SLICE_BYTES) != 0) {
         race_stop("BG2 not a copy of BG1 on the sky and horizon rows: not measured", r1.horizon_at);
-    }
-    /* BG1 is drawn down to the road's table entry or the first band, whichever comes first:
-       from the band's line the band interrupt switches BG1 to 16x16 tiles and the road's
-       colours (measured: the line a band starts on is the first screen row it applies to). */
-    int bg1_end = 4 + r1.sky + r1.horizon;
-    if (bg1_end > (int)first_band) {
-        bg1_end = (int)first_band;
     }
 
     /* The windows' table (HDMA 4). */
@@ -386,28 +609,33 @@ void race_screen_draw(uint32_t* fb) {
     if (palette_source_of(0) != PAL_SRC_SINGLE_COLOR) {
         race_stop("colour 0 not set by the NMI", 0);
     }
+    int band = -1;
     for (int y = 0; y < SCREEN_HEIGHT; ++y) {
-        /* BG1 for this row: H, V from the table's data (bank $83). */
-        bool bg1_row = y >= 4 && y < bg1_end;
-        int h = 0, line = 0;
-        if (bg1_row) {
-            uint16_t hv, vv;
-            if (y < 4 + r1.sky) {
-                hv = bus_rd16(0x83A5DCu + 4u * (uint32_t)(y - 4));
-                vv = bus_rd16(0x83A5DEu + 4u * (uint32_t)(y - 4));
-            } else {
-                hv = rd16(r1.horizon_at);
-                vv = rd16((uint16_t)(r1.horizon_at + 2u));
-            }
-            h = hv & 0x1FF;
-            line = (y + 1 + vv) & 0xFF;
-            if (line < 192) {
-                race_stop("a sky or horizon row on BG1 line outside the horizon's map rows", (unsigned)line);
-            }
+        /* This row: its band, BG1's scroll and tile size, and the road's window. */
+        bool bg_row = y >= 4 && y < RACE_TABLE_ROWS_END;
+        bool big = y >= (int)first_band;
+        while (band + 1 < bd.n && bd.line[band + 1] <= y) {
+            ++band;
+        }
+        race_row row1 = {0, 0, false}, row2 = {0, 0, false};
+        int wl = 1, wr = 0; /* window 1 (= window 2) on this row: BG2 shows inside, BG1 outside */
+        if (bg_row) {
+            row1 = race_row_scroll(&r1, y, big, "BG1");
             uint16_t wa = (y < 112) ? (uint16_t)(win_a + 4u * (unsigned)(y - 4))
                                     : (uint16_t)(win_b + 4u * (unsigned)(y - 112));
-            if (rd8(wa) <= rd8((uint32_t)wa + 1u)) {
-                race_stop("window 1 masks BG1 on a drawn row: not measured", (unsigned)y);
+            uint8_t w1l = rd8(wa), w1r = rd8((uint32_t)wa + 1u);
+            uint8_t w2l = rd8((uint32_t)wa + 2u), w2r = rd8((uint32_t)wa + 3u);
+            if (w1l <= w1r) {
+                /* Measured on the road rows only, and always with window 2 the same span: BG1
+                   masked and BG2 shown inside it; the colour window ((not W1) or W2) is then the
+                   whole line: no colour maths. */
+                if (!big || w2l != w1l || w2r != w1r) {
+                    race_stop("window 1 on a row not measured: row, W1, W2",
+                              ((unsigned)y << 24) | ((unsigned)w1l << 16) | ((unsigned)w1r << 8) | w2l);
+                }
+                wl = w1l;
+                wr = w1r;
+                row2 = race_row_scroll(&r2, y, big, "BG2");
             }
         }
         for (int x = 0; x < SCREEN_WIDTH; ++x) {
@@ -418,34 +646,17 @@ void race_screen_draw(uint32_t* fb) {
                 g_drawn[i] = 1u;
                 continue;
             }
-            if (c3 < 0 || !bg1_row || objs[i]) {
-                if (y < 4) {
-                    race_stop("the HUD's frame not opaque on rows 0-3 at x", (unsigned)x);
-                }
+            if (!bg_row) {
+                race_stop("the HUD's frame not opaque on rows 0-3 or 220-223 at y*256+x", (unsigned)i);
+            }
+            if (c3 < 0 || objs[i]) {
                 fb[i] = 0xFF000000u;
                 g_drawn[i] = 0u;
                 continue;
             }
-            int bx = (x + h) & 511;
-            const uint8_t* slice = rp->map[bx >= 256 ? 1 : 0];
-            unsigned cell = (unsigned)(((line >> 3) - 24) * 32 + ((bx >> 3) & 31));
-            uint16_t w = (uint16_t)(slice[2u * cell] | (slice[2u * cell + 1u] << 8));
-            unsigned tile = w & 0x3FFu;
-            if (tile < RACE_BG1_FIRST_TILE || tile >= RACE_BG1_FIRST_TILE + rp->tile_count) {
-                race_stop("a horizon tile outside the track's tile set", tile);
-            }
-            int px = (w & 0x4000u) ? 7 - (bx & 7) : (bx & 7);
-            int py = (w & 0x8000u) ? 7 - (line & 7) : (line & 7);
-            uint8_t c = g_bg1_tiles[(tile - RACE_BG1_FIRST_TILE) * 64u + (unsigned)(py * 8 + px)];
-            if (c == 0u) {
-                fb[i] = back;
-            } else {
-                if (((w >> 10) & 7u) != 7u) {
-                    race_stop("a horizon tile of a palette other than 7", w);
-                }
-                unsigned k = (0x70u + c - 0x71u) * 2u;
-                fb[i] = convert_color((uint16_t)(rp->colours[k] | (rp->colours[k + 1u] << 8)));
-            }
+            bool bg2 = x >= wl && x <= wr;
+            fb[i] = race_road_layer_pixel(rp, &bd, bg2 ? 1 : 0, bg2 ? &row2 : &row1, big ? band : -1,
+                                          x, back);
             g_drawn[i] = 1u;
         }
     }

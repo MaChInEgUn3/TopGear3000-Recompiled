@@ -97,6 +97,9 @@ static asset_entry g_assets[ASSET_COUNT] = {
     [ASSET_RACE_TRACK_SET_6] = {"RACE_TRACK_SET_6", 0x96B9FEu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_RACE_TRACK_SET_7] = {"RACE_TRACK_SET_7", 0x90C454u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_RACE_TRACK_SET_8] = {"RACE_TRACK_SET_8", 0x9BDE33u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    /* The road's block (track_backdrop_load, $82:A1D3): unpacked whole, the track picks its
+       slices ($84:A66C, $85:A346..; never read by the port: the uploads are recognised). */
+    [ASSET_RACE_BACKDROP] = {"RACE_BACKDROP", 0x989FEBu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
 };
 
 static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1, -1};
@@ -972,6 +975,52 @@ static bool race_match_tile_set(uint16_t addr, uint32_t size) {
     return false;
 }
 
+/* track_backdrop_load's five uploads, the next ones after the HUD map (race_load's order): the
+   road's tiles (an upload from $7F equal to the unpacked $98:9FEB at that offset), BG1's two map
+   slices (the block's bytes at their offsets), then BG2's: the same two offsets, each word as
+   the routine rewrites it in place over the $600 words from the first slice on (priority
+   cleared, palette + 1), kept as sent. Anything else here stops: it was never measured. */
+static bool race_note_road(uint32_t src, uint32_t size) {
+    const asset_entry* a = &g_assets[ASSET_RACE_BACKDROP];
+    const uint16_t addr = (uint16_t)(src & 0xFFFFu);
+    if ((src >> 16) != 0x7Fu || a->data == NULL || (size_t)addr + size > a->size) {
+        race_fatal("the road's block upload not from the unpacked $98:9FEB: source", src);
+    }
+    const uint8_t* sent = &g_ram[0x10000u + addr];
+    int k = g_race.road_sent;
+    if (k == 0) {
+        if (size == 0u || (size & 0x1Fu) != 0u || memcmp(sent, &a->data[addr], size) != 0) {
+            race_fatal("the road's tiles not sent as unpacked: size", size);
+        }
+        g_race.road_tile_offset = addr;
+        g_race.road_tile_count = (uint16_t)(size / 32u);
+    } else if (k <= 2) {
+        if (size != RACE_ROAD_MAP_BYTES || memcmp(sent, &a->data[addr], size) != 0) {
+            race_fatal("the road's map rows not sent as unpacked: size", size);
+        }
+        g_race.road_map_offset[k - 1] = addr;
+        memcpy(g_race.road_map[k - 1], sent, RACE_ROAD_MAP_BYTES);
+    } else {
+        const uint16_t first = g_race.road_map_offset[0];
+        if (size != RACE_ROAD_MAP_BYTES || addr != g_race.road_map_offset[k - 3]) {
+            race_fatal("BG2's road map rows not sent as measured: $7F", addr);
+        }
+        for (uint32_t i = 0; i < size; i += 2u) {
+            uint16_t at = (uint16_t)(addr + i);
+            uint16_t w = (uint16_t)(a->data[at] | (a->data[at + 1u] << 8));
+            if ((uint16_t)(at - first) < 2u * RACE_ROAD_MAP_BYTES) {
+                w = (uint16_t)((w & 0xDFFFu) + 0x0400u);
+            }
+                if (sent[i] != (uint8_t)w || sent[i + 1u] != (uint8_t)(w >> 8)) {
+                race_fatal("BG2's road map rows differ from BG1's rewritten at $7F", at);
+            }
+        }
+        memcpy(g_race.road_map[k - 1], sent, RACE_ROAD_MAP_BYTES);
+    }
+    g_race.road_sent = k + 1;
+    return true;
+}
+
 static bool race_note_upload(uint32_t src, uint32_t size) {
     if (!assets_race_vector()) {
         /* Not in a race (an upload under another screen's NMI): the last race's pieces go. */
@@ -1030,6 +1079,9 @@ static bool race_note_upload(uint32_t src, uint32_t size) {
     }
     if (!g_race.has_hud_map) {
         return false;
+    }
+    if (g_race.road_sent < 5) {
+        return race_note_road(src, size);
     }
     /* The HUD's strips (race_hud_draw, after its 52 words): $7E:4E61/$4E7B, or $83:A5A4/$A5BE
        while the message flashes. */
@@ -1095,7 +1147,7 @@ static void race_word_run_done(void) {
 
 bool assets_race_loaded(void) {
     return g_race.tile_set != 0 && g_race.maps_sent == 4 && g_race.has_font && g_race.has_hud_map
-        && g_race.has_markers;
+        && g_race.road_sent == 5 && g_race.has_markers;
 }
 
 const race_pieces* assets_race(void) {

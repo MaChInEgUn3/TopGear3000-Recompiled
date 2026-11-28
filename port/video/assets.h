@@ -79,6 +79,8 @@ typedef enum {
     ASSET_RACE_TRACK_SET_6,
     ASSET_RACE_TRACK_SET_7,
     ASSET_RACE_TRACK_SET_8,
+    ASSET_RACE_BACKDROP,           /* $98:9FEB, 52672 B unpacked (track_backdrop_load: the road's
+                                      tiles and map rows 0-23 of every track, slices by track) */
     ASSET_COUNT
 } asset_id;
 
@@ -287,8 +289,15 @@ const ticker_pieces* assets_ticker(void);
    ($8F:85F5 noted and sent), the HUD map (the unpacked $87:8B3D as sent; all but its 26 patched
    words checked against the block), the markers' 4 words (hud_markers_put). Then, as the NMIs
    send them: the HUD's 52 words (race_hud_draw, captured by call pattern: request T) and its two
-   strips, the minimap's tiles ($7E:230C), colours $71-$EF ($7E:6A35), the sprite table. */
+   strips, the minimap's tiles ($7E:230C), colours $71-$EF ($7E:6A35), the sprite table.
+   The road (second slice): track_backdrop_load's five uploads, in its order, right after the
+   HUD map: the road's tiles (BG1/BG2 tiles $080 on; their bytes against the unpacked $98:9FEB
+   at that offset), BG1's map rows 0-23 left and right (the block's bytes at their offsets), then
+   BG2's (the same words with priority cleared and palette + 1, as the routine writes them:
+   checked against the block, kept as sent; BG2 shows inside the road's windows). */
 #define RACE_MAP_SLICE_BYTES 0x0200u /* 8 map rows of 32 words */
+#define RACE_ROAD_MAP_BYTES 0x0600u  /* 24 map rows of 32 words */
+#define RACE_ROAD_FIRST_TILE 0x080u  /* BG tile of the road's first tile (VRAM $3800) */
 #define RACE_HUD_MAP_BYTES 0x0700u   /* BG3 map rows 0-27 */
 #define RACE_HUD_WORDS 52u
 #define RACE_STRIP_BYTES 0x001Au     /* 13 words */
@@ -309,6 +318,11 @@ typedef struct {
     bool has_hud_map;
     uint8_t hud_map[RACE_HUD_MAP_BYTES];
     bool has_markers;      /* the 4 words $0157 at $7C57.. (all markers unset: measured) */
+    int road_sent;         /* 0..5: track_backdrop_load's uploads seen (tiles, 2 maps, BG2's 2) */
+    uint16_t road_tile_offset; /* the road's tiles: their offset in the unpacked $98:9FEB */
+    uint16_t road_tile_count;  /* 4bpp tiles from BG tile $080 on */
+    uint16_t road_map_offset[2];
+    uint8_t road_map[4][RACE_ROAD_MAP_BYTES]; /* map rows 0-23: BG1's left, right; BG2's */
     /* Handed over by the NMIs, not computed: */
     bool hud_pending;      /* a 52-word run ended; taken when its first strip follows */
     uint16_t hud_pending_words[RACE_HUD_WORDS];

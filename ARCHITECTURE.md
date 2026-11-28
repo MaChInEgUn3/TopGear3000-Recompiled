@@ -22,7 +22,8 @@
   own voices, interpolation, envelope curves, echo delay line and one fixed output headroom; SDL3 audio stream and/or WAV,
   one game frame at a time from the main thread).
 - `port/video/` — `convert.c` (every format conversion), `assets.c` (named cartridge blocks,
-  recognised when the game uploads them), `palette.c` (the screen's colours as the game sets them).
+  recognised when the game uploads them; for the race also the track's tile sets and the road's
+  block `$98:9FEB`, unpacked at start-up), `palette.c` (the screen's colours as the game sets them).
 - `port/screens/` — one drawing function per kind of screen: `menu_screen.c` (the menus' text
   screens: title card, password display, options menu with its two per-line effects, and VS
   screen), `results_screen.c` (the results screen with 3D starfield sprites and `$0D00`
@@ -32,8 +33,10 @@
   (the pre-race screen: the bar, the closed shutter, the opening course view with its per-line
   effects listed in `docs/DECISIONS.md`), `ticker_screen.c` (the ticker after a race, two tasks:
   the top half's Mode 7 picture moved by the game's view block taken when the NMI runs, and the
-  scrolling text objects), `race_screen.c` (the one-player race's first slice: the sky, the
-  horizon and the HUD, after the NMI; the road and the cars not drawn yet, marked in its mask),
+  scrolling text objects), `race_screen.c` (the one-player race, after the NMI: the sky, the
+  horizon and the HUD, then the road: BG1's road rows with the band colours and 16x16 tiles from
+  the first band, and the second road (BG2) where the windows show it; the cars and objects not
+  drawn yet, marked in its mask),
   driven by tables of measured facts per screen. `screens.h` holds the
   shared brightness scaling (the bench's measured rule, `(c * ((b << 16) / 15)) >> 16`).
 - `docs/proposals/` — accepted design proposals (`video-layer.md`, `sound.md`).
@@ -72,7 +75,7 @@ CLI modes:
   `options`, `results`, `ticker`, `race`): which game code to run. `race` runs `race_wrapper()`
   (with `--wram notes/race/wram_before_race.bin`); the race NMI (`$85:8377`: `$838A` tail,
   `$83CE` full frame) is dispatched; since decomp `e152ffc` the whole one-player race runs to
-  `race_wrapper`'s return (its sky and HUD drawn, docs/DECISIONS.md). The race wrapper's own NMI
+  `race_wrapper`'s return (its sky, HUD and road drawn, docs/DECISIONS.md). The race wrapper's own NMI
   `$83:8623` (the VS race's load waits under it) and the VS race's NMI `$83:9721` (`$0008` =
   `$9777`) are dispatched; nothing of the VS race is drawn, and it stops at its sprite lists'
   DSP-4 commands (decomp request A's rest): the whole-game movies reach it at the title's VS

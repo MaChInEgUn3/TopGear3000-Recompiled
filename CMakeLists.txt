@@ -663,22 +663,29 @@ foreach(case "default;;2" "3;--race-refreshes;3" "replay;--race-refresh-replay;3
     SKIP_RETURN_CODE 77
   )
 endforeach()
-# The race's sky, horizon and HUD drawn (docs/DECISIONS.md, "The race's sky and HUD drawn"):
-# against the bench's pictures, the bench's stand-in DSP-4, not the console (autopilot_60k.txt's
-# first race, decomp 17dab56). The port's race is the bench's in gameplay only after the bench's
-# memory is handed over at a wait (--wram-at, a recording; step 1 differs: notes/probe/RACE.md
-# section 21), so each test starts at race_wrapper, hands over at loop step k's wait (port frame
-# F_k, pads re-aligned there) and compares one picture, port frame F = bench frame_(F + 8030 or
-# 8031).png, only the pixels the slice draws (the road and the objects are not drawn: their
-# count is pinned so a blank never passes). Local files under notes/race/handover/; skipped
-# where absent. Cases: name, hand-over step, F_k, movie offset, frame, bench picture, pixels.
+# The race drawn: the sky, horizon and HUD, and the road (docs/DECISIONS.md, "The race's sky and
+# HUD drawn" and "The race's road drawn"): against the bench's pictures, the bench's stand-in
+# DSP-4, not the console (autopilot_60k.txt's first race, track $00; the pictures and memories
+# made at decomp 8d66b47; where both exist, byte-equal to 17dab56's). The port's race is the
+# bench's in gameplay only after the bench's memory is handed over at a wait (--wram-at, a
+# recording; step 1 differs: notes/probe/RACE.md section 21), so each test starts at race_wrapper, hands over at
+# loop step k's wait (port frame F_k, pads re-aligned there) and compares one picture, port frame
+# F = bench frame_(F + 8030 or 8031).png, only the pixels the screen draws (the cars and objects
+# are not drawn: the count is pinned so a blank never passes). Local files under
+# notes/race/handover/; skipped where absent. The frames were chosen among those without HUD,
+# object or second-road colour residue (DECISIONS). Cases: name, hand-over step, F_k, movie
+# offset, frame, bench picture, pixels.
 foreach(case
-    "fade;2;89;8026;145;08175;42266"          # brightness 6, the horizon from $1536
-    "lit;2;89;8026;400;08430;42557"           # the horizon from $153A
-    "lit_later;2;89;8026;800;08830;42758"
-    "hill;600;1604;8027;1616;09647;35396"     # a 19-row horizon
-    "sky_long;612;1641;8027;1651;09682;38971" # sky past 127 rows ($83:A7D8), no horizon
-    "crest;700;1880;8027;1885;09916;44042")   # rows from $83:A968 (not drawn)
+    "fade;2;89;8026;145;08175;52947"          # brightness 6, the horizon from $1536
+    "lit;2;89;8026;400;08430;50082"           # the horizon from $153A
+    "lit_later;2;89;8026;800;08830;51627"     # the second road's first row (BG2 in window 1 = 2)
+    "hill;744;1995;8027;2009;10040;50407"     # a hill: first band at 110, 28 bands, $A968 rows
+    "sky_long;621;1668;8027;1677;09708;50979" # sky past 127 rows ($83:A7D8), no horizon; second road
+    "crest;700;1880;8027;1885;09916;52468"    # rows from $83:A968 (the road's map rows, 8x8)
+    "straight;1644;4500;8027;4506;12537;51093" # the road straight: H 384 on every road row
+    "curve;847;2286;8027;2291;10322;52135"    # a sharp curve: road rows' H 144..369
+    "second_road;2738;7511;8027;7515;15546;55190" # 23 rows of the second road whole (BG2)
+    "few_bands;640;1719;8027;1722;09753;51819") # 4 bands from 186; a 19-row horizon under a long sky
   list(GET case 0 name)
   list(GET case 1 step)
   list(GET case 2 at)
