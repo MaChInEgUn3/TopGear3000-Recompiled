@@ -725,15 +725,18 @@ add_test(NAME game_race1_stops_at_vs_demo
 set_tests_properties(game_race1_stops_at_vs_demo PROPERTIES
   PASS_REGULAR_EXPRESSION "FATAL .frame 19137.: the VS race's load: the race wrapper's NMI .83:8623 has no C yet"
 )
-# autopilot_60k.txt with the original's refresh counts for its race (local file): the title's
-# demo pick (a random draw) then matches the bench's, a VS race (bench step 20362), and the port
-# stops at its load as above; with the default pacing it picks mode 1 instead.
-add_test(NAME game_autopilot_replay_stops_at_vs_demo
-  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --race-refresh-replay notes/race/race_refreshes.txt --fast --frames 20300
+# autopilot_60k.txt as the console ran its race: the original's refresh counts for that race
+# (local file) and its driving inputs re-aligned to the race loop (from port 7800 the movie's
+# step is the port's frame + 271). The random state before the title's demo pick then equals
+# the bench's ($0110 = $2965/$EF30 at port 20031, bench step 20301), the pick is the bench's VS
+# race ($03DC = $2002), and the port stops at its load as race1 does. (With the default pacing
+# the pick differs: mode 1, $82:89B5, at port 20214.)
+add_test(NAME game_autopilot_stops_at_vs_demo
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --movie-offset-from 7800 271 --race-refresh-replay notes/race/race_refreshes.txt --fast --frames 20200
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-set_tests_properties(game_autopilot_replay_stops_at_vs_demo PROPERTIES
-  PASS_REGULAR_EXPRESSION "FATAL .frame 20214.: the VS race's load: the race wrapper's NMI .83:8623 has no C yet"
+set_tests_properties(game_autopilot_stops_at_vs_demo PROPERTIES
+  PASS_REGULAR_EXPRESSION "FATAL .frame 20093.: the VS race's load: the race wrapper's NMI .83:8623 has no C yet"
 )
 # explore_buy.txt re-aligned after the race (from port 16000 the movie's step is the port's frame
 # + 309): the title's taps now set difficulty 2 ($03DC = $0210, port 16732 = bench step 17041) and
@@ -758,7 +761,7 @@ set_tests_properties(game_picture_ticker_after_race2 PROPERTIES
   FAIL_REGULAR_EXPRESSION "FATAL|unported"
 )
 set_tests_properties(game_picture_ticker_after_race game_race1_stops_at_vs_demo
-  game_autopilot_replay_stops_at_vs_demo game_picture_champ_after_race game_picture_ticker_after_race2 PROPERTIES
+  game_autopilot_stops_at_vs_demo game_picture_champ_after_race game_picture_ticker_after_race2 PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )

@@ -1716,7 +1716,9 @@ decomp's bench at `17dab56` **with the DSP-4 firmware** (`--dsp4-firmware input/
 the race's length, and so every later step, depends on the chip. With the bench's stand-in
 chip the original's VS demo race below goes wrong (black from step 19451 of `race1`, the NMI
 target 0 at 19547, `$03DC` and `$0446` overwritten at 19594), so no after-race reference uses
-it. Scripts and pictures stay under `notes/movies/` (local).
+it. The scripts (`notes/movies/tools/`: `bench_trace.sh` runs a Python line on the bench's
+memory at every step, `bench_window_any.sh` dumps a window of any movie, both taking
+`BENCH_EXTRA` for the firmware) and pictures stay under `notes/movies/` (local).
 
 - **The screens after a failed race** (all three movies fail to qualify): the ticker (two tasks,
   `$B97B`), then the championship is over (`top_after_ticker`), so the top loop's title
@@ -1741,15 +1743,23 @@ it. Scripts and pictures stay under `notes/movies/` (local).
   stops there by name (decomp request V). Behind it the VS race still needs its DSP-4 commands
   native (request A's VS remainder) and the loop's way out (`$82:9642`, a trap; request W):
   `race_mode_vs` loops for good in the C. On the bench the demo runs past step 26000 with no
-  input; in `autopilot_60k` a button ends it after 11 frames (20454 to 20465), through that
-  way out. **Blocked by the decomp (VS).**
+  input; in `autopilot_60k`, which holds buttons, it is left after 11 frames (20454 to 20465;
+  inferred, not hooked: the demo's end on a button and that way out). **Blocked by the decomp (VS).**
 - **`autopilot_60k`'s stop (mode 1) is the same demo, picked differently.** The demo pick is a
-  random draw, and the port's race (2 refreshes a step) draws another number of times than the
-  console's. With the original's refresh counts for that very race (`--race-refresh-replay
-  notes/race/race_refreshes.txt`, test only), the port picks the bench's VS demo (`$03DC` =
-  `$2002`, port 20153 against bench 20302) and stops at its load, port 20214 (bench 20362), as
-  `race1` does. **Blocked by the decomp (VS);** mode 1 (`$82:89B5`) comes later in that movie
-  (bench 44736).
+  random draw (`$0110`/`$0112`), and the port's race is not the console's: other pacing (2
+  refreshes a step) and the autopilot's driving inputs on other race steps (the console's load
+  is longer: the race loop starts at bench 8111, port 7841 under offset 150). Run as the
+  console ran it, with the original's refresh counts for that very race (`--race-refresh-replay
+  notes/race/race_refreshes.txt`, test only) and the inputs re-aligned to the loop
+  (`--movie-offset-from 7800 271`), the random state before the pick equals the bench's
+  (`$0110` = `$2965`, `$0112` = `$EF30` at port 20031 and bench step 20301; `$52CA`/`$DE60`
+  after it, port 20032 and bench 20302), the pick is the bench's VS race (`$03DC` = `$2002`),
+  and the port stops at its load, port 20093 (bench 20362), as `race1` does. With the
+  recorded counts alone the random state differs (`$9953`/`$48E6`) and the pick happens to be
+  VS too; with neither, it is mode 1 (port 20214). Not the same race even so: the finishing
+  order differs (`$0446..$0457`; port `$0308...`, bench `$0803...`), which this section does
+  not follow (the race is not drawn). **Blocked by the decomp (VS);** mode 1 (`$82:89B5`) comes
+  later on the bench's path (step 44736).
 - **`explore_buy`'s stop was an input mis-alignment.** Its taps after the race (written for the
   console's longer race and loads) reached the port's title about 160 frames early and chose VS
   MODE (`$03DC` = `$0012`, port 16808). Re-aligned (`--movie-offset-from 16000 309`; the title
@@ -1778,14 +1788,15 @@ it. Scripts and pictures stay under `notes/movies/` (local).
     description show no difference the first visit does not show too (the championship's
     first lit frames, 25,546 pixels in the top half, and the bar's first lines, 248..388, in
     both; 4 track-description frames differ by fewer pixels the second time, 72 frames differ
-    only the first time). The shop shows two after-race differences: its first lit frame
-    (brightness 1, port 19301) is drawn and differs by 1,678 pixels in the panel (x 16..239,
-    y 24..87), where the first visit's is black on both sides (the known first-lit-frame case,
-    "The shop drawn natively"); and the list's caret (42 pixels, x 92..98, y 27..32) blinks in
-    another phase, the symptom already seen on the item screens after the console's longer
-    loads (not traced; the port's race counts other NMIs than the console's, so the frame
-    counter's phase differs). The shop's other differences (150..486 pixels in its lower rows
-    while it opens) are the same in both visits. None of these is analysed further here.
+    only the first time). The shop shows one difference only after the race: its first lit
+    frame (brightness 1, port 19301) is drawn and differs by 1,678 pixels in the panel
+    (x 16..239, y 24..87), where the first visit's is black on both sides (the known
+    first-lit-frame case, "The shop drawn natively"). The caret's box (42 pixels, x 92..98,
+    y 27..32) differs in both visits, before the race already (from port 7498 on), at more
+    frames the second time (169 against 107 of 307 compared frames: the second visit's list
+    shows it from its opening on, the first's only near the way out); its cause is not traced.
+    The shop's other differences (150..486 pixels in its lower rows while it opens) are the
+    same in both visits. None of these is analysed further here.
   - **Race 2** runs to its end in the port (not drawn), as race 1 does.
 - **Test option:** `--movie-offset-from FRAME N` may now be given up to 16 times; from each
   FRAME on its N applies (the latest FRAME not after the frame wins).
@@ -1794,8 +1805,11 @@ it. Scripts and pictures stay under `notes/movies/` (local).
   `game_picture_champ_after_race` (`explore_buy` re-aligned, port 17185 = `frame_17521.png`),
   `game_picture_ticker_after_race2` (`race1_again`, port 29390 = `frame_29816.png`), and the two
   stops pinned by name: `game_race1_stops_at_vs_demo` (port 19137) and
-  `game_autopilot_replay_stops_at_vs_demo` (port 20214, with the recorded refresh counts).
-  Skipped where a local file is absent.
+  `game_autopilot_stops_at_vs_demo` (port 20093, the recorded refresh counts and the race's
+  inputs re-aligned). Skipped where a local file is absent. The pinned bench pictures are kept
+  in `notes/movies/ref/` (renamed by test).
+- **The bench** was only run here (`~/tg3000-decomp-bench`, HEAD `17dab56`, its binary built
+  after its sources), not rebuilt; its working tree was not checked with git from this session.
 
 ## Steps (2026-11-24)
 

@@ -150,17 +150,20 @@ read). Updated 2026-11-28; the port pins the decomp at the commit recorded in `d
   replaces it before any wait, but the VS race's load waits under it (`vs_race_load` to
   `vs_race_start`: 97 frames on the firmware bench, `race1.txt` steps 19472..19569). It is only
   in `asm/bank_03.asm` (`sound_frame`, `pads_read`, `$0024`++, `$00BA`++, no `$0008`
-  dispatch). Every whole-game movie reaches it after its first race: the title's demo is a VS
-  race (`$03DC` = `$2002`; `race1.txt` at step 19472, `autopilot_60k.txt` at 20362). The port
-  stops there by name (port frame 19137 of `race1`). Please give it a C function (e.g.
+  dispatch). `race1.txt` and `autopilot_60k.txt` reach it after their first race, where the
+  title's demo is a VS race (`$03DC` = `$2002`; bench steps 19472 and 20362); `explore_buy.txt`
+  goes to a championship instead. The port stops there by name (port frame 19137 of `race1`;
+  20093 of `autopilot_60k` run as the console ran its race). Please give it a C function (e.g.
   `nmi_race_wrapper()`), as `nmi_race_tail` is.
 
 - **W. The VS race loop's way out** (2026-11-28). `race_mode_vs` loops for good and
   `vs_race_frame_body` traps at `$82:9642` ("the VS race loop's way out"); the demo's end on a
-  button in `vs_race_frame_tail` is marked never run. Both run in `autopilot_60k.txt`: its VS
-  demo race (`race_wrapper` at bench step 20362, `nmi_vs_full` from 20454) ends on a button at
-  20465 and the game is back at the title (`$FC5F`) at 20491. Needed after V and A's VS part
-  for any VS demo, and for the VS game's race end.
+  button in `vs_race_frame_tail` is marked never run. **Observed** (firmware bench,
+  `autopilot_60k.txt`, WRAM per step): its VS demo race (`race_wrapper` at step 20362, the VS
+  NMI `$9777` from 20454) is left at 20465 (NMI target back to `$8934`, then `$03DC` = `$0002`
+  at 20466) and the title (`$FC5F`) is back at 20491; the autopilot holds buttons there.
+  **Inferred** (not hooked): the demo's end on a button and `$82:9642` run there. Needed after
+  V and A's VS part for any VS demo that ends, and for the VS game's race end.
 
 ## Low (enhancements)
 
