@@ -1663,7 +1663,8 @@ frames (comparisons only).
 Since decomp `e152ffc` (the one-player race's `$09`/`$06` native) and `17dab56` (the power-on
 rounding), the whole one-player race runs in the port from `race_wrapper` to its return.
 **What this proves:** the race runs to its end in the port. With no pads, the tests pin the
-port against itself, not against the original. Nothing of the race is drawn yet.
+port against itself, not against the original. Nothing of the race was drawn then (since
+2026-11-28 its sky and HUD: "The race's sky and HUD drawn", below).
 
 - **Length by pacing** (no pads, the original's memory at `race_wrapper`): 8259 frames with 2
   refreshes a step (the default), 8095 with 3, and 8231 with the original's recorded counts.
@@ -1705,7 +1706,125 @@ different at all three. Nothing is drawn yet; this fixes what the draw function 
   interrupts (`$0486`, masks `$0596`).
 - **Bends still open:** the BG mode (request M), the HUD's words (request T: until named, a
   capture of `race_hud_draw`'s 52-word run by call pattern, like the pre-race meter), the scroll
-  table in effect at non-taking refreshes (request U).
+  table in effect at non-taking refreshes (request U). Since 2026-11-28: U not needed, M guarded,
+  T in use (below).
+
+## The race against the bench, step by step (2026-11-28)
+
+Measured (decomp `17dab56`, the bench's default DSP-4; `notes/probe/RACE.md` §21, local): the
+port's race (`--screen race` from `race_wrapper`, `autopilot_60k.txt`'s pads, the recorded
+refresh counts) against the bench's, WRAM at each loop step's wait entry (`$82:8656`: the port's
+`--wram-out` saves before a refresh's NMI, which in the port always falls after the step's
+head, so the head itself is not a comparable point). **The first gameplay difference is step 2
+(port frames 89-91), from step 1:** step 1 has no race wait in the port and keeps `$1E9E` = 1
+where the console counted 3 (the open pacing item), and the per-NMI accumulators lag by the two
+NMIs (`$00D4` the horizon's scroll, the fade, `$0024`). From step 3 the speed, the road and the
+cars differ and never re-converge. The matched prefix ends in forced blank: **no race picture can
+be tested from the movie alone.** With the bench's memory handed over at step 2's wait (and the
+pads re-aligned: port frame F = bench step F + 8026), the race is the bench's in gameplay through
+step 406 (port frame 1045, about 16 s); only picture-side residue differs (the HUD's digits and
+strip one HUD draw behind, objects' animation and the sprite list, the upload queue's split). At
+step 407 one NMI the console counts for no step shifts the alignment by a frame (F + 8027 from
+then on, the only shift in the whole race). Hence the race's picture tests hand the bench's
+memory over at a wait (below).
+
+## The race's sky and HUD drawn (step 4, 2026-11-28)
+
+**Identical to the bench's pictures where drawn (the bench's stand-in DSP-4, not the console):**
+the sky, the horizon and the HUD of the one-player race, `port/screens/race_screen.c`, drawn
+after the NMI. **The road and the cars are not drawn yet: left black and marked not drawn**
+(the screen's mask; a test compares only the drawn pixels and pins their count, so a blank never
+passes as exact). Compared with `--compare` (below) at 6 frames, 0 differing pixels each: port
+145 (brightness 6) against `frame_08175.png`, 400 / `frame_08430.png`, 800 / `frame_08830.png`
+(hand-over at step 2), 1616 / `frame_09647.png` (a 19-row horizon on a hill; hand-over at step
+600), 1651 / `frame_09682.png` (a sky past 127 rows, no horizon; step 612), 1885 /
+`frame_09916.png` (rows from `$83:A968`; step 700): 35,396 to 44,042 pixels each. Scanned
+(pictures 89-1045 after the step-2 hand-over, where the port's picture is not black): 657 equal;
+231 differ only in HUD cells (the digits, the bar and the strip one HUD draw behind: the HUD's
+NMIs placed at the wait, `$00B8` bit 2, `$4E4E`); 69 also elsewhere, which at frames 207 and 222
+are bench object pixels (`render_check.py`'s layer map) of objects the port's sprite table
+lacks (residue: `notes/probe/RACE.md` §21). At frame 400 the mask holds only bench backdrop,
+BG1 (sky and horizon rows) and BG3 pixels (the layer map at `17dab56`). The pairing (port F = bench `frame_(F + 8030)`, 8031 from step 408) checked on two
+fade frames.
+
+- **How, under the rule:**
+  - One draw function. Uploads recognised by source, in the load's order (`port/video/assets.c`,
+    `race_pieces`): the track's tile set made planar (BG1/BG2 tiles `$2FE` on), its pixels equal
+    to one of the **9 track tile sets unpacked at start-up** at the same offset (the game's own
+    table, `$83:8585`/`$8597` by `$83:8447`; `$047B` never read); its four map slices (BG1 map rows
+    24-31 left and right, then BG2's) checked against the set; the HUD font `$8F:85F5` (noted);
+    the HUD map, the unpacked `$87:8B3D` as sent (all but its 26 patched words checked against the
+    block); the markers' 4 words. Each NMI: the minimap's tiles (`$7E:230C`), colours `$71-$EF`
+    (`$7E:6A35`), the sprite table (`$81:1576`/`$1796`), the HUD's words and strips.
+  - Read from WRAM at draw time (the port's draw point sees the NMI's values): the brightness
+    `$014B`, the window and colour-maths bytes `$01B0-$01B2` (checked `C2 B0 A1`), the scroll
+    tables at `$83:(1E46)`/`(1E48)`, the windows' table at `$7E:4CCC`, the first band line.
+  - Static registers (the load's screen image `$83:96DD`) as measured: mode 1 with BG3 in front.
+  - Stops (`port_fatal`) on anything not measured: a lit picture before the first take or after a
+    non-`$83CE` NMI, the pause, other window/maths bytes, other table layouts, a horizon line
+    outside BG1 rows 24-31, another BG1 palette than 7, BG2 not a copy of BG1, a masking window 1
+    on a drawn row, HUD tiles never sent or of priority 0, a first band line outside 109-188.
+  - BG3 tile `$157` is never sent in the race (left-over video memory, zero on the bench): its
+    cells (the markers, the unlit lights) are not drawn.
+- **For the owner's veto, the per-line effects used** (no Mode 7: the race has none):
+  1. BG1's scroll per row (HDMA 5's table, read in `scroll_tables_build`'s layout, only the
+     entries measured, in their order: 4 rows under the frame; the sky from ROM `$83:A5DC`, past
+     127 rows continued at `$83:A7D8`; the horizon, one WRAM entry `$1536`/`$153A`; rows from ROM
+     `$83:A968..`; the road; checked to sum to 216 rows). The sky and horizon rows are drawn;
+     the rest is the road (not drawn). The first entry's pointer high byte is left over in memory
+     (`A5`, `55`, `0A`, `02` seen): not checked, its 4 rows lie under the HUD's opaque frame
+     (checked every pixel).
+  2. BG2's table (HDMA 6): only checked to give BG1's rows (`$1556`/`$155A`), with BG2's map
+     slices equal to BG1's, so BG2 is a hidden copy (it is not drawn).
+  3. The windows' table (HDMA 4): read only to check window 1 empty on every drawn row (no
+     masking, no colour maths); masking stops.
+  4. The first band's line (`$0486` + `$00BE`): BG1 is drawn above it only (from it the band
+     interrupt switches BG1 to 16x16 tiles and the road's colours).
+- **Request U: not needed by the port.** The port runs no loop body between a step's NMIs, so at
+  its draw point WRAM `$1E46`/`$1E48` always name the tables the last `dma_hdma_set_table` calls
+  gave: checked with a logging build (`notes/race/sync/make_sync_port.py`, `UCHECK_LOG`) over
+  three whole races (`autopilot_60k.txt` with the recorded counts, no pads at 2 and at 3
+  refreshes a step; 8,132-8,270 race refreshes each): different only before the first take
+  (port frames 1-88, forced blank). The draw reads WRAM; a lit picture before the first take
+  stops. No shadow of the call's argument.
+- **Request M:** `$09` and `$29` differ only in BG2's tile size (bit 5), so M does not touch BG1,
+  BG3 or the backdrop; BG2 is a hidden copy only with 8x8 tiles. Guard (listed for the veto, a
+  stop, not a mode choice): the first band line must lie within 109-188, the range lit pictures
+  showed over the three races (the register-only `$29` is written for no band or one at line
+  220 or lower: never lit). Left for the road slice.
+- **Request T, the one real bend:** the HUD's 52 words are taken by call pattern: a run of
+  exactly 52 `video_write_vram_word` calls, confirmed by the strip upload that follows it
+  (`$7E:4E61` or `$83:A5A4`, `$1A` bytes), placed by `race_hud_draw`'s fixed order (a table of
+  52 map cells; 8 words are BG3 tile `$15C`'s pixels); the markers' run of 4 `$0157` words
+  likewise. Any other word run in the race stops. The VRAM addresses are ignored at run time.
+- **Also for the veto (the shop's two analogues):** (1) constants taken from the game's fixed
+  upload destinations, as facts of its routines, not read at run time: the track's tiles at BG
+  tile `$2FE` (`tiles_planar_upload_5fe0`), the font at `$158` and the minimap at `$0F4`, the 52
+  HUD cells, the strips' and the markers' cells; (2) the HUD's 32x28 word array built at each
+  draw (the load's map, then the markers', the last HUD draw's words and strips): the closest
+  this screen comes to a video-memory-shaped structure (it holds only that map's named words).
+- **Also for the veto, a bend in the shipped path until the cars slice:** `race_screen_draw` reads
+  the sprite table the NMI sent (`$81:1576`/`$1796`, in its 544-byte layout: 9-bit x, the size
+  bit) only to mark where objects cover the picture as not drawn (the tests' mask). It draws
+  nothing from it; it goes when the cars and scenery are drawn by name.
+- **Test only, listed for the veto: `--wram-at F FILE`** hands the bench's memory to the port at
+  refresh F (before its NMI; a recording, like `--wram`), and **`--compare F PNG`** counts the
+  differing pixels against a bench picture where the screen drew (the whole picture for other
+  screens). The hand-over memories and the six pictures are local files under
+  `notes/race/handover/`: the bench's WRAM (decomp `17dab56`, default DSP-4,
+  `autopilot_60k.txt`) at the first instruction of `$82:8656` in bench steps 8115, 9631, 9668 and
+  9907 (loop steps 2, 600, 612, 700; port frames 89, 1604, 1641, 1880), and the bench's
+  `frame_N.png` pictures of the same run (`notes/race/sync/bench_dumps.sh` and `bench_pics.sh`
+  make them).
+- **Tests:** `game_picture_race_{fade,lit,lit_later,hill,sky_long,crest}` (skipped where the
+  local files are absent); `game_race_runs*` run the whole race with the draw (no stop). The
+  whole-game movies draw their first race and stop where they did before (`race1` 19137,
+  `explore_buy` 16809, `autopilot_60k` 20214); `autopilot_60k`'s first race from its wrapper runs
+  to its end at 2 and 3 refreshes a step and with the recorded counts.
+- **Open:** the road (slice 2) and the cars and objects (slice 3); M for the road; T until the
+  decomp names the words; the pause and a lit `$29` never measured (they stop); a sky of exactly
+  127 rows (no continuation entry) is drawn but was not met at a compared frame; measured on
+  track `$00` only.
 
 ## Steps (2026-11-24)
 

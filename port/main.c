@@ -91,7 +91,8 @@ static void print_usage(const char* prog) {
             "Usage: %s [--selftest] [--check-rom] [--screen NAME] [--frames N] [--press F] "
             "[--movie FILE] [--movie-offset N] [--movie-offset-from FRAME N] [--expect-return] "
             "[--fast] [--shot F PATH] [--shots FIRST LAST EVERY DIR] "
-            "[--wram FILE] [--wram-out F PATH] [--sound-events FILE] [--sound-wav FILE] "
+            "[--wram FILE] [--wram-out F PATH] [--wram-at F FILE] [--compare F PNG] "
+            "[--sound-events FILE] [--sound-wav FILE] "
             "[--sound-effect FRAME ID] [--sound-replay FILE] [--race-refreshes 2|3] "
             "[--race-refresh-replay FILE] [path/to/TG3000.sfc]\n",
             prog);
@@ -119,6 +120,10 @@ int main(int argc, char* argv[]) {
     long movie_offset_from_value = 0;
     unsigned long wram_out_frame = 0;
     const char* wram_out_path = NULL;
+    unsigned long wram_at_frame = 0;
+    const char* wram_at_path = NULL;
+    unsigned long compare_frame = 0;
+    const char* compare_path = NULL;
     const char* screen = "game";
     const char* rom_path = NULL;
     const char* sound_events_path = NULL;
@@ -152,6 +157,12 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--wram-out") == 0 && i + 2 < argc) {
             wram_out_frame = strtoul(argv[++i], NULL, 10);
             wram_out_path = argv[++i];
+        } else if (strcmp(argv[i], "--wram-at") == 0 && i + 2 < argc) {
+            wram_at_frame = strtoul(argv[++i], NULL, 10);
+            wram_at_path = argv[++i];
+        } else if (strcmp(argv[i], "--compare") == 0 && i + 2 < argc) {
+            compare_frame = strtoul(argv[++i], NULL, 10);
+            compare_path = argv[++i];
         } else if (strcmp(argv[i], "--shot") == 0 && i + 2 < argc) {
             shot_frame = strtoul(argv[++i], NULL, 10);
             shot_path = argv[++i];
@@ -242,6 +253,20 @@ int main(int argc, char* argv[]) {
         }
         fclose(wf);
     }
+    /* The same for the original's memory handed over later (--wram-at) and for a bench picture
+       to compare with (--compare): local files. */
+    const char* local_files[2] = {wram_at_path, compare_path};
+    for (int k = 0; k < 2; ++k) {
+        if (local_files[k] != NULL && frames_given) {
+            FILE* lf = fopen(local_files[k], "rb");
+            if (lf == NULL) {
+                fprintf(stderr, "SKIP: local test file not found (%s)\n", local_files[k]);
+                rom_free(rom_data);
+                return 77;
+            }
+            fclose(lf);
+        }
+    }
     /* The same for an input movie kept locally (the port's own test movies under notes/movies/,
        never in git). */
     if (movie_path != NULL && frames_given) {
@@ -315,6 +340,12 @@ int main(int argc, char* argv[]) {
     }
     if (wram_out_path != NULL) {
         port_set_wram_out(wram_out_frame, wram_out_path);
+    }
+    if (wram_at_path != NULL) {
+        port_set_wram_at(wram_at_frame, wram_at_path);
+    }
+    if (compare_path != NULL) {
+        port_set_compare(compare_frame, compare_path);
     }
     int rc = port_run(renderer, screen, frame_limit);
 

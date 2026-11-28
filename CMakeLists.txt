@@ -29,7 +29,8 @@ target_compile_options(tg3000_logic PRIVATE -Wall -Wextra)
 
 option(TG3000_SYSTEM_SDL "Use system-installed SDL3 instead of deps/SDL3" OFF)
 if(TG3000_SYSTEM_SDL)
-  find_package(SDL3 REQUIRED CONFIG)
+  # 3.4 or later: the tests read the bench's pictures with SDL_LoadPNG (--compare)
+  find_package(SDL3 3.4 REQUIRED CONFIG)
 else()
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/SDL3/CMakeLists.txt")
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -73,6 +74,7 @@ add_executable(tg3000
   port/screens/shop_screen.c
   port/screens/ticker_screen.c
   port/screens/race_start_screen.c
+  port/screens/race_screen.c
 )
 target_include_directories(tg3000 PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/port"
@@ -656,6 +658,45 @@ foreach(case "default;;2" "3;--race-refreshes;3" "replay;--race-refresh-replay;3
   )
   set_tests_properties(game_race_wait_${name} PROPERTIES
     PASS_REGULAR_EXPRESSION "race wait: ${expect} refreshes, .00BA ${expect}, .00B8 0001 -> 0000"
+    FAIL_REGULAR_EXPRESSION "FATAL"
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+    SKIP_RETURN_CODE 77
+  )
+endforeach()
+# The race's sky, horizon and HUD drawn (docs/DECISIONS.md, "The race's sky and HUD drawn"):
+# against the bench's pictures, the bench's stand-in DSP-4, not the console (autopilot_60k.txt's
+# first race, decomp 17dab56). The port's race is the bench's in gameplay only after the bench's
+# memory is handed over at a wait (--wram-at, a recording; step 1 differs: notes/probe/RACE.md
+# section 21), so each test starts at race_wrapper, hands over at loop step k's wait (port frame
+# F_k, pads re-aligned there) and compares one picture, port frame F = bench frame_(F + 8030 or
+# 8031).png, only the pixels the slice draws (the road and the objects are not drawn: their
+# count is pinned so a blank never passes). Local files under notes/race/handover/; skipped
+# where absent. Cases: name, hand-over step, F_k, movie offset, frame, bench picture, pixels.
+foreach(case
+    "fade;2;89;8026;145;08175;42266"          # brightness 6, the horizon from $1536
+    "lit;2;89;8026;400;08430;42557"           # the horizon from $153A
+    "lit_later;2;89;8026;800;08830;42758"
+    "hill;600;1604;8027;1616;09647;35396"     # a 19-row horizon
+    "sky_long;612;1641;8027;1651;09682;38971" # sky past 127 rows ($83:A7D8), no horizon
+    "crest;700;1880;8027;1885;09916;44042")   # rows from $83:A968 (not drawn)
+  list(GET case 0 name)
+  list(GET case 1 step)
+  list(GET case 2 at)
+  list(GET case 3 offset)
+  list(GET case 4 frame)
+  list(GET case 5 picture)
+  list(GET case 6 pixels)
+  math(EXPR stop "${frame} + 1")
+  add_test(NAME game_picture_race_${name}
+    COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames ${stop}
+            --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 7903
+            --movie-offset-from ${at} ${offset} --race-refresh-replay notes/race/race_refreshes_tape.txt
+            --wram-at ${at} notes/race/handover/wram_step${step}_wait.bin
+            --compare ${frame} notes/race/handover/frame_${picture}.png
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  set_tests_properties(game_picture_race_${name} PROPERTIES
+    PASS_REGULAR_EXPRESSION "frame ${frame} drawn race compared ${pixels} of 57344 pixels with the reference: 0 differ"
     FAIL_REGULAR_EXPRESSION "FATAL"
     ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
     SKIP_RETURN_CODE 77

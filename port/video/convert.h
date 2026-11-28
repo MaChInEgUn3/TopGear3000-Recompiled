@@ -15,6 +15,10 @@ void convert_tiles_4bpp(const uint8_t* data, size_t ntiles, uint8_t* out);
 /* Convert ntiles 8bpp planar tiles (64 bytes each) into 64 colour indices (0..255) per tile. */
 void convert_tiles_8bpp(const uint8_t* data, size_t ntiles, uint8_t* out);
 
+/* Convert ntiles packed 4bpp tiles (32 bytes each, two pixels a byte, left in the high nibble)
+   into 64 colour indices (0..15) per tile. */
+void convert_tiles_4bpp_packed(const uint8_t* data, size_t ntiles, uint8_t* out);
+
 /* Convert 15-bit SNES BGR555 colour into 0xAARRGGBB (A = 0xFF). */
 uint32_t convert_color(uint16_t bgr555);
 

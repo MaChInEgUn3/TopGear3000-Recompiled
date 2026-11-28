@@ -32,7 +32,9 @@
   (the pre-race screen: the bar, the closed shutter, the opening course view with its per-line
   effects listed in `docs/DECISIONS.md`), `ticker_screen.c` (the ticker after a race, two tasks:
   the top half's Mode 7 picture moved by the game's view block taken when the NMI runs, and the
-  scrolling text objects), driven by tables of measured facts per screen. `screens.h` holds the
+  scrolling text objects), `race_screen.c` (the one-player race's first slice: the sky, the
+  horizon and the HUD, after the NMI; the road and the cars not drawn yet, marked in its mask),
+  driven by tables of measured facts per screen. `screens.h` holds the
   shared brightness scaling (the bench's measured rule, `(c * ((b << 16) / 15)) >> 16`).
 - `docs/proposals/` — accepted design proposals (`video-layer.md`, `sound.md`).
 - `tools/` — helper CMake scripts (`fetch_deps.cmake`).
@@ -70,7 +72,7 @@ CLI modes:
   `options`, `results`, `ticker`, `race`): which game code to run. `race` runs `race_wrapper()`
   (with `--wram notes/race/wram_before_race.bin`); the race NMI (`$85:8377`: `$838A` tail,
   `$83CE` full frame) is dispatched; since decomp `e152ffc` the whole one-player race runs to
-  `race_wrapper`'s return (nothing of it is drawn yet). `race_wait` (test) runs
+  `race_wrapper`'s return (its sky and HUD drawn, docs/DECISIONS.md). `race_wait` (test) runs
   `race_frame_wait()` alone from `notes/race/wram_race_wait.bin` and prints the refreshes it took.
 - `--race-refreshes 2|3` (setting): screen refreshes per race step; `--race-refresh-replay FILE`
   (test): the original's recorded count per step (`notes/race/race_refreshes.txt`).
@@ -79,6 +81,10 @@ CLI modes:
 - `--press F` (tests): hold A+B for 6 frames from frame F.
 - `--movie FILE --movie-offset N` (tests): replay a decomp bench input movie (`--movie-offset-from FRAME N` switches the offset from port frame `FRAME` onwards); `--wram-out F PATH`
   saves game memory at frame F; `--fast`: no pacing.
+- `--wram-at F FILE` (tests): replace the game memory with FILE at the start of refresh F
+  (before its NMI): the bench's memory handed over at a race wait; `--compare F PNG`: count the
+  pixels that differ from a bench picture at frame F, only where the screen drew (the race's
+  mask; all pixels for other screens). Both exit 77 when the file is absent.
 - `--wram FILE` (tests): start from a saved 128 KB game memory (e.g. the original's, from the
   decomp's bench) instead of zeroed memory.
 - `--shot F PATH` (tests): print the picture's fingerprint at frame F and save it as BMP (`-`: no file).

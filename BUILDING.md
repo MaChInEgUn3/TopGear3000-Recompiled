@@ -77,7 +77,7 @@ ctest --test-dir build --output-on-failure
 
 ## Using System SDL3
 
-If SDL3 is already installed on your system and you do not want to build it from `deps/SDL3`:
+If SDL3 (3.4 or later) is already installed on your system and you do not want to build it from `deps/SDL3`:
 
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTG3000_SYSTEM_SDL=ON

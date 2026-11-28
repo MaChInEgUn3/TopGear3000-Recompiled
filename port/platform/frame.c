@@ -50,6 +50,10 @@ static const char* g_shots_dir = NULL;
 static unsigned long g_shots_every = 1;
 static unsigned long g_wram_out_frame = 0;
 static const char* g_wram_out_path = NULL;
+static unsigned long g_wram_at_frame = 0;
+static const char* g_wram_at_path = NULL;
+static unsigned long g_compare_frame = 0;
+static const char* g_compare_path = NULL;
 static bool g_fast = false;
 
 static bool g_split_active = false;
@@ -251,8 +255,10 @@ static void run_nmi_dispatch(void) {
     } else if (target == 0x858377u) {
         /* The race NMI (set by race_load, $82:8428): its prologue, then its two targets
            (measured on the bench, autopilot_60k.txt: $838A on the two frames before the road's
-           first frame, $83CE on every race frame after). Nothing is drawn for the race yet. */
+           first frame, $83CE on every race frame after). The race's first slice is drawn after
+           it (race_screen.c). */
         uint16_t sub = rd16(0x0008);
+        race_screen_note_nmi(sub);
         nmi_race_prologue();
         switch (sub) {
             case 0x838A: nmi_race_tail(); break;
@@ -358,6 +364,19 @@ static void pump_events_and_input(void) {
     port_input_set_test_mask(test_mask);
     test_effects_for_frame(g_frame_count);
 
+    if (g_wram_at_path != NULL && g_frame_count == g_wram_at_frame) {
+        /* Test only (--wram-at): the original's memory handed over at this refresh. */
+        FILE* hf = fopen(g_wram_at_path, "rb");
+        if (hf == NULL || fread(g_ram, 1, sizeof(g_ram), hf) != sizeof(g_ram)) {
+            if (hf != NULL) {
+                fclose(hf);
+            }
+            port_fatal("--wram-at: cannot read a 131072-byte game memory file");
+        }
+        fclose(hf);
+        printf("game memory handed over at frame %lu\n", g_frame_count);
+        g_wram_at_path = NULL;
+    }
     if (g_wram_out_path != NULL && g_frame_count == g_wram_out_frame) {
         FILE* wf = fopen(g_wram_out_path, "wb");
         if (wf == NULL || fwrite(g_ram, 1, sizeof(g_ram), wf) != sizeof(g_ram)) {
@@ -427,6 +446,47 @@ static void write_picture_bmp(const char* path) {
     fclose(f);
 }
 
+/* Test only (--compare): count the pixels that differ from a bench picture (PNG, 256x224),
+   only where `mask` is non-zero (all pixels when it is NULL). */
+static void compare_picture(const char* path, const uint8_t* mask, const char* drawn_name) {
+    SDL_Surface* png = SDL_LoadPNG(path);
+    if (png == NULL) {
+        port_fatal("--compare: cannot read the reference picture");
+    }
+    SDL_Surface* rgb = SDL_ConvertSurface(png, SDL_PIXELFORMAT_ARGB8888);
+    SDL_DestroySurface(png);
+    if (rgb == NULL || rgb->w != SCREEN_WIDTH || rgb->h != SCREEN_HEIGHT) {
+        port_fatal("--compare: the reference picture is not 256x224");
+    }
+    unsigned long compared = 0, differ = 0;
+    int first_x = -1, first_y = -1;
+    for (int y = 0; y < SCREEN_HEIGHT; ++y) {
+        const uint32_t* row =
+            (const uint32_t*)((const uint8_t*)rgb->pixels + (size_t)y * (size_t)rgb->pitch);
+        for (int x = 0; x < SCREEN_WIDTH; ++x) {
+            int i = y * SCREEN_WIDTH + x;
+            if (mask != NULL && mask[i] == 0u) {
+                continue;
+            }
+            ++compared;
+            if ((row[x] & 0x00FFFFFFu) != (g_fb[i] & 0x00FFFFFFu)) {
+                if (differ++ == 0) {
+                    first_x = x;
+                    first_y = y;
+                }
+            }
+        }
+    }
+    SDL_DestroySurface(rgb);
+    printf("frame %lu drawn %s compared %lu of %d pixels with the reference: %lu differ",
+           g_frame_count, drawn_name, compared, SCREEN_WIDTH * SCREEN_HEIGHT, differ);
+    if (differ > 0) {
+        printf(" (first at %d,%d)", first_x, first_y);
+    }
+    printf("\n");
+    fflush(stdout);
+}
+
 static void present_frame(bool before_nmi) {
     /* The pre-race screen alone is drawn before the NMI (race_start_screen_note_nmi); the
        others after it. */
@@ -441,8 +501,10 @@ static void present_frame(bool before_nmi) {
                        && !active_champ && shop_screen_active();
     bool active_ticker = !active_racestart && !active_intro && !active_title && !active_results
                          && !active_champ && !active_shop && ticker_screen_active();
+    bool active_race = !active_racestart && !active_intro && !active_title && !active_results
+                       && !active_champ && !active_shop && !active_ticker && race_screen_active();
     int active_menu = (active_intro || active_title || active_results || active_champ
-                       || active_shop || active_ticker || active_racestart)
+                       || active_shop || active_ticker || active_racestart || active_race)
                           ? -1
                           : menu_screen_active();
     const char* drawn_name = "none";
@@ -467,12 +529,15 @@ static void present_frame(bool before_nmi) {
     } else if (active_racestart) {
         race_start_screen_draw(g_fb);
         drawn_name = "race_start";
+    } else if (active_race) {
+        race_screen_draw(g_fb);
+        drawn_name = "race";
     } else if (active_menu >= 0) {
         menu_screen_draw(active_menu, g_fb);
         drawn_name = menu_screen_name(active_menu);
     }
     if (active_intro || active_title || active_results || active_champ || active_shop
-        || active_ticker || active_racestart || active_menu >= 0) {
+        || active_ticker || active_racestart || active_race || active_menu >= 0) {
         SDL_UpdateTexture(g_texture, NULL, g_fb, SCREEN_WIDTH * (int)sizeof(uint32_t));
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
         SDL_RenderClear(g_renderer);
@@ -568,6 +633,11 @@ static void present_frame(bool before_nmi) {
             write_picture_bmp(g_shot_path);
         }
         g_shot_path = NULL;
+    }
+    /* Test only (--compare): the picture against a bench picture, where the screen drew. */
+    if (g_compare_path != NULL && g_frame_count == g_compare_frame) {
+        compare_picture(g_compare_path, active_race ? race_screen_drawn_mask() : NULL, drawn_name);
+        g_compare_path = NULL;
     }
     /* Test only (--shots): every picture of a range of frames, for comparing with the bench. */
     if (g_shots_dir != NULL && g_frame_count >= g_shots_first && g_frame_count <= g_shots_last
@@ -763,6 +833,16 @@ void port_set_shots(unsigned long first, unsigned long last, unsigned long every
 void port_set_wram_out(unsigned long frame, const char* path) {
     g_wram_out_frame = frame;
     g_wram_out_path = path;
+}
+
+void port_set_wram_at(unsigned long frame, const char* path) {
+    g_wram_at_frame = frame;
+    g_wram_at_path = path;
+}
+
+void port_set_compare(unsigned long frame, const char* path) {
+    g_compare_frame = frame;
+    g_compare_path = path;
 }
 
 void port_set_fast(bool fast) {

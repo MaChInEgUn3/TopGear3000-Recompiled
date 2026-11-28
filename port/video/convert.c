@@ -67,6 +67,16 @@ void convert_tiles_8bpp(const uint8_t* data, size_t ntiles, uint8_t* out) {
     }
 }
 
+/* Convert ntiles packed 4bpp tiles (32 bytes each: two pixels a byte, the left one in the high
+   nibble; the race's track tile sets as unpacked, before the game makes them planar) into 64
+   colour indices (0..15) per tile. */
+void convert_tiles_4bpp_packed(const uint8_t* data, size_t ntiles, uint8_t* out) {
+    for (size_t t = 0; t < ntiles * 32u; ++t) {
+        out[2u * t] = (uint8_t)(data[t] >> 4);
+        out[2u * t + 1u] = (uint8_t)(data[t] & 0x0Fu);
+    }
+}
+
 uint32_t convert_color(uint16_t bgr555) {
     uint32_t r5 = (uint32_t)(bgr555 & 0x1Fu);
     uint32_t g5 = (uint32_t)((bgr555 >> 5) & 0x1Fu);

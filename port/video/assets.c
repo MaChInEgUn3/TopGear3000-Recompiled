@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "convert.h"
 #include "decompress.h"
 #include "port.h"
 #include "tg3000.h"
@@ -83,6 +84,19 @@ static asset_entry g_assets[ASSET_COUNT] = {
     [ASSET_SHOP_LIST_SPECIAL] = {"SHOP_LIST_SPECIAL", 0x978000u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_TICKER_M7_TILES] = {"TICKER_M7_TILES", 0x888C7Du, ASSET_KIND_TILES_8BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
     [ASSET_TICKER_M7_MAP] = {"TICKER_M7_MAP", 0x958000u, ASSET_KIND_MAP_16, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_HUD_FONT] = {"RACE_HUD_FONT", 0x8F85F5u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_HUD_MAP] = {"RACE_HUD_MAP", 0x878B3Du, ASSET_KIND_MAP_16, ROLE_NONE, 0, NULL, 0, 0, 0},
+    /* The track tile sets, in the order of their table ($83:8585 address, $83:8597 bank, by
+       $83:8447[$83:8410[track]]): each holds several tracks' scenery (track_tiles_load). */
+    [ASSET_RACE_TRACK_SET_0] = {"RACE_TRACK_SET_0", 0x958CABu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_TRACK_SET_1] = {"RACE_TRACK_SET_1", 0x938401u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_TRACK_SET_2] = {"RACE_TRACK_SET_2", 0x968109u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_TRACK_SET_3] = {"RACE_TRACK_SET_3", 0x93C1BEu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_TRACK_SET_4] = {"RACE_TRACK_SET_4", 0x948856u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_TRACK_SET_5] = {"RACE_TRACK_SET_5", 0x95C634u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_TRACK_SET_6] = {"RACE_TRACK_SET_6", 0x96B9FEu, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_TRACK_SET_7] = {"RACE_TRACK_SET_7", 0x90C454u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
+    [ASSET_RACE_TRACK_SET_8] = {"RACE_TRACK_SET_8", 0x9BDE33u, ASSET_KIND_TILES_4BPP, ROLE_NONE, 0, NULL, 0, 0, 0},
 };
 
 static int g_current[ROLE_COUNT] = {-1, -1, -1, -1, -1, -1};
@@ -92,6 +106,9 @@ static uint8_t g_champ_streams_mask[CHAMP_HALF_COUNT];
 static champ_half_pieces g_champ_half[CHAMP_HALF_COUNT];
 static racestart_pieces g_racestart;
 static ticker_pieces g_ticker;
+static race_pieces g_race;
+static uint32_t g_race_generation;
+static void race_word_run_done(void);
 
 /* The shop's four unpacked streams before the split ($8D:8000, $88:8000, $87:8190, $8D:895F,
    in that order: bits 0..3), and each half's pieces. */
@@ -375,6 +392,9 @@ void assets_init(void) {
 }
 
 void assets_reset_word_run(void) {
+    if (g_word_run_words > 0u) {
+        race_word_run_done();
+    }
     g_word_run_words = 0;
 }
 
@@ -510,6 +530,13 @@ void assets_note_stream(uint32_t src, uint32_t size) {
 /* The sprite table the NMI sends ($81:0900, $220 bytes), kept while the pre-race screen's
    pieces are in. */
 void assets_note_oam(uint32_t src, uint32_t size) {
+    /* The race: the sprite table nmi_race_full sends ($81:1576 or $81:1796 by $00B4). */
+    if (assets_race_vector() && assets_race_loaded() && size == RACE_OAM_BYTES
+        && (src == 0x811576u || src == 0x811796u)) {
+        memcpy(g_race.oam, &g_ram[src & 0xFFFFu], RACE_OAM_BYTES);
+        g_race.has_oam = true;
+        return;
+    }
     /* The ticker: the top half's sprite table as the NMI sends it ($81:0900 from nmi_prologue,
        then $81:0900 or $81:0D00 from nmi_menu_frame: the last one sent is the picture's). */
     if (g_ticker.rows_sent == (uint8_t)((1u << TICKER_MAP_ROWS) - 1u) && size == TICKER_OAM_BYTES
@@ -612,6 +639,10 @@ static bool shop_note_source(uint32_t rom) {
 }
 
 void assets_note_source(uint32_t rom) {
+    /* The race's HUD font: its upload follows (race_note_upload). */
+    if (rom == 0x8F85F5u && assets_race_vector() && g_race.maps_sent == 4 && !g_race.has_font) {
+        g_race.font_noted = true;
+    }
     /* The ticker's font starts its load; any other unpacked stream ends the ticker's. */
     memset(&g_ticker, 0, sizeof(g_ticker));
     if (rom == 0x888601u) {
@@ -900,7 +931,181 @@ static bool capture_champ_piece(uint32_t src, uint32_t size) {
     return false;
 }
 
+/* ---- The one-player race (assets.h, race_pieces) ---- */
+
+bool assets_race_vector(void) {
+    return g_ram[0x0000u] == 0x5Cu && g_ram[0x0001u] == 0x77u && g_ram[0x0002u] == 0x83u
+        && g_ram[0x0003u] == 0x85u;
+}
+
+static void race_fatal(const char* what, unsigned v) {
+    char msg[160];
+    snprintf(msg, sizeof(msg), "race: %s (0x%X)", what, v);
+    port_fatal(msg);
+}
+
+/* The track's tile set made planar (tiles_planar_upload_5fe0): an upload from $7F whose pixels
+   equal one of the 9 unpacked sets' (packed, two pixels a byte) at the same offset. */
+static bool race_match_tile_set(uint16_t addr, uint32_t size) {
+    static uint8_t sent[0x2000u * 2u];
+    static uint8_t want[0x2000u * 2u];
+    if ((size & 0x1Fu) != 0u || size == 0u || size > 0x2000u || (addr & 0x1Fu) != 0u) {
+        return false;
+    }
+    size_t ntiles = size / 32u;
+    convert_tiles_4bpp(&g_ram[0x10000u + addr], ntiles, sent);
+    for (int id = ASSET_RACE_TRACK_SET_0; id <= ASSET_RACE_TRACK_SET_8; ++id) {
+        const asset_entry* a = &g_assets[id];
+        if (a->data == NULL || (size_t)addr + size > a->size) {
+            continue;
+        }
+        convert_tiles_4bpp_packed(&a->data[addr], ntiles, want);
+        if (memcmp(sent, want, ntiles * 64u) == 0) {
+            memset(&g_race, 0, sizeof(g_race));
+            g_race.generation = ++g_race_generation;
+            g_race.tile_set = id;
+            g_race.tile_offset = addr;
+            g_race.tile_count = (uint16_t)ntiles;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool race_note_upload(uint32_t src, uint32_t size) {
+    if (!assets_race_vector()) {
+        /* Not in a race (an upload under another screen's NMI): the last race's pieces go. */
+        if (g_race.tile_set != 0) {
+            memset(&g_race, 0, sizeof(g_race));
+        }
+        return false;
+    }
+    uint32_t wi = 0;
+    const bool wram = bus_wram(src, &wi);
+    const uint16_t addr = (uint16_t)(src & 0xFFFFu);
+    if (g_race.tile_set == 0) {
+        /* A race's load starts with its track's tile set (track_tiles_load's first upload). */
+        if ((src >> 16) == 0x7Fu && (uint32_t)addr + size <= 0x10000u) {
+            return race_match_tile_set(addr, size);
+        }
+        return false;
+    }
+    if (g_race.maps_sent < 4) {
+        /* track_tiles_load's next four uploads: the map slices, in its order. */
+        const asset_entry* a = &g_assets[g_race.tile_set];
+        if ((src >> 16) != 0x7Fu || size != RACE_MAP_SLICE_BYTES || (size_t)addr + size > a->size
+            || memcmp(&g_ram[0x10000u + addr], &a->data[addr], size) != 0) {
+            race_fatal("the track's map rows not sent as measured: $7F upload of size", size);
+        }
+        memcpy(g_race.map[g_race.maps_sent], &a->data[addr], RACE_MAP_SLICE_BYTES);
+        g_race.maps_sent++;
+        return true;
+    }
+    if (g_race.font_noted && !g_race.has_font) {
+        g_race.font_noted = false;
+        if (src != 0x7F0000u || size != g_assets[ASSET_RACE_HUD_FONT].size
+            || fnv1a_32(&g_ram[0x10000u], size) != g_assets[ASSET_RACE_HUD_FONT].hash) {
+            race_fatal("the HUD font $8F:85F5 not sent as unpacked: size", size);
+        }
+        g_race.has_font = true;
+        return true;
+    }
+    if (g_race.has_font && !g_race.has_hud_map && src == 0x7F0000u && size == RACE_HUD_MAP_BYTES) {
+        /* The unpacked $87:8B3D, patched by race_load (the laps-total digit at word $3C, the
+           minimap's 5x5 block at rows 4-8, columns 24-28): every other word checked. */
+        const asset_entry* a = &g_assets[ASSET_RACE_HUD_MAP];
+        if (a->size < RACE_HUD_MAP_BYTES) {
+            race_fatal("the HUD map block is short", (unsigned)a->size);
+        }
+        for (unsigned w = 0; w < RACE_HUD_MAP_BYTES / 2u; ++w) {
+            unsigned r = w / 32u, c = w % 32u;
+            bool patched = (w == 0x3Cu) || (r >= 4u && r <= 8u && c >= 24u && c <= 28u);
+            if (!patched && memcmp(&g_ram[0x10000u + 2u * w], &a->data[2u * w], 2u) != 0) {
+                race_fatal("the HUD map sent differs from $87:8B3D at word", w);
+            }
+        }
+        memcpy(g_race.hud_map, &g_ram[0x10000u], RACE_HUD_MAP_BYTES);
+        g_race.has_hud_map = true;
+        return true;
+    }
+    if (!g_race.has_hud_map) {
+        return false;
+    }
+    /* The HUD's strips (race_hud_draw, after its 52 words): $7E:4E61/$4E7B, or $83:A5A4/$A5BE
+       while the message flashes. */
+    if (size == RACE_STRIP_BYTES && (src == 0x7E4E61u || src == 0x83A5A4u)) {
+        if (!g_race.hud_pending) {
+            race_fatal("a HUD strip without the HUD's 52 words before it", src);
+        }
+        memcpy(g_race.hud, g_race.hud_pending_words, sizeof(g_race.hud));
+        g_race.hud_pending = false;
+        g_race.has_hud = true;
+        for (uint32_t k = 0; k < RACE_STRIP_BYTES; ++k) {
+            g_race.strip[0][k] = wram ? g_ram[wi + k] : rom8(src + k);
+        }
+        g_race.strips_sent = 1;
+        return true;
+    }
+    if (size == RACE_STRIP_BYTES && (src == 0x7E4E7Bu || src == 0x83A5BEu)) {
+        if (g_race.strips_sent != 1) {
+            race_fatal("the HUD's second strip out of order", src);
+        }
+        for (uint32_t k = 0; k < RACE_STRIP_BYTES; ++k) {
+            g_race.strip[1][k] = wram ? g_ram[wi + k] : rom8(src + k);
+        }
+        g_race.strips_sent = 2;
+        g_race.has_strips = true;
+        return true;
+    }
+    if (g_race.hud_pending) {
+        race_fatal("the HUD's 52 words not followed by its strip", src);
+    }
+    if (src == 0x7E230Cu && size == RACE_MINIMAP_BYTES) {
+        memcpy(g_race.minimap, &g_ram[0x230Cu], RACE_MINIMAP_BYTES);
+        g_race.has_minimap = true;
+        return true;
+    }
+    return false;
+}
+
+/* A finished run of video_write_vram_word calls while a race is loaded: the markers' 4 words
+   (hud_markers_put, once, all markers unset: measured) or race_hud_draw's 52 (taken when its
+   strip follows). Nothing else in the race writes words (decomp 17dab56). */
+static void race_word_run_done(void) {
+    if (!assets_race_vector() || !g_race.has_hud_map) {
+        return;
+    }
+    size_t n = g_word_run_words;
+    uint16_t w[RACE_HUD_WORDS];
+    for (size_t k = 0; k < n && k < RACE_HUD_WORDS; ++k) {
+        w[k] = (uint16_t)(g_word_run_buf[2u * k] | ((uint16_t)g_word_run_buf[2u * k + 1u] << 8));
+    }
+    if (!g_race.has_markers && n == RACE_MARKER_WORDS && w[0] == 0x0157u && w[1] == 0x0157u
+        && w[2] == 0x0157u && w[3] == 0x0157u) {
+        g_race.has_markers = true;
+        return;
+    }
+    if (g_race.has_markers && n == RACE_HUD_WORDS) {
+        memcpy(g_race.hud_pending_words, w, sizeof(w));
+        g_race.hud_pending = true;
+        return;
+    }
+    race_fatal("a run of video words not measured in the race: words", (unsigned)n);
+}
+
+bool assets_race_loaded(void) {
+    return g_race.tile_set != 0 && g_race.maps_sent == 4 && g_race.has_font && g_race.has_hud_map
+        && g_race.has_markers;
+}
+
+const race_pieces* assets_race(void) {
+    return &g_race;
+}
+
 void assets_note_upload(uint32_t src, uint32_t size) {
+    if (race_note_upload(src, size)) {
+        return;
+    }
     if (g_ticker.font_noted && !g_ticker.font_sent && src == 0x7F0000u
         && size == g_assets[ASSET_PASSWORD_TEXT_DRAWINGS].size
         && fnv1a_32(&g_ram[0x10000u], size) == g_assets[ASSET_PASSWORD_TEXT_DRAWINGS].hash) {
@@ -958,6 +1163,14 @@ void assets_note_upload(uint32_t src, uint32_t size) {
 /* The shop: each half's 256 colours as the frame code sends them ($81:0500 task 1's, $81:0700
    task 2's, 512 bytes from colour 0). */
 void assets_note_cgram(uint8_t index, uint32_t src, uint32_t size) {
+    /* The race: colours $71-$EF as nmi_race_full sends them ($7E:6A35, the track's row and the
+       objects' and cars' rows). */
+    if (assets_race_vector() && assets_race_loaded() && index == 0x71u && src == 0x7E6A35u
+        && size == RACE_COLOUR_BYTES) {
+        memcpy(g_race.colours, &g_ram[0x6A35u], RACE_COLOUR_BYTES);
+        g_race.has_colours = true;
+        return;
+    }
     /* The ticker: the top half's 256 colours as the NMI sends them ($81:0500). */
     if (g_ticker.rows_sent == (uint8_t)((1u << TICKER_MAP_ROWS) - 1u) && index == 0u
         && src == 0x810500u && size == TICKER_COLOUR_BYTES) {
@@ -1006,6 +1219,7 @@ void assets_clear_loaded(void) {
     g_shop_streams = 0u;
     memset(g_shop_half, 0, sizeof(g_shop_half));
     memset(&g_ticker, 0, sizeof(g_ticker));
+    memset(&g_race, 0, sizeof(g_race));
 }
 
 bool assets_ticker_loaded(void) {

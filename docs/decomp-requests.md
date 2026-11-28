@@ -91,6 +91,11 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   re-deriving the game's test.
   **Measured (2026-11-27, `notes/probe/RACE.md`):** `$09` at all three race anchors (bench steps
   8171, 8271, 8624); `$29` only at the loop's frames 0-1, under forced blank.
+  **Since the sky and HUD are drawn (2026-11-28):** `$09` and `$29` differ only in BG2's tile size
+  (bit 5); BG2 is a hidden copy of BG1 above the first band only with 8x8 tiles. Over three whole
+  races in the port (`autopilot_60k.txt`, no pads at 2 and 3 refreshes a step) the first band line
+  of every lit picture lay within 109-188 (never 0 or 220 and lower, where `$29` is written); the
+  port stops outside that range. Still wanted for the road slice.
 
 - **N — CONFIRMED by the decomp (2026-11-27): mode 1 runs with the firmware DSP-4 (its coverage map came from the bench's own chip, whose answers take another path); likely a demo race mode (bit 13 of `$03DC`); being ported.** The race wrapper's mode 1 runs in `autopilot_60k.txt` (observation, 2026-11-26; firmware
   bench). `race_wrapper` is entered with `$03DC & 3` = 1 (`$03DC` = `$2001`, `$047C` bit 15) at
@@ -158,7 +163,9 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   A named `race_mode_one_loop()` (the `do { head; wait; body } while (!rest); race_end();` part)
   called by `race_mode_one` would let the port call the game's own code there.
 
-- **T. Name the race HUD's words** (2026-11-27). The HUD (BG3) is redrawn only by the race's
+- **T. Name the race HUD's words** (2026-11-27; **in use as a bend since 2026-11-28**: the port
+  takes a run of exactly 52 words confirmed by the strip upload after it, and the markers' run of
+  4 `$0157`, placed by `race_hud_draw`'s fixed order; DECISIONS, "The race's sky and HUD drawn"). The HUD (BG3) is redrawn only by the race's
   non-taking NMIs: `race_hud_draw` writes 52 words a HUD NMI, and `hud_markers_put` writes its
   own, through `video_write_vram_word` with no WRAM home. WRAM runs ahead of the picture (at
   bench step 8624 the clock in WRAM reads 1"32, the picture 1"27). A note per run, like
@@ -166,7 +173,10 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   would let the port draw them by name instead of capturing the 52-word run by call pattern (a
   bend, as for the pre-race meter, request K).
 
-- **U. The race's scroll table in effect as game state** (2026-11-27). At non-taking refreshes
+- **U — NOT NEEDED BY THE PORT (2026-11-28): the port runs no loop body between a step's NMIs, so
+  at its draw point `$1E46`/`$1E48` always name the table the last `dma_hdma_set_table` call gave
+  (checked with a logging build over three whole races; they differ only before the race's first
+  take, in forced blank). The port reads WRAM. Kept for the record:** The race's scroll table in effect as game state (2026-11-27). At non-taking refreshes
   WRAM `$1E46`/`$1E48` already name the next BG1/BG2 scroll table (7 of 7 frames tested), while
   the picture still shows the one the last `dma_hdma_set_table` call gave. A WRAM copy of the
   table in effect (or a named note) would spare the port a shadow of that call's argument

@@ -86,4 +86,12 @@ bool race_start_screen_active(void);
 bool race_start_screen_first_after_nmi(void);
 void race_start_screen_draw(uint32_t* fb);
 
+/* The one-player race's first slice (sky, horizon, HUD), drawn after the NMI; the race NMI's
+   target is noted before it runs (frame.c). The mask says which pixels were drawn (1) and
+   which were left black for the slices not drawn yet (0): tests compare only the drawn ones. */
+void race_screen_note_nmi(uint16_t target);
+bool race_screen_active(void);
+void race_screen_draw(uint32_t* fb);
+const uint8_t* race_screen_drawn_mask(void);
+
 #endif

@@ -31,6 +31,13 @@ void port_set_movie(const char* path, long offset);
 void port_set_movie_offset_from(unsigned long frame, long offset);
 /* Test only: write the 128 KB game memory to path at frame (before frame code runs). */
 void port_set_wram_out(unsigned long frame, const char* path);
+/* Test only: at the start of refresh `frame` (before its NMI), replace the game memory with the
+   128 KB file at path (the original's, saved on the decomp's bench at the same point): a
+   recording handed over, like --wram, for comparing pictures with the bench's. */
+void port_set_wram_at(unsigned long frame, const char* path);
+/* Test only: at frame `frame`, compare the picture with the PNG at path (a bench picture),
+   only where the screen says it drew (the race's slice), and print the count. */
+void port_set_compare(unsigned long frame, const char* path);
 /* Test only: disable 60.0988 fps frame pacing when fast is true. */
 void port_set_fast(bool fast);
 /* The port's frame counter (frames since port_run started). */

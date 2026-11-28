@@ -68,6 +68,17 @@ typedef enum {
     ASSET_SHOP_LIST_SPECIAL,       /* $97:8000 (lists 6-10's, the specials) */
     ASSET_TICKER_M7_TILES,         /* $88:8C7D, 6464 B (the ticker's Mode 7 drawings: 101 8bpp tiles) */
     ASSET_TICKER_M7_MAP,           /* $95:8000 (the ticker's Mode 7 map: 7 rows of 17 tiles) */
+    ASSET_RACE_HUD_FONT,           /* $8F:85F5, 2432 B (the race HUD's 152 2bpp tiles: BG3 $158..$1EF) */
+    ASSET_RACE_HUD_MAP,            /* $87:8B3D, 1792 B (the race HUD's BG3 map, rows 0-27) */
+    ASSET_RACE_TRACK_SET_0,        /* the 9 packed track tile sets ($83:8585/$8597 by $83:8447) */
+    ASSET_RACE_TRACK_SET_1,
+    ASSET_RACE_TRACK_SET_2,
+    ASSET_RACE_TRACK_SET_3,
+    ASSET_RACE_TRACK_SET_4,
+    ASSET_RACE_TRACK_SET_5,
+    ASSET_RACE_TRACK_SET_6,
+    ASSET_RACE_TRACK_SET_7,
+    ASSET_RACE_TRACK_SET_8,
     ASSET_COUNT
 } asset_id;
 
@@ -267,6 +278,57 @@ typedef struct {
 
 bool assets_ticker_loaded(void);
 const ticker_pieces* assets_ticker(void);
+
+/* The one-player race's first slice (the sky, the horizon, the HUD; notes/probe/RACE.md §12-21,
+   docs/DECISIONS.md "The race's sky and HUD drawn"). Recognised while the race NMI ($85:8377) is
+   the vector, by source, in the load's order (race_load, track_tiles_load): the track's tile set
+   made planar (BG1/BG2 tiles $2FE on, its bytes against one of the 9 unpacked sets at that
+   offset), its four map slices (BG1 map rows 24-31 left and right, then BG2's), the HUD font
+   ($8F:85F5 noted and sent), the HUD map (the unpacked $87:8B3D as sent; all but its 26 patched
+   words checked against the block), the markers' 4 words (hud_markers_put). Then, as the NMIs
+   send them: the HUD's 52 words (race_hud_draw, captured by call pattern: request T) and its two
+   strips, the minimap's tiles ($7E:230C), colours $71-$EF ($7E:6A35), the sprite table. */
+#define RACE_MAP_SLICE_BYTES 0x0200u /* 8 map rows of 32 words */
+#define RACE_HUD_MAP_BYTES 0x0700u   /* BG3 map rows 0-27 */
+#define RACE_HUD_WORDS 52u
+#define RACE_STRIP_BYTES 0x001Au     /* 13 words */
+#define RACE_MINIMAP_BYTES 0x0190u   /* 25 2bpp tiles, BG3 $0F4..$10C */
+#define RACE_COLOUR_BYTES 0x00FEu    /* colours $71..$EF */
+#define RACE_OAM_BYTES 0x0220u
+#define RACE_MARKER_WORDS 4u
+
+typedef struct {
+    uint32_t generation;   /* +1 at each race load seen */
+    int tile_set;          /* asset id of the track tile set the BG1/BG2 tiles came from */
+    uint16_t tile_offset;  /* their offset in that unpacked set */
+    uint16_t tile_count;   /* 4bpp tiles from BG tile $2FE on */
+    int maps_sent;         /* 0..4: BG1 rows 24-31 left, right; BG2's left, right */
+    uint8_t map[4][RACE_MAP_SLICE_BYTES];
+    bool font_noted;
+    bool has_font;
+    bool has_hud_map;
+    uint8_t hud_map[RACE_HUD_MAP_BYTES];
+    bool has_markers;      /* the 4 words $0157 at $7C57.. (all markers unset: measured) */
+    /* Handed over by the NMIs, not computed: */
+    bool hud_pending;      /* a 52-word run ended; taken when its first strip follows */
+    uint16_t hud_pending_words[RACE_HUD_WORDS];
+    bool has_hud;
+    uint16_t hud[RACE_HUD_WORDS];
+    int strips_sent;       /* 0..2 of the last HUD draw */
+    bool has_strips;
+    uint8_t strip[2][RACE_STRIP_BYTES];
+    bool has_minimap;
+    uint8_t minimap[RACE_MINIMAP_BYTES];
+    bool has_colours;
+    uint8_t colours[RACE_COLOUR_BYTES];
+    bool has_oam;
+    uint8_t oam[RACE_OAM_BYTES];
+} race_pieces;
+
+/* The race NMI is the vector ($0000 = JML $85:8377). */
+bool assets_race_vector(void);
+bool assets_race_loaded(void);
+const race_pieces* assets_race(void);
 
 bool assets_racestart_shutter_loaded(void);
 bool assets_racestart_loaded(void);
