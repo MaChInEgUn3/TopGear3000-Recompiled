@@ -27,7 +27,8 @@ void port_set_shots(unsigned long first, unsigned long last, unsigned long every
 void port_set_start_wram(const char* path);
 /* Test only: replay controller-1 input from a bench movie file with frame offset. */
 void port_set_movie(const char* path, long offset);
-/* Test only: switch movie frame offset to offset from port frame onwards. */
+/* Test only: from port frame on, the movie frame offset is offset (up to 16 switches; the latest
+   frame not after the current one wins). */
 void port_set_movie_offset_from(unsigned long frame, long offset);
 /* Test only: write the 128 KB game memory to path at frame (before frame code runs). */
 void port_set_wram_out(unsigned long frame, const char* path);

@@ -76,17 +76,28 @@ static size_t g_movie_len = 0;
 static size_t g_movie_idx = 0;
 static uint16_t g_movie_held = 0;
 static long g_movie_offset = 0;
-static bool g_movie_offset_from_set = false;
-static unsigned long g_movie_offset_from_frame = 0;
-static long g_movie_offset_from_value = 0;
+/* --movie-offset-from FRAME N, given once per re-alignment (the console's longer loads): from
+   port frame FRAME on, the offset is N; the switch with the latest FRAME not after the frame
+   wins. */
+#define MAX_MOVIE_OFFSET_SWITCHES 16
+static unsigned long g_movie_switch_frame[MAX_MOVIE_OFFSET_SWITCHES];
+static long g_movie_switch_value[MAX_MOVIE_OFFSET_SWITCHES];
+static int g_movie_switches = 0;
 
 static uint16_t movie_buttons_for_frame(unsigned long frame) {
     if (g_movie_events == NULL) {
         return 0;
     }
-    long offset = (g_movie_offset_from_set && frame >= g_movie_offset_from_frame)
-                      ? g_movie_offset_from_value
-                      : g_movie_offset;
+    long offset = g_movie_offset;
+    unsigned long best = 0;
+    bool found = false;
+    for (int i = 0; i < g_movie_switches; ++i) {
+        if (frame >= g_movie_switch_frame[i] && (!found || g_movie_switch_frame[i] >= best)) {
+            best = g_movie_switch_frame[i];
+            offset = g_movie_switch_value[i];
+            found = true;
+        }
+    }
     long step = (long)frame + offset;
     while (g_movie_idx < g_movie_len && g_movie_events[g_movie_idx].step <= step) {
         g_movie_held = g_movie_events[g_movie_idx].mask;
@@ -270,6 +281,13 @@ static void run_nmi_dispatch(void) {
                 break;
             }
         }
+    } else if (target == 0x838623u) {
+        /* The race wrapper's own NMI (race_wrapper_head sets it; race_load replaces it before
+           any wait, so the one-player race never runs it). The VS race's load waits under it
+           (vs_race_load to vs_race_start; bench: about 97 frames). It has no C in the decomp
+           (only asm/bank_03.asm): decomp request V. */
+        port_fatal("the VS race's load: the race wrapper's NMI $83:8623 has no C yet "
+                   "(decomp request V; the VS race also waits on requests A and W)");
     } else {
         char msg[128];
         snprintf(msg, sizeof(msg), "unknown NMI vector target 0x%06X", (unsigned int)target);
@@ -857,7 +875,7 @@ void port_set_movie(const char* path, long offset) {
     g_movie_idx = 0;
     g_movie_held = 0;
     g_movie_offset = offset;
-    g_movie_offset_from_set = false;
+    g_movie_switches = 0;
 
     FILE* f = fopen(path, "r");
     if (f == NULL) {
@@ -899,9 +917,10 @@ void port_set_movie(const char* path, long offset) {
 }
 
 void port_set_movie_offset_from(unsigned long frame, long offset) {
-    g_movie_offset_from_set = true;
-    g_movie_offset_from_frame = frame;
-    g_movie_offset_from_value = offset;
+    if (g_movie_switches >= MAX_MOVIE_OFFSET_SWITCHES) port_fatal("--movie-offset-from: too many");
+    g_movie_switch_frame[g_movie_switches] = frame;
+    g_movie_switch_value[g_movie_switches] = offset;
+    ++g_movie_switches;
 }
 
 int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {

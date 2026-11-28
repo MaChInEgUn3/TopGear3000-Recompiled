@@ -742,3 +742,67 @@ set_tests_properties(game_picture_ticker_fade game_picture_ticker game_picture_t
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
+# After the race (docs/DECISIONS.md, "After the race: the whole-game movies' next stops"). The
+# references are the decomp's bench with the DSP-4 firmware (the race's length, and so every
+# later step, depends on the chip). Each pinned frame matched one bench picture only, 0 of
+# 57,344 pixels different.
+# race1.txt: no input in the race; the ticker after the port's own race, port 16080 =
+# frame_16409.png (lag 329).
+add_test(NAME game_picture_ticker_after_race
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/race1.txt --movie-offset 150 --fast --frames 16082 --shot 16080 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_ticker_after_race PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 16080 picture hash df657edd8a49de65 brightness 11 drawn ticker"
+  FAIL_REGULAR_EXPRESSION "FATAL|unported"
+)
+# race1.txt then waits at the title, whose demo is a VS race: the port stops at its load, on the
+# race wrapper's NMI $83:8623, which has no C (decomp request V). The original's memory there:
+# $03DC = $2002 (bench step 19412; the port's 19137).
+add_test(NAME game_race1_stops_at_vs_demo
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/race1.txt --movie-offset 150 --fast --frames 19200
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_race1_stops_at_vs_demo PROPERTIES
+  PASS_REGULAR_EXPRESSION "FATAL .frame 19137.: the VS race's load: the race wrapper's NMI .83:8623 has no C yet"
+)
+# autopilot_60k.txt as the console ran its race: the original's refresh counts for that race
+# (local file) and its driving inputs re-aligned to the race loop (from port 7800 the movie's
+# step is the port's frame + 271). The random state before the title's demo pick then equals
+# the bench's ($0110 = $2965/$EF30 at port 20031, bench step 20301), the pick is the bench's VS
+# race ($03DC = $2002), and the port stops at its load as race1 does. (With the default pacing
+# the pick differs: mode 1, $82:89B5, at port 20214.)
+add_test(NAME game_autopilot_stops_at_vs_demo
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --movie-offset-from 7800 271 --race-refresh-replay notes/race/race_refreshes.txt --fast --frames 20200
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_autopilot_stops_at_vs_demo PROPERTIES
+  PASS_REGULAR_EXPRESSION "FATAL .frame 20093.: the VS race's load: the race wrapper's NMI .83:8623 has no C yet"
+)
+# explore_buy.txt re-aligned after the race (from port 16000 the movie's step is the port's frame
+# + 309): the title's taps now set difficulty 2 ($03DC = $0210, port 16732 = bench step 17041) and
+# open a second championship (port 17146 = 17454); its opening, port 17185 = frame_17521.png.
+add_test(NAME game_picture_champ_after_race
+  COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/explore_buy.txt --movie-offset 150 --movie-offset-from 16000 309 --fast --frames 17187 --shot 17185 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_champ_after_race PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 17185 picture hash ffdc85b56cbdbfff brightness 15 drawn champ"
+  FAIL_REGULAR_EXPRESSION "FATAL|unported"
+)
+# race1_again.txt (local, notes/movies/): race1.txt, then its menu path once more after the race
+# (championship, track description, shop, race 2, its ticker); re-aligned from port 16000 (+325).
+# The ticker after race 2, port 29390 = frame_29816.png (lag 426).
+add_test(NAME game_picture_ticker_after_race2
+  COMMAND tg3000 --movie notes/movies/race1_again.txt --movie-offset 150 --movie-offset-from 16000 325 --fast --frames 29392 --shot 29390 -
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+set_tests_properties(game_picture_ticker_after_race2 PROPERTIES
+  PASS_REGULAR_EXPRESSION "frame 29390 picture hash 864abcd8c9dc237c brightness 12 drawn ticker"
+  FAIL_REGULAR_EXPRESSION "FATAL|unported"
+)
+set_tests_properties(game_picture_ticker_after_race game_race1_stops_at_vs_demo
+  game_autopilot_stops_at_vs_demo game_picture_champ_after_race game_picture_ticker_after_race2 PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)

@@ -115,9 +115,9 @@ int main(int argc, char* argv[]) {
     const char* shots_dir = NULL;
     const char* movie_path = NULL;
     long movie_offset = 0;
-    bool movie_offset_from_set = false;
-    unsigned long movie_offset_from_frame = 0;
-    long movie_offset_from_value = 0;
+    int movie_offset_from_count = 0;
+    unsigned long movie_offset_from_frame[16];
+    long movie_offset_from_value[16];
     unsigned long wram_out_frame = 0;
     const char* wram_out_path = NULL;
     unsigned long wram_at_frame = 0;
@@ -148,9 +148,13 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--movie-offset") == 0 && i + 1 < argc) {
             movie_offset = strtol(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--movie-offset-from") == 0 && i + 2 < argc) {
-            movie_offset_from_set = true;
-            movie_offset_from_frame = strtoul(argv[++i], NULL, 10);
-            movie_offset_from_value = strtol(argv[++i], NULL, 10);
+            if (movie_offset_from_count >= 16) {
+                fprintf(stderr, "--movie-offset-from: at most 16\n");
+                return 1;
+            }
+            movie_offset_from_frame[movie_offset_from_count] = strtoul(argv[++i], NULL, 10);
+            movie_offset_from_value[movie_offset_from_count] = strtol(argv[++i], NULL, 10);
+            ++movie_offset_from_count;
         } else if (strcmp(argv[i], "--wram") == 0 && i + 1 < argc) {
             wram_path = argv[++i];
             port_set_start_wram(wram_path);
@@ -334,8 +338,8 @@ int main(int argc, char* argv[]) {
     port_set_shots(shots_first, shots_last, shots_every, shots_dir);
     if (movie_path != NULL) {
         port_set_movie(movie_path, movie_offset);
-        if (movie_offset_from_set) {
-            port_set_movie_offset_from(movie_offset_from_frame, movie_offset_from_value);
+        for (int k = 0; k < movie_offset_from_count; ++k) {
+            port_set_movie_offset_from(movie_offset_from_frame[k], movie_offset_from_value[k]);
         }
     }
     if (wram_out_path != NULL) {

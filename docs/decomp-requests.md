@@ -3,7 +3,7 @@
 The port (this repository) consumes [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp)
 read-only. What it needs from the decomp is listed here, by priority. This file is the source
 of truth for the requests (an earlier copy went to a claude-mem list the decomp session did not
-read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `docs/DECISIONS.md`.
+read). Updated 2026-11-28; the port pins the decomp at the commit recorded in `docs/DECISIONS.md`.
 
 ## High
 
@@ -149,6 +149,26 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `$0100`/`$0000` (bench `$7FF0`/`$B5A0`); D+`$1E` (`$01A0`/`$06C0`) and `$0270`-`$0278` differ
   too. One-player runs never drew task 2's menu text. Is a path of player 2's menu reading or
   writing task 1's direct page (or a fixed `$01xx`)?
+
+- **V. The race wrapper's NMI `$83:8623` in C** (2026-11-28; DECISIONS, "After the race: the
+  whole-game movies' next stops"). `race_wrapper_head` points the NMI at `$83:8623`; `race_load`
+  replaces it before any wait, but the VS race's load waits under it (`vs_race_load` to
+  `vs_race_start`: 97 frames on the firmware bench, `race1.txt` steps 19472..19569). It is only
+  in `asm/bank_03.asm` (`sound_frame`, `pads_read`, `$0024`++, `$00BA`++, no `$0008`
+  dispatch). `race1.txt` and `autopilot_60k.txt` reach it after their first race, where the
+  title's demo is a VS race (`$03DC` = `$2002`; bench steps 19472 and 20362); `explore_buy.txt`
+  goes to a championship instead. The port stops there by name (port frame 19137 of `race1`;
+  20093 of `autopilot_60k` run as the console ran its race). Please give it a C function (e.g.
+  `nmi_race_wrapper()`), as `nmi_race_tail` is.
+
+- **W. The VS race loop's way out** (2026-11-28). `race_mode_vs` loops for good and
+  `vs_race_frame_body` traps at `$82:9642` ("the VS race loop's way out"); the demo's end on a
+  button in `vs_race_frame_tail` is marked never run. **Observed** (firmware bench,
+  `autopilot_60k.txt`, WRAM per step): its VS demo race (`race_wrapper` at step 20362, the VS
+  NMI `$9777` from 20454) is left at 20465 (NMI target back to `$8934`, then `$03DC` = `$0002`
+  at 20466) and the title (`$FC5F`) is back at 20491; the autopilot holds buttons there.
+  **Inferred** (not hooked): the demo's end on a button and `$82:9642` run there. Needed after
+  V and A's VS part for any VS demo that ends, and for the VS game's race end.
 
 ## Low (enhancements)
 
