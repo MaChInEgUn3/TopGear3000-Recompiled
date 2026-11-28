@@ -7,7 +7,7 @@ read). Updated 2026-11-28; the port pins the decomp at the commit recorded in `d
 
 ## High
 
-- **A. The DSP-4 race commands as native C.** `src/misc.c` still talks to the chip through about
+- **A — one-player DONE (`e152ffc`); VS road projection `$0D` DONE (`8d66b47`). Left: the VS sprite lists (`$000E`, `sprite_parts_stream_vs`, `sprite_put_rows_c_vs`, `object_sprite_kind0_vs`, `vs_sprites`) and the VS high table `$06` (`oam_high_load_vs`, `oam_high_load2`); the whole-game movies stop there (port 19142 of `race1`, 20098 of `autopilot_60k` replayed).** **A. The DSP-4 race commands as native C.** `src/misc.c` still talks to the chip through about
   270 `dsp4_port_write16`/`dsp4_port_read16` calls; `src/dsp4.c` is native only for `$00`
   (multiply), `$0A` (edges), `$11` (row), `$03`/`$0B` (sprite). Needed: `$01`
   (`road_rows_project`), `$07` (`road_rows_project2`), `$0D` (the VS race's road, four sites `$85:A59F`/`$85:A8E8`/`$85:AC53`/`$85:AF9B`;
@@ -150,7 +150,7 @@ read). Updated 2026-11-28; the port pins the decomp at the commit recorded in `d
   too. One-player runs never drew task 2's menu text. Is a path of player 2's menu reading or
   writing task 1's direct page (or a fixed `$01xx`)?
 
-- **V. The race wrapper's NMI `$83:8623` in C** (2026-11-28; DECISIONS, "After the race: the
+- **V — DONE in decomp `1ad12bb` (`nmi_race_wrapper`), adopted: the port dispatches it.** **V. The race wrapper's NMI `$83:8623` in C** (2026-11-28; DECISIONS, "After the race: the
   whole-game movies' next stops"). `race_wrapper_head` points the NMI at `$83:8623`; `race_load`
   replaces it before any wait, but the VS race's load waits under it (`vs_race_load` to
   `vs_race_start`: 97 frames on the firmware bench, `race1.txt` steps 19472..19569). It is only
@@ -161,7 +161,7 @@ read). Updated 2026-11-28; the port pins the decomp at the commit recorded in `d
   20093 of `autopilot_60k` run as the console ran its race). Please give it a C function (e.g.
   `nmi_race_wrapper()`), as `nmi_race_tail` is.
 
-- **W. The VS race loop's way out** (2026-11-28). `race_mode_vs` loops for good and
+- **W — DONE in decomp `156c0e0` (`vs_race_frame_body` returns, `vs_race_end`; traced: the idle demo's race runs out, no button).** **W. The VS race loop's way out** (2026-11-28). `race_mode_vs` loops for good and
   `vs_race_frame_body` traps at `$82:9642` ("the VS race loop's way out"); the demo's end on a
   button in `vs_race_frame_tail` is marked never run. **Observed** (firmware bench,
   `autopilot_60k.txt`, WRAM per step): its VS demo race (`race_wrapper` at step 20362, the VS

@@ -756,28 +756,29 @@ set_tests_properties(game_picture_ticker_after_race PROPERTIES
   PASS_REGULAR_EXPRESSION "frame 16080 picture hash df657edd8a49de65 brightness 11 drawn ticker"
   FAIL_REGULAR_EXPRESSION "FATAL|unported"
 )
-# race1.txt then waits at the title, whose demo is a VS race: the port stops at its load, on the
-# race wrapper's NMI $83:8623, which has no C (decomp request V). The original's memory there:
-# $03DC = $2002 (bench step 19412; the port's 19137).
+# race1.txt then waits at the title, whose demo is a VS race ($03DC = $2002, bench step 19412; the
+# port's 19137). Its load runs under the race wrapper's NMI $83:8623 (C since decomp 1ad12bb), its
+# road's projection is native (8d66b47), its NMI $83:9721 runs, and the port stops at its first
+# sprite list's DSP-4 command (what is left of decomp request A).
 add_test(NAME game_race1_stops_at_vs_demo
   COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/race1.txt --movie-offset 150 --fast --frames 19200
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 set_tests_properties(game_race1_stops_at_vs_demo PROPERTIES
-  PASS_REGULAR_EXPRESSION "FATAL .frame 19137.: the VS race's load: the race wrapper's NMI .83:8623 has no C yet"
+  PASS_REGULAR_EXPRESSION "FATAL .frame 19142.: the VS race's DSP-4 commands are not native yet"
 )
 # autopilot_60k.txt as the console ran its race: the original's refresh counts for that race
 # (local file) and its driving inputs re-aligned to the race loop (from port 7800 the movie's
 # step is the port's frame + 271). The random state before the title's demo pick then equals
 # the bench's ($0110 = $2965/$EF30 at port 20031, bench step 20301), the pick is the bench's VS
-# race ($03DC = $2002), and the port stops at its load as race1 does. (With the default pacing
+# race ($03DC = $2002), and the port stops at the same VS DSP-4 command as race1 does. (With the default pacing
 # the pick differs: mode 1, $82:89B5, at port 20214.)
 add_test(NAME game_autopilot_stops_at_vs_demo
   COMMAND tg3000 --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 150 --movie-offset-from 7800 271 --race-refresh-replay notes/race/race_refreshes.txt --fast --frames 20200
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 set_tests_properties(game_autopilot_stops_at_vs_demo PROPERTIES
-  PASS_REGULAR_EXPRESSION "FATAL .frame 20093.: the VS race's load: the race wrapper's NMI .83:8623 has no C yet"
+  PASS_REGULAR_EXPRESSION "FATAL .frame 20098.: the VS race's DSP-4 commands are not native yet"
 )
 # explore_buy.txt re-aligned after the race (from port 16000 the movie's step is the port's frame
 # + 309): the title's taps now set difficulty 2 ($03DC = $0210, port 16732 = bench step 17041) and

@@ -73,9 +73,10 @@ CLI modes:
   (with `--wram notes/race/wram_before_race.bin`); the race NMI (`$85:8377`: `$838A` tail,
   `$83CE` full frame) is dispatched; since decomp `e152ffc` the whole one-player race runs to
   `race_wrapper`'s return (its sky and HUD drawn, docs/DECISIONS.md). The race wrapper's own NMI
-  `$83:8623` (only the VS race's load waits under it; no C yet, decomp request V) stops the port
-  by name: the whole-game movies reach it at the title's VS demo race (docs/DECISIONS.md, "After
-  the race"). `race_wait` (test) runs
+  `$83:8623` (the VS race's load waits under it) and the VS race's NMI `$83:9721` (`$0008` =
+  `$9777`) are dispatched; nothing of the VS race is drawn, and it stops at its sprite lists'
+  DSP-4 commands (decomp request A's rest): the whole-game movies reach it at the title's VS
+  demo race (docs/DECISIONS.md, "After the race"). `race_wait` (test) runs
   `race_frame_wait()` alone from `notes/race/wram_race_wait.bin` and prints the refreshes it took.
 - `--race-refreshes 2|3` (setting): screen refreshes per race step; `--race-refresh-replay FILE`
   (test): the original's recorded count per step (`notes/race/race_refreshes.txt`).

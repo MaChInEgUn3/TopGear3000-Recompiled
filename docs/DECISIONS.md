@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `17ee1d6`; earlier `17dab56`, earlier `e152ffc`, earlier `6c6bd22`, earlier `6ec8da5`, earlier `ca47c97`, earlier `0aa501a`, earlier `7f1daa4`, earlier `0e2a6af`, earlier `edddd50`, earlier `416560f`, earlier `d0eaf01`, earlier `9bc4a9a`, earlier `d92e6e6`, earlier `506cc7d`, earlier `6755322`, earlier `23be63d`, earlier `63e1df5`, earlier `f3f7d5a`, `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `8d66b47`; earlier `17ee1d6`, earlier `17dab56`, earlier `e152ffc`, earlier `6c6bd22`, earlier `6ec8da5`, earlier `ca47c97`, earlier `0aa501a`, earlier `7f1daa4`, earlier `0e2a6af`, earlier `edddd50`, earlier `416560f`, earlier `d0eaf01`, earlier `9bc4a9a`, earlier `d92e6e6`, earlier `506cc7d`, earlier `6755322`, earlier `23be63d`, earlier `63e1df5`, earlier `f3f7d5a`, `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -1730,6 +1730,28 @@ step 407 one NMI the console counts for no step shifts the alignment by a frame 
 then on, the only shift in the whole race). Hence the race's picture tests hand the bench's
 memory over at a wait (below).
 
+**To the race's end (decomp `17ee1d6`, `notes/probe/RACE.md` §23, local; 2026-11-28).** One
+hand-over at step 2's wait, run to the end: the first lasting difference is step 408 (the NMI
+the console counts for no step: `$0024` and the race clock `$005A-$005C` stay 1 NMI behind; the
+finishing time 1:55.74 on the bench, 1:55.72 in the port), and the first motion difference is
+step 488: on the console the NMI that loads a new pad falls between step 487's rest and head
+488, which counts it; the port runs the head before that refresh, so it reads the pad one frame
+older (41 heads have this lag; the pad changes on that frame at 3 of them: 488, 2191, 2198).
+With those three heads given the console's pad (a re-aligned scratch movie), the race matches
+the bench at every wait to step 2848 but for NMI-timed and picture-side bytes. **The step-410
+drift guessed earlier as the DSP-4's C state was this same pad lag: withdrawn.**
+- **Decided: the three differences are one class and stay.** Step 1's count, the uncounted NMI
+  at step 407 and the pad lag at the heads all come from where an NMI falls inside the console's
+  CPU time. Placing them in the port would be a CPU-time model; the shipped race runs at 2 (or
+  3) refreshes a step by the owner's choice ("Race pacing"). The game logic matches the
+  console's to the end once timing comes from recordings; a console-exact race from pads alone
+  is not possible under the rule. Tests keep using recordings (refresh counts, hand-over,
+  re-aligned pads), listed as test-only.
+- Also measured: the bench's stand-in DSP-4 and its firmware differ from step 55 in the sprite
+  list only, and where the port's sprite tables differ from the stand-in's (steps 55-405), 4,708
+  of 5,236 bytes equal the firmware's: object pictures must be pinned from the firmware run
+  (its own refresh counts and hand-over: it splits at step 406).
+
 ## The race's sky and HUD drawn (step 4, 2026-11-28)
 
 **Identical to the bench's pictures where drawn (the bench's stand-in DSP-4, not the console):**
@@ -1858,10 +1880,13 @@ memory at every step, `bench_window_any.sh` dumps a window of any movie, both ta
   (`PAL_SRC_VS_RACE_COLOURS_0_31`, nothing drawn). The next wait runs under the race wrapper's
   own NMI, `$83:8623` (`race_wrapper_head` sets it; `race_load` replaces it before any wait, so
   the one-player race never runs it; on the bench the VS load waits 97 frames under it, 19472 to
-  19569). It exists only in `asm/bank_03.asm` (sound, pads, `$0024`++, `$00BA`++): the port now
-  stops there by name (decomp request V). Behind it the VS race still needs its DSP-4 commands
-  native (request A's VS remainder) and the loop's way out (`$82:9642`, a trap; request W):
-  `race_mode_vs` loops for good in the C. On the bench the demo runs past step 26000 with no
+  19569). It exists only in `asm/bank_03.asm` (sound, pads, `$0024`++, `$00BA`++): the port
+  stopped there by name (decomp request V). **Update (decomp `8d66b47`):** V is `nmi_race_wrapper`
+  (`1ad12bb`), W the loop's way out (`156c0e0`: the idle demo's race runs out, `vs_race_end`),
+  and the VS road's `$0D` is native; the port dispatches `$83:8623` and the VS NMI `$83:9721`
+  (`$0008` = `$9777`, `nmi_vs_full`; nothing drawn) and now stops at the VS sprite lists' DSP-4
+  commands (request A's rest), port 19142 of `race1` and 20098 of `autopilot_60k` replayed.
+  Before V/W `race_mode_vs` looped for good in the C. On the bench the demo runs past step 26000 with no
   input; in `autopilot_60k`, which holds buttons, it is left after 11 frames (20454 to 20465;
   inferred, not hooked: the demo's end on a button and that way out). **Blocked by the decomp (VS).**
 - **`autopilot_60k`'s stop (mode 1) is the same demo, picked differently.** The demo pick is a

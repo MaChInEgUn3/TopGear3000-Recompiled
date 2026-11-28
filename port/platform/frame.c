@@ -284,10 +284,21 @@ static void run_nmi_dispatch(void) {
     } else if (target == 0x838623u) {
         /* The race wrapper's own NMI (race_wrapper_head sets it; race_load replaces it before
            any wait, so the one-player race never runs it). The VS race's load waits under it
-           (vs_race_load to vs_race_start; bench: about 97 frames). It has no C in the decomp
-           (only asm/bank_03.asm): decomp request V. */
-        port_fatal("the VS race's load: the race wrapper's NMI $83:8623 has no C yet "
-                   "(decomp request V; the VS race also waits on requests A and W)");
+           (vs_race_load to vs_race_start; bench: about 97 frames). In C since decomp 1ad12bb
+           (request V): the sound frame, the pads, $0024 and $00BA counted; no dispatch. */
+        nmi_race_wrapper();
+    } else if (target == 0x839721u) {
+        /* The VS race's NMI (vs_race_start sets it, with $0008 = $9777): its prologue, then its
+           one target, the full frame. Nothing of the VS race is drawn yet. */
+        uint16_t sub = rd16(0x0008);
+        nmi_vs_prologue();
+        if (sub == 0x9777u) {
+            nmi_vs_full();
+        } else {
+            char msg[128];
+            snprintf(msg, sizeof(msg), "unknown VS race NMI target 0x%04X", sub);
+            port_fatal(msg);
+        }
     } else {
         char msg[128];
         snprintf(msg, sizeof(msg), "unknown NMI vector target 0x%06X", (unsigned int)target);
