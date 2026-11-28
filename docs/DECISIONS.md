@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `e152ffc`; earlier `6c6bd22`, earlier `6ec8da5`, earlier `ca47c97`, earlier `0aa501a`, earlier `7f1daa4`, earlier `0e2a6af`, earlier `edddd50`, earlier `416560f`, earlier `d0eaf01`, earlier `9bc4a9a`, earlier `d92e6e6`, earlier `506cc7d`, earlier `6755322`, earlier `23be63d`, earlier `63e1df5`, earlier `f3f7d5a`, `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `17dab56`; earlier `e152ffc`, earlier `6c6bd22`, earlier `6ec8da5`, earlier `ca47c97`, earlier `0aa501a`, earlier `7f1daa4`, earlier `0e2a6af`, earlier `edddd50`, earlier `416560f`, earlier `d0eaf01`, earlier `9bc4a9a`, earlier `d92e6e6`, earlier `506cc7d`, earlier `6755322`, earlier `23be63d`, earlier `63e1df5`, earlier `f3f7d5a`, `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -1657,6 +1657,29 @@ frames (comparisons only).
   only after a race, which the port cannot run (DSP-4 sprite commands, request A).
 - **Pre-race and shop states after a race** (later tracks of a championship played through):
   reached here by the star names instead; the same screens.
+
+## The race runs (2026-11-28)
+
+Since decomp `e152ffc` (the one-player race's `$09`/`$06` native) and `17dab56` (the power-on
+rounding), the whole one-player race runs in the port from `race_wrapper` to its return.
+**What this proves:** the race runs to its end in the port. With no pads, the tests pin the
+port against itself, not against the original. Nothing of the race is drawn yet.
+
+- **Length by pacing** (no pads, the original's memory at `race_wrapper`): 8259 frames with 2
+  refreshes a step (the default), 8095 with 3, and 8231 with the original's recorded counts.
+  The game's physics take the refreshes a step took (`$00BA`), so the race's real-time length
+  stays close at either setting. This is the first evidence that the pacing setting keeps
+  real-time speed (tests `game_race_runs*`).
+- **The frame counter `$0024` in the race** (checked in the C at `e152ffc`): it is read only by
+  the objects' animation rows (`object_sprite_kind0`/`_raised`/`_shadowed`/`_hover`) and
+  by `nmi_race_full`'s block cycling every 4 frames (`race_cycle_blocks`, WRAM
+  `$2000-$213F`). Both are pictures, not gameplay, so the console's longer load (210
+  NMIs against the port's 89) shifts animation phases only.
+- **Whole-game movies:** `race1` and `explore_buy` now pass their race and stop at an unknown
+  palette block `$8E:8000` (port frames 19137 and 16809, after the race). `autopilot_60k`
+  stops at the race wrapper's mode 1 (`$82:89B5`, port frame 20214), which the decomp is porting.
+- **References:** until the decomp's chip matches the firmware everywhere, every race reference
+  is the bench's stand-in DSP-4, not the console. Each race picture test says which.
 
 ## The race's sky and HUD measured (2026-11-27)
 
