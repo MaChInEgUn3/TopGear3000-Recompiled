@@ -3,7 +3,7 @@
 The port (this repository) consumes [tg3000-decomp](https://github.com/MaChInEgUn3/tg3000-decomp)
 read-only. What it needs from the decomp is listed here, by priority. This file is the source
 of truth for the requests (an earlier copy went to a claude-mem list the decomp session did not
-read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `docs/DECISIONS.md`.
+read). Updated 2026-11-28; the port pins the decomp at the commit recorded in `docs/DECISIONS.md`.
 
 ## High
 
@@ -144,6 +144,23 @@ read). Updated 2026-11-26; the port pins the decomp at the commit recorded in `d
   `$0100`/`$0000` (bench `$7FF0`/`$B5A0`); D+`$1E` (`$01A0`/`$06C0`) and `$0270`-`$0278` differ
   too. One-player runs never drew task 2's menu text. Is a path of player 2's menu reading or
   writing task 1's direct page (or a fixed `$01xx`)?
+
+- **V. The race wrapper's NMI `$83:8623` in C** (2026-11-28; DECISIONS, "After the race: the
+  whole-game movies' next stops"). `race_wrapper_head` points the NMI at `$83:8623`; `race_load`
+  replaces it before any wait, but the VS race's load waits under it (`vs_race_load` to
+  `vs_race_start`: 97 frames on the firmware bench, `race1.txt` steps 19472..19569). It is only
+  in `asm/bank_03.asm` (`sound_frame`, `pads_read`, `$0024`++, `$00BA`++, no `$0008`
+  dispatch). Every whole-game movie reaches it after its first race: the title's demo is a VS
+  race (`$03DC` = `$2002`; `race1.txt` at step 19472, `autopilot_60k.txt` at 20362). The port
+  stops there by name (port frame 19137 of `race1`). Please give it a C function (e.g.
+  `nmi_race_wrapper()`), as `nmi_race_tail` is.
+
+- **W. The VS race loop's way out** (2026-11-28). `race_mode_vs` loops for good and
+  `vs_race_frame_body` traps at `$82:9642` ("the VS race loop's way out"); the demo's end on a
+  button in `vs_race_frame_tail` is marked never run. Both run in `autopilot_60k.txt`: its VS
+  demo race (`race_wrapper` at bench step 20362, `nmi_vs_full` from 20454) ends on a button at
+  20465 and the game is back at the title (`$FC5F`) at 20491. Needed after V and A's VS part
+  for any VS demo, and for the VS game's race end.
 
 ## Low (enhancements)
 

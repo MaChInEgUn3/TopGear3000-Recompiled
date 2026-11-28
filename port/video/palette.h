@@ -18,6 +18,7 @@ typedef enum {
     PAL_SRC_RESULTS_STARS_OBJ,
     PAL_SRC_RESULTS_TEXT_0,
     PAL_SRC_RACE_COLOURS_0_31,
+    PAL_SRC_VS_RACE_COLOURS_0_31,
     PAL_SRC_COUNT
 } palette_source;
 

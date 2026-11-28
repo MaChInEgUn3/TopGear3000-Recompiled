@@ -70,14 +70,17 @@ CLI modes:
   `options`, `results`, `ticker`, `race`): which game code to run. `race` runs `race_wrapper()`
   (with `--wram notes/race/wram_before_race.bin`); the race NMI (`$85:8377`: `$838A` tail,
   `$83CE` full frame) is dispatched; since decomp `e152ffc` the whole one-player race runs to
-  `race_wrapper`'s return (nothing of it is drawn yet). `race_wait` (test) runs
+  `race_wrapper`'s return (nothing of it is drawn yet). The race wrapper's own NMI `$83:8623`
+  (only the VS race's load waits under it; no C yet, decomp request V) stops the port by name:
+  the whole-game movies reach it at the title's VS demo race (docs/DECISIONS.md, "After the
+  race"). `race_wait` (test) runs
   `race_frame_wait()` alone from `notes/race/wram_race_wait.bin` and prints the refreshes it took.
 - `--race-refreshes 2|3` (setting): screen refreshes per race step; `--race-refresh-replay FILE`
   (test): the original's recorded count per step (`notes/race/race_refreshes.txt`).
 - `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
 - `--expect-return` (tests): exit 2 if the screen function has not returned by then.
 - `--press F` (tests): hold A+B for 6 frames from frame F.
-- `--movie FILE --movie-offset N` (tests): replay a decomp bench input movie (`--movie-offset-from FRAME N` switches the offset from port frame `FRAME` onwards); `--wram-out F PATH`
+- `--movie FILE --movie-offset N` (tests): replay a decomp bench input movie (`--movie-offset-from FRAME N` switches the offset from port frame `FRAME` onwards; up to 16 of them, for the console's longer loads); `--wram-out F PATH`
   saves game memory at frame F; `--fast`: no pacing.
 - `--wram FILE` (tests): start from a saved 128 KB game memory (e.g. the original's, from the
   decomp's bench) instead of zeroed memory.

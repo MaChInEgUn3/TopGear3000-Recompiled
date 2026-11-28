@@ -33,6 +33,9 @@ static const palette_entry g_palette_catalogue[] = {
     /* race_load's last colours, the same for every track and car (a constant source in
        race_load, $82:8428): colours 0-31 */
     {0x8D8B70u, 0x40u,  PAL_SRC_RACE_COLOURS_0_31, "race colours 0-31"},
+    /* vs_race_load's colours ($82:92BA, a constant source: upload_cgram_now(0, $8E, $8000, $40)):
+       colours 0-31 of the VS race, the title's VS demo race included */
+    {0x8E8000u, 0x40u,  PAL_SRC_VS_RACE_COLOURS_0_31, "VS race colours 0-31"},
 };
 
 void palette_set(uint8_t index, uint16_t bgr) {
