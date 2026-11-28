@@ -195,8 +195,16 @@ const uint8_t* port_sound_last_message(void) {
     return g_sound_last_msg;
 }
 
-/* dsp4_port_write16/dsp4_port_read16: port/platform/test_dsp4_tape.c (they stop the game, or,
-   in tests only, replay a recording). */
+/* The DSP-4 byte port: since decomp e152ffc only the VS race's C still calls it (request A). */
+void dsp4_port_write16(uint16_t value) {
+    (void)value;
+    port_fatal("the VS race's DSP-4 commands are not native yet");
+}
+
+uint16_t dsp4_port_read16(void) {
+    port_fatal("the VS race's DSP-4 commands are not native yet");
+    return 0;
+}
 
 void port_fatal(const char* what) {
     fprintf(stderr, "FATAL (frame %lu): %s\n", g_frame_count, what);
@@ -652,7 +660,6 @@ static int race_wait_refreshes(void) {
         || (rd16(0x0146) == 0 && (rd16(0x014A) & 0x0F00) == 0)) {
         return 1;
     }
-    if (port_dsp4_tape_race_wait()) return 1;  /* test only: the tape's next recorded NMI */
     if (g_rr_replay != NULL && g_rr_at < g_rr_len) {
         int n = g_rr_replay[g_rr_at++];
         if (g_rr_at == g_rr_len) {
@@ -679,10 +686,6 @@ void platform_wait_vblank(void) {
     for (int i = 0; i < n; ++i) {
         refresh();
     }
-}
-
-void port_refresh_once(void) {
-    refresh();
 }
 
 /* One screen refresh: input, the NMI, the picture, a frame of sound, the 60.0988 Hz pacing. */
@@ -902,19 +905,6 @@ int port_run(SDL_Renderer* r, const char* screen, unsigned long frame_limit) {
                the original's memory at $82:8342, dumped on the decomp's bench by
                tools/make_reference_memory.sh) */
             race_wrapper();
-        } else if (strcmp(name, "race_loop") == 0) {
-            /* Test only: the one-player race from its loop's first head (with --wram
-               notes/race/wram_race_loop.bin, the original's memory at $82:8645 on the decomp's
-               bench, tools/make_reference_memory.sh): race_mode_one's loop and race_end, as the
-               game has them. The console's load takes more refreshes than the port's (its CPU
-               time), so a race entered at race_wrapper reaches the loop with another frame
-               counter ($0024, which animates objects); from here the counts are the console's. */
-            do {
-                race_frame_head();
-                race_frame_wait();
-                race_frame_body();
-            } while (!race_frame_rest());
-            race_end();
         } else if (strcmp(name, "race_wait") == 0) {
             /* Test only: the race loop's wait alone (race_frame_wait), from the original's memory
                at that wait with the frame requested (with --wram notes/race/wram_race_wait.bin,

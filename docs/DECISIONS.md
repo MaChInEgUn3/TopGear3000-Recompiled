@@ -4,7 +4,7 @@ Single source of truth for the port's scope and decisions. Dates are absolute.
 
 ## Scope (2026-11-24)
 
-- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `6c6bd22`; earlier `6ec8da5`, earlier `ca47c97`, earlier `0aa501a`, earlier `7f1daa4`, earlier `0e2a6af`, earlier `edddd50`, earlier `416560f`, earlier `d0eaf01`, earlier `9bc4a9a`, earlier `d92e6e6`, earlier `506cc7d`, earlier `6755322`, earlier `23be63d`, earlier `63e1df5`, earlier `f3f7d5a`, `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
+- **Separate repository from the decomp.** `extern/tg3000-decomp` is read-only here, pinned as a submodule at a named commit (currently `e152ffc`; earlier `6c6bd22`, earlier `6ec8da5`, earlier `ca47c97`, earlier `0aa501a`, earlier `7f1daa4`, earlier `0e2a6af`, earlier `edddd50`, earlier `416560f`, earlier `d0eaf01`, earlier `9bc4a9a`, earlier `d92e6e6`, earlier `506cc7d`, earlier `6755322`, earlier `23be63d`, earlier `63e1df5`, earlier `f3f7d5a`, `372d471`, `b284d72`, `e45e619`, `b67f44e`, `2d72646`, `e966da4`, `92d4d5a`, `77b8ebd`, `49b5583`, `2ade543`, `f84afeb`, `8238cd1`, `75e8d14`) and bumped explicitly. Requests for changes in the decomp go to the list `tg3000-port-requests` in the claude-mem work state, and the owner is told; never direct edits in `extern/`.
 - **"Not even 1% emulator" in the shipped game.** No CPU (65816), PPU (video chip), SPC700/S-DSP (sound), or DSP-4 model in the port. Video and sound are drawn and played natively from the data the game builds in RAM, with per-screen drawing code. The DSP-4 math becomes native C.
   - **Litmus test:** if the video or sound code could show or play *another* SNES game given its memory, it is an emulator and forbidden.
   - **Allowed:** converting cartridge graphics/colours to ordinary images, drawing from game-built RAM data (tile maps, sprite list, palette, the per-line road table) with own drawing code per screen type.
@@ -1442,6 +1442,12 @@ steps) is parked for later. No settings file exists yet; the setting is a comman
   recorded, `$1E9E` reaching the motion code at the recorded counts.
 
 ## The DSP-4 tape (tests only) (2026-11-27)
+
+**REMOVED 2026-11-28 (decomp `e152ffc`: the one-player race's `$09`/`$06` native).** The file
+`port/platform/test_dsp4_tape.c`, the flags `--dsp4-tape`/`--dsp4-tape-nmis`, `--screen
+race_loop`, its tests and `record_race_tape` are gone; the race runs from `race_wrapper` to its
+end with the native commands (tests `game_race_runs*`). Kept below as the record of what was
+measured with it.
 
 **Listed for the owner's veto: two test-only recordings, nothing in the shipped path.** Under the
 rule "nem 1% emulador" no DSP-4 model goes into the port, not even in a dev build (the

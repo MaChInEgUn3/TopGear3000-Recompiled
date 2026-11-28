@@ -69,19 +69,11 @@ CLI modes:
 - `--screen NAME` (`game` by default; test scaffolds such as `title_card`, `password_show`, `vs`,
   `options`, `results`, `ticker`, `race`): which game code to run. `race` runs `race_wrapper()`
   (with `--wram notes/race/wram_before_race.bin`); the race NMI (`$85:8377`: `$838A` tail,
-  `$83CE` full frame) is dispatched, nothing of the race is drawn yet, and it stops at the first
-  DSP-4 sprite command. `race_wait` (test) runs `race_frame_wait()` alone from
-  `notes/race/wram_race_wait.bin` and prints the refreshes it took. `race_loop` (test) runs
-  `race_mode_one`'s loop and `race_end` from `notes/race/wram_race_loop.bin` (the original's
-  memory at the loop's first head).
+  `$83CE` full frame) is dispatched; since decomp `e152ffc` the whole one-player race runs to
+  `race_wrapper`'s return (nothing of it is drawn yet). `race_wait` (test) runs
+  `race_frame_wait()` alone from `notes/race/wram_race_wait.bin` and prints the refreshes it took.
 - `--race-refreshes 2|3` (setting): screen refreshes per race step; `--race-refresh-replay FILE`
   (test): the original's recorded count per step (`notes/race/race_refreshes.txt`).
-- `--dsp4-tape FILE` (TEST ONLY, `port/platform/test_dsp4_tape.c`): `dsp4_port_write16`/`read16`
-  replay a bench recording of the race's `$09`/`$06` calls (`notes/race/race_tape.txt`, made by
-  `tools/make_reference_memory.sh`): reads answered in order, writes checked, the first
-  difference stops the port. Without it both calls stop the game. `--dsp4-tape-nmis` (test):
-  also run the tape's recorded race NMIs between the calls where the bench ran them (each race
-  wait takes the next one). docs/DECISIONS.md, "The DSP-4 tape (tests only)".
 - `--frames N`: quit after N frames (tests); with no ROM it exits 77 (ctest: skipped).
 - `--expect-return` (tests): exit 2 if the screen function has not returned by then.
 - `--press F` (tests): hold A+B for 6 frames from frame F.

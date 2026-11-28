@@ -58,7 +58,6 @@ add_executable(tg3000
   port/platform/video_events.c
   port/platform/input.c
   port/platform/frame.c
-  port/platform/test_dsp4_tape.c
   port/platform/sound_sets.c
   port/sound/convert_audio.c
   port/sound/mixer.c
@@ -593,16 +592,16 @@ foreach(race "3;8094;7740;7861 3af30fc4a9a95e42" "4;17574;10990;11562 3cf9b22e9c
   )
 endforeach()
 # The one-player race from the original's own game memory at race_wrapper ($82:8342, dumped on the
-# decomp's bench by tools/make_reference_memory.sh; a local file under notes/, never in git): the
-# setup (race_load, race_sound, the track, the road's first frame) runs through, and the port
-# stops at the first DSP-4 sprite command ($09, object_sprites_stream in the first
-# race_frame_draw), not native yet (docs/decomp-requests.md, A). Skipped where the file is absent.
-add_test(NAME game_race_load_runs
-  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 300
+# decomp's bench by tools/make_reference_memory.sh; a local file under notes/, never in git): since
+# decomp e152ffc (the one-player race's DSP-4 commands all native) the whole race runs, with no
+# pads, to race_wrapper's return. Skipped where the file is absent.
+add_test(NAME game_race_runs
+  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 9000
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-set_tests_properties(game_race_load_runs PROPERTIES
-  PASS_REGULAR_EXPRESSION "FATAL \\(frame 89\\): the race's DSP-4 commands are not native yet"
+set_tests_properties(game_race_runs PROPERTIES
+  PASS_REGULAR_EXPRESSION "screen race returned at frame 8259 \\(game frame counter 8258\\)"
+  FAIL_REGULAR_EXPRESSION "FATAL"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
@@ -613,19 +612,26 @@ foreach(bad 1 4 2x)
   set_tests_properties(port_race_refreshes_refuses_${bad} PROPERTIES
     PASS_REGULAR_EXPRESSION "--race-refreshes: ${bad} is not allowed")
 endforeach()
-# The load and step 1 are not paced (step 1 has no race wait before it in the port): with 3
-# refreshes, or the original's recorded counts, the same stop at the same frame.
-add_test(NAME game_race_load_runs_paced_3
-  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 300 --race-refreshes 3
+# With 3 refreshes a step, or the original's recorded counts: the game's physics take the
+# refreshes a step took ($00BA), so the race's course and length change with them.
+add_test(NAME game_race_runs_paced_3
+  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 9000 --race-refreshes 3
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-add_test(NAME game_race_load_runs_refresh_replay
-  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 300
+set_tests_properties(game_race_runs_paced_3 PROPERTIES
+  PASS_REGULAR_EXPRESSION "screen race returned at frame 8095 \\(game frame counter 8094\\)"
+  FAIL_REGULAR_EXPRESSION "FATAL"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
+  SKIP_RETURN_CODE 77
+)
+add_test(NAME game_race_runs_refresh_replay
+  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 9000
           --race-refresh-replay notes/race/race_refreshes.txt
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-set_tests_properties(game_race_load_runs_paced_3 game_race_load_runs_refresh_replay PROPERTIES
-  PASS_REGULAR_EXPRESSION "FATAL \\(frame 89\\): the race's DSP-4 commands are not native yet"
+set_tests_properties(game_race_runs_refresh_replay PROPERTIES
+  PASS_REGULAR_EXPRESSION "screen race returned at frame 8231 \\(game frame counter 8230\\)"
+  FAIL_REGULAR_EXPRESSION "FATAL"
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
   SKIP_RETURN_CODE 77
 )
@@ -655,58 +661,6 @@ foreach(case "default;;2" "3;--race-refreshes;3" "replay;--race-refresh-replay;3
     SKIP_RETURN_CODE 77
   )
 endforeach()
-# TEST ONLY: the DSP-4 tape (docs/DECISIONS.md, "The DSP-4 tape (tests only)"): the race's $09/$06
-# port calls recorded on the decomp's bench (default DSP-4) by tools/make_reference_memory.sh
-# (notes/race/race_tape.txt, local), a write checked and a read answered in order. Skipped where
-# the local files are absent.
-# From race_wrapper, the tape alone: the first draw's first frame-counter object differs at call
-# 439 (the console's load takes 210 refreshes, the port's 89: $0024 differs when step 1 draws).
-add_test(NAME game_race_tape_wrapper_stop
-  COMMAND tg3000 --wram notes/race/wram_before_race.bin --screen race --fast --frames 300
-          --dsp4-tape notes/race/race_tape.txt --race-refresh-replay notes/race/race_refreshes_tape.txt
-  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-)
-set_tests_properties(game_race_tape_wrapper_stop PROPERTIES
-  PASS_REGULAR_EXPRESSION "FATAL \\(frame 89\\): DSP-4 tape: call 439 \\(bench step 8113\\): another value: expected W FFC7, got W FFC5"
-  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
-  SKIP_RETURN_CODE 77
-)
-# Disabled since decomp c38d5ee (2026-11-27): the high table ($06) and the sprite list's opening
-# are native, the $09 stream not yet, so the native $06 lacks the stream's entries (the decomp's
-# words) and no recording can match the bench in this half-wired state. Back on, re-recorded,
-# or deleted with the tape, when the $09 stream lands.
-# From the race loop's first head (notes/race/wram_race_loop.bin, the same bench run), with the
-# tape's recorded NMIs where the bench ran them (--dsp4-tape-nmis, listed apart for the owner's
-# veto) and the movie's pads (port frame F = bench step F + 8113): 900 refreshes (loop steps 1-386,
-# bench steps 8113-9012) with every call as recorded and the frames one to one with the bench's.
-add_test(NAME game_race_tape_runs
-  COMMAND tg3000 --wram notes/race/wram_race_loop.bin --screen race_loop --fast --frames 900
-          --dsp4-tape notes/race/race_tape.txt --dsp4-tape-nmis
-          --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 8113
-  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-)
-set_tests_properties(game_race_tape_runs PROPERTIES
-  DISABLED TRUE
-  PASS_REGULAR_EXPRESSION "dsp4 tape: 530261 of 4727876 calls matched \\(up to bench step 9012\\)"
-  FAIL_REGULAR_EXPRESSION "FATAL|bench step - port frame"
-  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
-  SKIP_RETURN_CODE 77
-)
-# The same run's first difference (the finding): an object's frame-counter bob at frame 911 (loop
-# step 389): the bench's NMI fell between a call and the object's $0024 read; the port can place a
-# recorded NMI only at a call, here after that read.
-add_test(NAME game_race_tape_stop
-  COMMAND tg3000 --wram notes/race/wram_race_loop.bin --screen race_loop --fast --frames 2000
-          --dsp4-tape notes/race/race_tape.txt --dsp4-tape-nmis
-          --movie extern/tg3000-decomp/tools/bench/movies/autopilot_60k.txt --movie-offset 8113
-  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-)
-set_tests_properties(game_race_tape_stop PROPERTIES
-  DISABLED TRUE
-  PASS_REGULAR_EXPRESSION "FATAL \\(frame 911\\): DSP-4 tape: call 538280 \\(bench step 9023\\): another value: expected W FFC0, got W FFC1"
-  ENVIRONMENT "SDL_VIDEODRIVER=dummy;TG3000_HEADLESS=1"
-  SKIP_RETURN_CODE 77
-)
 # Two-task kernel (decomp request D, step 1): the ticker screen runs from saved game memory
 # (a local file under notes/, never in git) and returns by itself. Skipped where absent.
 add_test(NAME game_ticker_runs
